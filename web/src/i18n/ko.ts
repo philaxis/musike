@@ -187,6 +187,7 @@ export const ko: Messages = {
     removeX: (title) => `대기열에서 ${title} 빼기`,
     remove: "대기열에서 빼기",
     nowPlaying: "지금 재생 중",
+    played: "지나간 곡",
     upNext: "다음 곡",
     clear: "비우기",
     nothingQueued: "대기열에 곡이 없어요.",

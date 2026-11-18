@@ -187,6 +187,7 @@ export const pt: Messages = {
     removeX: (title) => `Remover ${title} da fila`,
     remove: "Remover da fila",
     nowPlaying: "Tocando agora",
+    played: "Já tocadas",
     upNext: "A seguir",
     clear: "Limpar",
     nothingQueued: "Nada na fila.",
