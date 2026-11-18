@@ -40,7 +40,7 @@ import Search from "./views/Search";
 import SongBox from "./views/SongBox";
 import Stats from "./views/Stats";
 import Mixes from "./views/Mixes";
-import MusicMap from "./views/MusicMap";
+import KeptMusicMap from "./views/MusicMap";
 import TasteGenre from "./views/TasteGenre";
 import TasteGenres from "./views/TasteGenres";
 import TasteTracks from "./views/TasteTracks";
@@ -186,12 +186,14 @@ export default function App() {
               <Route path="/library/performances/:id" element={<TasteTracks key="performance" kind="performance" />} />
               <Route path="/library/composers" element={<Composers />} />
               <Route path="/library/composers/:name" element={<Composer />} />
-              <Route path={paths.musicMap} element={<MusicMap />} />
+              {/* The map screen lives beside the routes (below), kept alive once opened. */}
+              <Route path={paths.musicMap} element={null} />
               <Route path="/library/shelves/:genre" element={<AlbumShelf />} />
               <Route path="/library/sun" element={<Sun />} />
               <Route path="*" element={<Home />} />
             </Routes>
           )}
+          <KeptMusicMap />
         </main>
         {panelOpen && hasTrack && <SidePanel />}
         {isMd && <PanelSheet />}

@@ -53,13 +53,17 @@ def zscore_index(sims: np.ndarray, ids: list[str], top_n: int = TOP_SONGS):
     return index, strength
 
 
+def int8_bytes(vectors: np.ndarray) -> bytes:
+    """브라우저 검색용 int8 벡터(줄마다 한 항목). transformers.js 쪽 embed_text 와 같은 모양."""
+    return np.clip(np.round(np.asarray(vectors, dtype=np.float32) * 127), -127, 127).astype(np.int8).tobytes()
+
+
 def int8_assets(vectors: np.ndarray, rows: list[dict], bin_path: Path, meta_path: Path) -> None:
-    """브라우저 검색 자산(int8 벡터 + 메타). transformers.js 쪽 embed_text 와 같은 모양."""
+    """브라우저 검색 자산(int8 벡터 + 메타)."""
     dim = int(vectors.shape[1]) if vectors.size else text_mod.DIM
-    q = np.clip(np.round(np.asarray(vectors, dtype=np.float32) * 127), -127, 127).astype(np.int8)
     for i, row in enumerate(rows):
         row["offset"] = i * dim
-    atomic_write_bytes(bin_path, q.tobytes())
+    atomic_write_bytes(bin_path, int8_bytes(vectors))
     atomic_write_json(meta_path, {"model": text_mod.MODEL, "dtype": "int8", "dim": dim, "count": len(rows), "items": rows})
 
 

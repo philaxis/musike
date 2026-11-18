@@ -2,7 +2,7 @@
    UI 는 붙이지 않은 모듈이다. 지도 페이지가 import 해서 쓴다.
    - soundSearch(query, {k, base}) → [{videoId, score, concepts:[ko]}]
    - expandByAudio(textHits, neighborsAudio) → 글자 검색 + 소리 이웃 RRF
-   자산: sound_concepts_meta.json, vectors_e5_concepts.bin, sound_concepts_index.json */
+   자산: sound_concepts_meta.json, vectors_e5_concepts.bin, sound_concepts_index.json (지도 페이지에선 이름표 window.mapFile 의 해시 이름) */
 
 const MODEL = 'Xenova/multilingual-e5-small';
 const CDN = 'https://cdn.jsdelivr.net/npm/@huggingface/transformers@4.3.1';
@@ -11,8 +11,11 @@ const DEFAULT_MIN_SIM = 0.82;
 let assetsPromise = null;
 let modelPromise = null;
 
+// 지도 페이지는 해시 이름(오래 캐시)으로 준다. 이름표가 없으면 원래 이름.
+const file = name => (typeof window !== 'undefined' && window.mapFile ? window.mapFile(name) : name);
+
 function fetchJson(url) {
-  return fetch(url, { cache: 'no-cache' }).then(r => {
+  return fetch(url).then(r => {
     if (!r.ok) throw new Error(`${url}: HTTP ${r.status}`);
     return r.json();
   });
@@ -56,10 +59,10 @@ export function loadSoundAssets(base = '') {
   if (!assetsPromise) {
     assetsPromise = (async () => {
       const [meta, index] = await Promise.all([
-        fetchJson(`${base}sound_concepts_meta.json`),
-        fetchJson(`${base}sound_concepts_index.json`),
+        fetchJson(`${base}${file('sound_concepts_meta.json')}`),
+        fetchJson(`${base}${file('sound_concepts_index.json')}`),
       ]);
-      const buf = await fetch(`${base}vectors_e5_concepts.bin`, { cache: 'no-cache' })
+      const buf = await fetch(`${base}${file('vectors_e5_concepts.bin')}`)
         .then(r => { if (!r.ok) throw new Error(`vectors: HTTP ${r.status}`); return r.arrayBuffer(); });
       const vectors = new Int8Array(buf);
       const items = meta.items || [];

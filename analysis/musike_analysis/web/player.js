@@ -1,9 +1,10 @@
 /* Musike 다리(음악 지도): 지도는 Musike 「음악 지도」 화면(/library/map)의 같은 origin iframe 안에서 돈다.
    재생·메뉴·재생목록은 Musike 쪽 것만 쓴다. 지도는 곡 번호만 window.parent 로 보낸다({musikeMap: 1, type, …}).
-   보내는 것: ready · radio{id}(그 곡부터 닮은 곡 라디오) · play{ids, start}(목록을 start 번째부터) · menu{ids, x, y, title}(곡 메뉴) ·
-   toggle · next · prev. 받는 것: player{id, state} · theme{theme} · favorites{ids}(Musike ♥).
+   보내는 것: ready(첫 화면을 그렸다) · radio{id}(그 곡부터 닮은 곡 라디오) · play{ids, start}(목록을 start 번째부터) · menu{ids, x, y, title}(곡 메뉴) ·
+   toggle · next · prev (지도 자료를 못 읽으면 지도 페이지가 직접 failed). 받는 것: player{id, state} · theme{theme} · favorites{ids}(Musike ♥) ·
+   visible{on}(Musike 가 지도 화면을 떠나면 지도는 숨긴 채 살아 있다).
    지도 템플릿에는 예전 미니 플레이어와 같은 모양으로 window.musicPlayer(재생), window.musicUser(♥)를 준다.
-   이벤트로 알리는 것: playerstate({i, state}) · songmarks(♥ 점 번호) · musiketheme(테마). */
+   이벤트로 알리는 것: playerstate({i, state}) · songmarks(♥ 점 번호) · musiketheme(테마) · musikevisible(보이는지, 숨으면 그리기를 멈춘다). */
 (() => {
   const P = window.P || [];
   const parent = window.parent !== window ? window.parent : null;
@@ -58,6 +59,8 @@
     } else if (d.type === 'favorites' && Array.isArray(d.ids)) {
       favs = new Set(d.ids.filter(x => typeof x === 'string'));
       dispatchEvent(new CustomEvent('songmarks', { detail: window.musicUser.favPoints() }));
+    } else if (d.type === 'visible') {
+      dispatchEvent(new CustomEvent('musikevisible', { detail: !!d.on }));
     }
   });
 

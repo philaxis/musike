@@ -750,6 +750,8 @@ export const pt: Messages = {
     map: "Mapa musical",
     mapMissing: "Ainda não há mapa musical",
     mapMissingBody: "A análise de gosto desenha o mapa a partir de todas as suas faixas toda manhã. Volte depois da próxima execução.",
+    mapLoading: "Desenhando o mapa…",
+    mapLoadFailed: "Os dados do mapa não carregaram. Verifique a conexão e tente de novo.",
   },
 
   works: {

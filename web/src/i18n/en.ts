@@ -764,6 +764,8 @@ export const en = {
     map: "Music map",
     mapMissing: "No music map yet",
     mapMissingBody: "The taste analysis draws the map from all your songs every morning. Come back after the next run.",
+    mapLoading: "Drawing the map…",
+    mapLoadFailed: "The map's data did not load. Check the connection and try again.",
   },
 
   // Albums, composers and performances of the taste analysis: from a track to where it belongs.

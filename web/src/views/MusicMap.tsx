@@ -1,4 +1,4 @@
-import { MapTrifoldIcon, WarningCircleIcon } from "@phosphor-icons/react";
+import { CircleNotchIcon, MapTrifoldIcon, WarningCircleIcon } from "@phosphor-icons/react";
 import { useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router";
 import { workRowMenu } from "../components/menus";
@@ -16,9 +16,11 @@ import { toast, useUi } from "../stores/ui";
 // The taste analysis's 3D music map (#26). Its page (served at /api/map/) runs in a same-origin frame; playing,
 // queueing and playlists stay Musike's own. The map sends track IDs, Musike answers with what is playing, the theme
 // and the ♥ tracks. Messages are `{ musikeMap: 1, type, … }` (see analysis/musike_analysis/web/player.js).
+// Once opened, the screen stays alive while the app runs (App mounts it beside the routes): leaving hides it and the
+// map stops drawing, coming back shows it as it was, with nothing to load again.
 
 type FromMap =
-  | { type: "ready" | "toggle" | "next" | "prev" }
+  | { type: "ready" | "failed" | "toggle" | "next" | "prev" }
   | { type: "radio"; id: string }
   | { type: "play"; ids: string[]; start: number }
   | { type: "menu"; ids: string[]; x: number; y: number; title?: string };
@@ -28,13 +30,24 @@ const MAX_IDS = 300;
 
 const ids = (v: unknown): string[] => (Array.isArray(v) ? v.filter((x): x is string => typeof x === "string").slice(0, MAX_IDS) : []);
 
-export default function MusicMap() {
+/** The map screen from its first visit on; hidden, not unmounted, while another screen shows. */
+export default function KeptMusicMap() {
+  const active = useLocation().pathname === paths.musicMap;
+  const [opened, setOpened] = useState(active);
+  if (active && !opened) setOpened(true);
+  return opened ? <MusicMap active={active} /> : null;
+}
+
+function MusicMap({ active }: { active: boolean }) {
   const t = useT();
   const location = useLocation();
   const navigate = useNavigate();
   const status = useRemote("music-map", (signal) => server.musicMap(signal));
   const frame = useRef<HTMLIFrameElement>(null);
+  // Until the map has drawn its first frame: a light loading cover. `failed`: its data did not load.
   const [drawn, setDrawn] = useState(false);
+  const [failed, setFailed] = useState(false);
+  const [attempt, setAttempt] = useState(0);
   // The map's own address state (`#v=<id>&g=…`) can come along in the link; read once, the frame keeps it after.
   const [src] = useState(() => {
     const hash = location.hash.slice(1);
@@ -42,6 +55,24 @@ export default function MusicMap() {
   });
   // Track details by ID, asked once per visit (null: not playable now, say gone from YouTube or a hidden file).
   const known = useRef(new Map<string, Promise<Track | null>>());
+
+  // Shown or hidden: the map draws only while shown. Coming back by a link with a map address (`#v=<id>`) goes there.
+  // Only on showing and hiding: the hash also changes for the now-playing sheet.
+  const shown = useRef(active);
+  useEffect(() => {
+    const before = shown.current;
+    shown.current = active;
+    const win = frame.current?.contentWindow;
+    if (!win || before === active) return;
+    win.postMessage({ musikeMap: 1, type: "visible", on: active }, window.location.origin);
+    const hash = location.hash.slice(1);
+    if (active && hash && hash !== NOW_PLAYING_HASH && win.location.hash.slice(1) !== hash) {
+      // A full address: a relative one would resolve against this page, not the frame's.
+      const url = new URL(win.location.href);
+      url.hash = hash;
+      win.location.replace(url.href);
+    }
+  }, [active, location.hash]);
 
   useEffect(() => {
     const post = (msg: Record<string, unknown>) => frame.current?.contentWindow?.postMessage({ musikeMap: 1, ...msg }, window.location.origin);
@@ -80,7 +111,11 @@ export default function MusicMap() {
           sendTheme();
           sendFavorites();
           sendPlayer();
+          // Left before it was drawn: it waits hidden.
+          if (!shown.current) post({ type: "visible", on: false });
           return;
+        case "failed":
+          return setFailed(true);
         case "toggle":
           return player.toggle();
         case "next":
@@ -140,16 +175,26 @@ export default function MusicMap() {
     };
   }, []);
 
+  const retry = () => {
+    setFailed(false);
+    setDrawn(false);
+    setAttempt((n) => n + 1);
+  };
+
   return (
-    <div className="flex h-full flex-col">
+    <div
+      className={active ? "flex h-full flex-col" : "invisible absolute inset-0 flex flex-col"}
+      inert={!active}
+      aria-hidden={!active || undefined}
+    >
       <PageHeader title={t.taste.map} actions={<BackButton fallback={paths.library} />} />
-      {status.status === "error" && (
+      {(status.status === "error" || failed) && (
         <EmptyState
           icon={<WarningCircleIcon size={28} />}
           title={t.taste.openFailed}
-          body={status.message}
+          body={status.status === "error" ? status.message : t.taste.mapLoadFailed}
           action={
-            <button type="button" onClick={status.retry} className="mt-2 h-11 rounded-full bg-surface-3 px-6 text-sm font-medium hover:bg-surface-4">
+            <button type="button" onClick={failed ? retry : status.retry} className="mt-2 h-11 rounded-full bg-surface-3 px-6 text-sm font-medium hover:bg-surface-4">
               {t.common.retry}
             </button>
           }
@@ -158,12 +203,19 @@ export default function MusicMap() {
       {status.status === "ok" && !status.data.ready && (
         <EmptyState icon={<MapTrifoldIcon size={28} />} title={t.taste.mapMissing} body={t.taste.mapMissingBody} />
       )}
-      {(status.status === "loading" || (status.status === "ok" && status.data.ready)) && (
+      {(status.status === "loading" || (status.status === "ok" && status.data.ready)) && !failed && (
         <div className="relative min-h-0 flex-1 overflow-hidden md:rounded-b-[20px]">
           {status.status === "ok" && (
-            <iframe ref={frame} src={src} title={t.taste.map} className="absolute inset-0 size-full border-0" allow="fullscreen" />
+            <iframe key={attempt} ref={frame} src={src} title={t.taste.map} className="absolute inset-0 size-full border-0" allow="fullscreen" />
           )}
-          {!drawn && <div aria-hidden="true" className="skeleton absolute inset-0" />}
+          {!drawn && (
+            <div className="skeleton absolute inset-0 grid place-items-center">
+              <span role="status" className="flex items-center gap-2 rounded-full bg-surface-1/90 px-4 py-2 text-sm text-fg-2 ring-1 ring-line">
+                <CircleNotchIcon size={16} className="animate-spin" />
+                {t.taste.mapLoading}
+              </span>
+            </div>
+          )}
         </div>
       )}
     </div>
