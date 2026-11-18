@@ -186,7 +186,7 @@ export interface VideoRef {
 export type VideoEvent = { at: number; id: string; track: Track; video: VideoRef } & (
   | { kind: "title" | "channel"; from: string; to: string }
   | { kind: "status"; from: VideoStatus; to: VideoStatus }
-  | { kind: "replaced"; to: string; by: "redirect" | "alternative" | "manual"; other: VideoRef }
+  | { kind: "replaced"; to: string; by: ReplacedBy; other: VideoRef }
   | { kind: "restored"; from: string; other: VideoRef }
 );
 

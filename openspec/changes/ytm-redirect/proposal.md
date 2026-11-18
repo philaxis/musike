@@ -17,7 +17,7 @@
 - API: `POST /api/box/:id/restore`, `GET /api/box?filter=replaced`, `/api/box/sources`의 `replaced` 수, `/api/prepare`의 `replaced`, 후보의 `redirect`.
 
 ## Impact
-- 서버: `server/src/ytMusic.ts`(새), `server/src/standIn.ts`(새), `box.ts`, `boxRoutes.ts`, `app.ts`(`/api/prepare`, 시작), `google.ts`(동기화 뒤), `ytdlp.ts`(`toHttpError`), `types.ts`, `i18n.ts`
+- 서버: `server/src/ytMusic.ts`(새), `server/src/standIn.ts`(새), `box.ts`, `boxRoutes.ts`, `app.ts`(`/api/prepare`, 시작), `google.ts`(`checkBox` 뒤), `ytdlp.ts`(`toHttpError`), `types.ts`, `i18n.ts`; 영상 기록(`ledger.ts`)에 바꿔 넣음·되돌림을 남겨 별칭으로 들은 기록·취향·라디오·지도가 새 곡을 따라감(video-ledger 2.3)
 - 웹: `player/player.ts`, `views/SongBox.tsx`, `components/Alternatives.tsx`, `lib/{server,apiTypes,types}.ts`, `i18n/{ko,en,pt}.ts`
 - 데이터: `box.json` 항목에 `replaced`·`standInAt`·`keepAside`가 더해진다(옛 파일은 그대로 읽힘)
 - 문서: `AGENTS.md` API 표
