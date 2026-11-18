@@ -20,6 +20,21 @@ const WARMUP_MS = 8_000;
 const WARMUP_STEP_MS = 500;
 
 /**
+ * Asks googlevideo for one byte until a freshly resolved URL stops answering 403 (up to WARMUP_MS), so the track
+ * starts at once when it is played. Used by `prepare`; failures are left to the stream request.
+ */
+export async function warmStream(fmt: StreamFormat): Promise<void> {
+  const deadline = Date.now() + WARMUP_MS;
+  for (;;) {
+    const res = await fetch(fmt.url, { headers: { ...fmt.headers, Range: "bytes=0-0" } }).catch(() => null);
+    await res?.body?.cancel();
+    if (res?.ok) return;
+    if (res?.status !== 403 || Date.now() + WARMUP_STEP_MS > deadline) return;
+    await sleep(WARMUP_STEP_MS);
+  }
+}
+
+/**
  * Proxies a googlevideo stream, forwarding Range so the browser can seek natively.
  * The browser's range is fetched upstream as consecutive bounded chunks (see CHUNK_BYTES) and sent as one body.
  * googlevideo URLs are bound to the IP that resolved them, so the bytes must flow through this server.
