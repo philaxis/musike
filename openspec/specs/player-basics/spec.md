@@ -57,3 +57,10 @@ TBD - created by archiving change music-basics. Update Purpose after archive.
 #### Scenario: 두 곡이 겹칠 때
 - **WHEN** 이미 1~3번 곡이 든 재생목록에 2~6번 곡을 넣는다
 - **THEN** 「이미 있는 2곡은 빼고 넣을까요?」가 뜨고, Enter(빼고 넣기)로 세 곡만 들어간다
+
+### Requirement: 열어 둔 탭도 새 버전을 받는다
+열어 둔 Musike 탭은 다시 앞에 올 때와 30분마다 새 버전을 확인해야 하며, 재생 중이 아니면 바로 새 버전으로 바뀌고 재생 중이면 「새로 고침」 알림만 띄운다(MUST).
+
+#### Scenario: 탭을 열어 둔 채 배포
+- **WHEN** 서버에 새 화면이 올라간 뒤 멈춰 둔 Musike 탭으로 돌아온다
+- **THEN** 몇 초 안에 새 화면으로 바뀐다
