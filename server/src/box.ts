@@ -267,9 +267,9 @@ export async function checkedAt(): Promise<number | undefined> {
   return (await load()).checkedAt;
 }
 
-/** The box's YouTube track IDs, for the check. */
-export async function youtubeIds(): Promise<string[]> {
-  return (await load()).entries.map((e) => e.track.id);
+/** The box's entries (all YouTube tracks), for the check and the video ledger. */
+export async function youtubeEntries(): Promise<readonly BoxEntry[]> {
+  return (await load()).entries;
 }
 
 /**

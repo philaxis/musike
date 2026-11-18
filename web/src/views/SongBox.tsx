@@ -13,6 +13,7 @@ import { server, type BoxItem, type BoxSource } from "../lib/server";
 import type { Track, Unplayable } from "../lib/types";
 import { usePlayer } from "../player/player";
 import { useTagEdits } from "../stores/tags";
+import { VideoChanges } from "../components/VideoChanges";
 import { useUi } from "../stores/ui";
 import { isTvMode } from "../tv/tvMode";
 
@@ -21,7 +22,8 @@ type SourceCount = Omit<BoxSource, "at"> & { count: number };
 /**
  * Library's 「곡 상자」: every track brought in (and the music folders), newest first, 200 at a time. Filter by
  * unsorted (no tags), source or tag; pick several to play or put in a playlist. Tracks that won't play here are put
- * aside under their own chip, each with 「다른 판 찾기」. Not in TV mode, which only plays.
+ * aside under their own chip, each with 「다른 판 찾기」; 「변경 기록」 lists what changed about the tracks on YouTube.
+ * Not in TV mode, which only plays.
  */
 export default function SongBox() {
   const [params, setParams] = useSearchParams();
@@ -34,7 +36,19 @@ export default function SongBox() {
   const tag = params.get("tag") ?? "";
   const untagged = params.get("filter") === "untagged";
   const aside = params.get("filter") === "blocked";
-  const mode = source || params.get("by") === "source" ? "source" : tag || params.get("by") === "tag" ? "tag" : untagged ? "untagged" : aside ? "aside" : "all";
+  const changes = params.get("filter") === "changes";
+  const mode =
+    source || params.get("by") === "source"
+      ? "source"
+      : tag || params.get("by") === "tag"
+        ? "tag"
+        : untagged
+          ? "untagged"
+          : aside
+            ? "aside"
+            : changes
+              ? "changes"
+              : "all";
 
   const [page, setPage] = useState<{ items: BoxItem[]; total: number; next: string | null } | null>(null);
   const [failed, setFailed] = useState(false);
@@ -48,12 +62,13 @@ export default function SongBox() {
 
   // A new filter starts a new list: the selection empties with it (rows that left the list leave it).
   useEffect(() => {
+    if (changes) return;
     const ctrl = new AbortController();
     setPage(null);
     setFailed(false);
     server.box(query, ctrl.signal).then(setPage, (e: Error) => e.name !== "AbortError" && setFailed(true));
     return () => ctrl.abort();
-  }, [untagged, aside, source, tag]);
+  }, [untagged, aside, source, tag, changes]);
 
   const items = page?.items ?? [];
   const tracks: Track[] = useMemo(() => (page?.items ?? []).map((it) => it.track), [page]);
@@ -128,6 +143,9 @@ export default function SongBox() {
               {t.aside.chip} <span className="font-mono opacity-70">{asideTotal}</span>
             </Chip>
           )}
+          <Chip on={mode === "changes"} onClick={() => setParams({ filter: "changes" })}>
+            {t.ledger.chip}
+          </Chip>
         </div>
 
         {mode === "source" && (
@@ -181,7 +199,9 @@ export default function SongBox() {
         )}
       </div>
 
-      {failed ? (
+      {changes ? (
+        <VideoChanges />
+      ) : failed ? (
         <EmptyState icon={<TrayIcon size={28} />} title={t.songBox.failed} body="" />
       ) : !page ? (
         <div className="px-2 md:px-3">

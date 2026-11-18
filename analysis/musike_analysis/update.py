@@ -1,11 +1,11 @@
-"""한 번에: 곡 후보 → 카드(새 곡만 Gemini) → 글 벡터 → 소리 조각·벡터(빠진 곡만) → 묶음 → taste.json → 소리 색인·지도."""
+"""한 번에: 곡 후보 → 바꿔 넣은 곡의 분석 옮기기 → 카드(새 곡만 Gemini) → 글 벡터 → 소리 조각·벡터(빠진 곡만) → 묶음 → taste.json → 소리 색인·지도."""
 
 from __future__ import annotations
 
 import json
 import time
 
-from . import audio, budget, cards, catalog, groups, mapbuild, songs as songs_api, soundsearch, taste, text
+from . import aliases, audio, budget, cards, catalog, groups, mapbuild, songs as songs_api, soundsearch, taste, text
 from .config import LOCK_PATH, OUT_DIR, STATE_PATH, require_work_dir
 from .util import BUSY, Lock, atomic_write_json, log, now_iso
 from .vectors import unit
@@ -19,6 +19,7 @@ def run(max_cost: float, with_audio: bool = True, with_map: bool = True, regroup
 
     songs = songs_api.load()
     log(f"곡 후보: {len(songs)}곡 (유튜브 {sum(s['source'] == 'youtube' for s in songs)} · 내 파일 {sum(s['source'] == 'local' for s in songs)})")
+    alias_stats = aliases.carry_over({s["id"] for s in songs})
     card_stats = cards.run(songs)
     by_id = {s["id"]: s for s in songs}
     music_cards = {s["id"]: c for s in songs if (c := cards.load(s["id"])) and c.get("is_music")}
@@ -61,6 +62,7 @@ def run(max_cost: float, with_audio: bool = True, with_map: bool = True, regroup
         "textRows": int(len(tmat)),
         "groups": [f"{g['id']} {g['name']} ({g['size']})" for g in group_list],
         "cards": card_stats,
+        "aliases": alias_stats,
         "text": text_stats,
         "audio": audio_stats,
         "soundsearch": sound_stats,
