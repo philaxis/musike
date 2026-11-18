@@ -479,7 +479,9 @@ export function streamLocalAudio(req: FastifyRequest, reply: FastifyReply, id: s
   if (!ffmpeg) throw new HttpError(503, msg("toolMissing", { tool: "FFmpeg" }), "tool_missing");
 
   const asked = Number((req.query as { t?: string }).t);
-  const t = Number.isFinite(asked) && asked > 0 && asked < (e.probe.duration ?? Infinity) ? asked : 0;
+  const duration = e.probe.duration ?? Infinity;
+  // At or past the end, send the last second so the track ends and the queue moves on (never restart from 0).
+  const t = Number.isFinite(asked) && asked > 0 ? Math.max(0, Math.min(asked, duration - 1)) : 0;
   const codec = e.probe.acodec ?? "";
   const webm = codec === "opus" || codec === "vorbis";
   const copy = webm || ["aac", "mp3", "alac"].includes(codec);
