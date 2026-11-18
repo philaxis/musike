@@ -36,3 +36,10 @@ TBD - created by archiving change song-box. Update Purpose after archive.
 #### Scenario: 계정 연결 뒤 보관함
 - **WHEN** 유튜브 계정에서 Classical(1,184곡)·그냥노래(860곡) 등이 들어온 뒤 보관함을 연다
 - **THEN** 곡 상자 칸에 「4,409곡」, 「유튜브에서 들여온 곡」에 「Classical 1,184곡」이 맨 앞에 보이고, 누르면 그 곡들만 보인다
+
+### Requirement: 검색과 이어 재생은 기본으로 들여온 곡만
+검색은 기본으로 곡 상자(내 폴더 포함)에서만 찾고 유튜브에는 묻지 않아야 하며, 「유튜브」 탭을 누를 때만 유튜브를 찾는다(MUST). 대기열이 끝났을 때 유튜브 라디오로 이어 트는 것은 기본으로 꺼져 있다.
+
+#### Scenario: asayake 찾기
+- **WHEN** 검색창에 "asayake"를 친다
+- **THEN** 들여온 곡 중 10곡이 보이고 유튜브 검색 요청은 나가지 않으며, 「유튜브」를 누르면 그때 유튜브 결과가 나온다
