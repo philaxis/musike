@@ -2,18 +2,14 @@ import type { FastifyInstance } from "fastify";
 import { msg } from "./i18n.js";
 import * as local from "./local.js";
 import { trackId } from "./serverRoutes.js";
-import { loadTaste } from "./taste.js";
-import { catalog } from "./tasteRoutes.js";
+import { loadWorks } from "./tasteRoutes.js";
 import { HttpError, isLocalId } from "./types.js";
-import { albumName, albumTracks, buildWorks, composerList, composerWorks, instanceTracks, parseInstance, trackWorks } from "./works.js";
+import { albumName, albumTracks, composerList, composerWorks, instanceTracks, parseInstance, trackWorks } from "./works.js";
 
 // Albums, composers and performances from the taste analysis (#26), over my tracks only (song box, music folders).
+// A movement of a performance that is one unit carries it as `work` (types.ts), so playing it keeps the rest together.
 
-async function currentWorks() {
-  const taste = await loadTaste();
-  const known = await catalog(taste);
-  return buildWorks(taste, new Map([...known].map(([id, k]) => [id, k.track])));
-}
+const currentWorks = async () => (await loadWorks()).works;
 
 export function registerWorkRoutes(app: FastifyInstance) {
   /**

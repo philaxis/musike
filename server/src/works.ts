@@ -25,6 +25,8 @@ export interface Works {
   albumOf: Map<number, string>;
   /** Performance → song indexes in movement order. */
   instances: Map<string, number[]>;
+  /** Song index → its performance's song indexes (movement order), for the performances that are one unit (two or more movements). */
+  units: Map<number, number[]>;
 }
 
 const song = (taste: Taste, i: number) => taste.songs[i] as Song;
@@ -85,8 +87,63 @@ export function buildWorks(taste: Taste, known: Map<string, Track>): Works {
     for (const i of ids) albumOf.set(i, key);
   }
   const order = movementOrder(works);
-  for (const ids of instances.values()) ids.sort(order);
-  return { taste, known, albums, albumOf, instances };
+  // A performance is one unit (listed as one row, played whole) when two or more of its playable tracks are
+  // movements; one known movement, or tracks of a work without movements, stay tracks of their own.
+  const units = new Map<number, number[]>();
+  for (const ids of instances.values()) {
+    ids.sort(order);
+    if (ids.filter((i) => song(taste, i).movement).length >= 2) for (const i of ids) units.set(i, ids);
+  }
+  return { taste, known, albums, albumOf, instances, units };
+}
+
+/** The song standing for song `i` where Musike picks tracks itself: its performance's first movement, or itself. */
+export const unitOf = (works: Pick<Works, "units">, i: number) => works.units.get(i)?.[0] ?? i;
+
+/** What a performance is called in a list: "Dvořák: Symphony No. 7 in D minor, Op. 70" (the composer by surname). */
+function unitTitle(works: Pick<Works, "taste">, i: number): string {
+  const s = song(works.taste, i);
+  const p = parseInstance(text(s.instance) ?? "");
+  const work = text(s.work) ?? p.work;
+  const surname = (text(s.composer) ?? p.composer)?.split(/\s+/).pop();
+  return surname ? `${surname}: ${work}` : work;
+}
+
+/**
+ * The row standing for a whole performance in Musike's own lists: a bundle row (id "W" + its first movement's) with
+ * the movements in `work.parts`, made for the response and never stored.
+ */
+export function unitRow(works: Works, ids: number[]): Track {
+  const parts = ids.map((i) => works.known.get(works.taste.songs[i].id)!);
+  const first = parts[0];
+  const key = text(song(works.taste, ids[0]).instance)!;
+  const title = unitTitle(works, ids[0]);
+  return {
+    id: `W${first.id}`,
+    title,
+    artist: parseInstance(key).performer || first.artist,
+    ...(first.album ? { album: first.album } : {}),
+    duration: parts.reduce((n, t) => n + t.duration, 0),
+    thumb: first.thumb,
+    art: first.art,
+    kind: "bundle",
+    work: { key, title, parts, labels: ids.map((i, n) => movementTitle(works, i) ?? parts[n].title) },
+  };
+}
+
+/** Playable songs as list rows: a movement of a unit stands for its whole performance, once, where it first comes. */
+export function unitRows(works: Works, ids: number[]): Track[] {
+  const seen = new Set<number>();
+  const out: Track[] = [];
+  for (const i of ids) {
+    const members = works.units.get(i);
+    if (!members) out.push(works.known.get(works.taste.songs[i].id)!);
+    else if (!seen.has(members[0])) {
+      seen.add(members[0]);
+      out.push(unitRow(works, members));
+    }
+  }
+  return out;
 }
 
 export const albumName = (key: string) => key.split("\t")[0];
@@ -120,7 +177,13 @@ export function trackWorks(works: Works, id: string): TrackWorks {
   };
 }
 
-const tracksOf = (works: Works, ids: number[]) => ids.map((i) => works.known.get(works.taste.songs[i].id)!);
+/** A movement of a unit carries its performance (`work`), so playing it keeps the movements after it together. */
+const tracksOf = (works: Works, ids: number[]) =>
+  ids.map((i) => {
+    const track = works.known.get(works.taste.songs[i].id)!;
+    const key = works.units.has(i) ? text(song(works.taste, i).instance) : null;
+    return key ? { ...track, work: { key, title: unitTitle(works, i) } } : track;
+  });
 
 const ROMAN: [number, string][] = [
   [1000, "M"],

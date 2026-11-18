@@ -6,8 +6,9 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { config } from "./config.js";
 import { langOf, msg, tr, type Msg } from "./i18n.js";
 import { aliases } from "./ledger.js";
-import { lookup } from "./tasteRoutes.js";
+import { loadWorks, lookup } from "./tasteRoutes.js";
 import type { Track } from "./types.js";
+import { unitRows } from "./works.js";
 
 // The music map (#26): the 3D map page the analysis writes to `<analysis>/map/`, served under /api/map/ so the web
 // app's service worker and 404 fallback leave it alone. The 「음악 지도」 screen shows it in a same-origin iframe.
@@ -116,14 +117,24 @@ const MAP_TRACKS = 500;
 
 /**
  * The playable tracks of map points, in order: a play or menu from the map. A replaced video's point is the video in
- * its place (the map is only redrawn by the next analysis). Unknown and gone tracks are left out.
+ * its place (the map is only redrawn by the next analysis). A movement of a performance that is one unit is its whole
+ * performance, once, where its first point comes. Unknown and gone tracks are left out.
  */
 export async function mapTracks(ids: unknown): Promise<Track[]> {
   const { resolve } = await aliases();
   const given = Array.isArray(ids) ? ids.filter((x): x is string => typeof x === "string").map(resolve) : [];
   const list = [...new Set(given)].slice(0, MAP_TRACKS);
-  const found = await Promise.all(list.map(lookup));
-  return found.flatMap((k) => (k ? [k.track] : []));
+  const { works } = await loadWorks();
+  // The analysed tracks that play are all in `works.known`; others (not analysed yet) are looked up one by one.
+  const found = await Promise.all(
+    list.map(async (id) => {
+      const i = works.taste.index.get(id);
+      if (i !== undefined) return works.known.has(id) ? unitRows(works, [i])[0] : null;
+      return (await lookup(id))?.track ?? null;
+    }),
+  );
+  const rows = found.filter((t): t is Track => !!t);
+  return rows.filter((t, n) => rows.findIndex((x) => x.id === t.id) === n);
 }
 
 export function registerMapRoutes(app: FastifyInstance) {

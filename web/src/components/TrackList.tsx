@@ -9,6 +9,7 @@ import {
   VideoCameraIcon,
 } from "@phosphor-icons/react";
 import { useLayoutEffect, useRef, useState, type CSSProperties, type MouseEvent, type PointerEvent } from "react";
+import { useNavigate } from "react-router";
 import { useT } from "../i18n";
 import { cn, formatTime } from "../lib/format";
 import { isLocal } from "../lib/server";
@@ -21,6 +22,7 @@ import type { MenuTarget } from "../stores/ui";
 import { isTvMode } from "../tv/tvMode";
 import { Artwork } from "./Artwork";
 import { Equalizer } from "./Brand";
+import { workRowMenu } from "./menus";
 import { menuTrigger, NO_CALLOUT, openMenu, openMenuFromButton, startLongPress } from "./menuTrigger";
 import { useDragReorder } from "./reorder";
 import { Check, SelectedCount, SelectionBar, Short, useListSelection } from "./Selection";
@@ -71,7 +73,9 @@ function TrackRow({
     return part?.bundle === track.id ? part.n : 0;
   });
   const isCurrent = usePlayer((s) => selectCurrent(s)?.id === track.id) || playingPart > 0;
-  const bundle = useLibrary((s) => (track.kind === "bundle" ? s.bundles?.find((b) => b.id === track.id) : undefined));
+  // A bundle row's parts: a library bundle's, or a performance row's movements (with their own row titles).
+  const stored = useLibrary((s) => (track.kind === "bundle" && !track.work ? s.bundles?.find((b) => b.id === track.id) : undefined));
+  const parts = track.work?.parts ?? stored?.parts;
   const [expanded, setExpanded] = useState(false);
   const isPlaying = usePlayer((s) => s.status === "playing" || s.status === "loading");
   const isFavorite = useLibrary((s) => s.favorites.some((t) => t.id === track.id));
@@ -159,9 +163,9 @@ function TrackRow({
         </p>
         <p className="mt-0.5 flex items-center gap-1.5 truncate text-[13px] text-fg-2">
           {track.kind === "video" && <VideoCameraIcon size={13} className="shrink-0 text-fg-3" aria-label={t.common.video} />}
-          {bundle && (
+          {parts && (
             <span className="shrink-0 rounded-full bg-accent-soft px-1.5 text-[11px] leading-[18px] font-medium text-accent-text">
-              {t.songBox.bundle(bundle.parts.length)}
+              {track.work?.parts ? t.works.movements(parts.length) : t.songBox.bundle(parts.length)}
             </span>
           )}
           {isLocal(track) ? (
@@ -183,25 +187,30 @@ function TrackRow({
       {showAlbum && <p className="pointer-events-none hidden truncate text-sm text-fg-2 lg:block">{track.album ?? ""}</p>}
 
       <div className="relative z-10 hidden items-center gap-1 md:flex">
-        <button
-          type="button"
-          onClick={() => void toggleFavorite(track)}
-          aria-label={isFavorite ? t.common.removeFromFavorites : t.common.addToFavorites}
-          title={isFavorite ? t.common.removeFromFavorites : t.common.addToFavorites}
-          className={cn(
-            "grid size-8 place-items-center rounded-full transition-[opacity,transform] active:scale-90",
-            isFavorite ? "text-accent-text" : "text-fg-2 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 hover:text-fg",
-          )}
-        >
-          <HeartIcon size={17} weight={isFavorite ? "fill" : "regular"} />
-        </button>
+        {/* A performance row is made for this list only: ♥ goes to its movements (menu, selection), not to it. */}
+        {track.work?.parts ? (
+          <span className="size-8" />
+        ) : (
+          <button
+            type="button"
+            onClick={() => void toggleFavorite(track)}
+            aria-label={isFavorite ? t.common.removeFromFavorites : t.common.addToFavorites}
+            title={isFavorite ? t.common.removeFromFavorites : t.common.addToFavorites}
+            className={cn(
+              "grid size-8 place-items-center rounded-full transition-[opacity,transform] active:scale-90",
+              isFavorite ? "text-accent-text" : "text-fg-2 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 hover:text-fg",
+            )}
+          >
+            <HeartIcon size={17} weight={isFavorite ? "fill" : "regular"} />
+          </button>
+        )}
         <span className="pointer-events-none w-11 text-right font-mono text-[13px] text-fg-3 tabular-nums">
           {track.duration ? formatTime(track.duration) : ""}
         </span>
       </div>
 
       <div className="relative z-10 flex items-center">
-        {bundle && (
+        {parts && (
           <button
             type="button"
             onClick={() => setExpanded(!expanded)}
@@ -224,10 +233,10 @@ function TrackRow({
         </button>
       </div>
 
-      {expanded && bundle && (
+      {expanded && parts && (
         // The parts, played from where you tap; inside the row so dragging still moves the bundle as one.
         <ol className="relative z-10 col-span-full -mt-1 mb-1 flex flex-col md:pl-10" onPointerDown={(e) => e.stopPropagation()}>
-          {bundle.parts.map((part, n) => (
+          {parts.map((part, n) => (
             <li key={`${part.id}-${n}`}>
               <button
                 type="button"
@@ -239,7 +248,7 @@ function TrackRow({
                   {playingPart === n + 1 ? <Equalizer live={isPlaying} /> : n + 1}
                 </span>
                 <span className={cn("min-w-0 flex-1 truncate text-sm", playingPart === n + 1 ? "text-accent-text" : "text-fg")}>
-                  {part.title}
+                  {track.work?.labels?.[n] ?? part.title}
                 </span>
                 <span className="shrink-0 font-mono text-xs text-fg-3 tabular-nums">{part.duration ? formatTime(part.duration) : ""}</span>
               </button>
@@ -293,8 +302,12 @@ export function TrackList({
   const allSelected = picking && sel.chosen.length === new Set(tracks.map((x) => x.id)).size;
   // Dragged onto a sidebar playlist, a picked row carries the whole selection.
   const carried = (i: number) => (sel.has(tracks[i].id) && sel.chosen.length > 1 ? sel.chosen : [tracks[i]]);
-  const menuFor = (i: number) =>
-    sel.menuFor(i, { kind: "track", track: tracks[i], row: playlistId ? { playlistId, at: i } : undefined }, playlistId);
+  const navigate = useNavigate();
+  // A performance row's menu is its group menu (it plays whole, and goes to playlists as its movements).
+  const menuFor = (i: number) => {
+    const target = sel.menuFor(i, { kind: "track", track: tracks[i], row: playlistId ? { playlistId, at: i } : undefined }, playlistId);
+    return target.kind === "track" && target.track.work?.parts ? workRowMenu(target.track, (to) => navigate(to), target.select) : target;
+  };
   const reorder = useDragReorder(!!onReorder, (from, to) => onReorder?.(from, to), {
     onHold: (i, x, y) => openMenu(menuFor(i), x, y),
     dropTracks: tv ? undefined : carried,

@@ -223,11 +223,11 @@ export async function startServer(opts: StartOptions = {}): Promise<RunningServe
     return { favorites: await library.addFavorite(track) };
   });
 
-  /** Bulk add, e.g. from the list search. */
+  /** Bulk add, e.g. from the list search; a performance row of the taste lists adds its movements. */
   app.post("/api/favorites", async (req) => {
     const { tracks } = (req.body ?? {}) as { tracks?: unknown };
     if (!Array.isArray(tracks)) throw new HttpError(400, msg("tracksRequired"));
-    return { favorites: await library.addFavorites(tracks.slice(0, 500).map(library.sanitizeTrack)) };
+    return { favorites: await library.addFavorites(library.storedBodies(tracks).slice(0, 500).map(library.sanitizeTrack)) };
   });
 
   app.delete("/api/favorites/:id", async (req) => ({ favorites: await library.removeFavorite(trackId(req.params)) }));
@@ -240,7 +240,7 @@ export async function startServer(opts: StartOptions = {}): Promise<RunningServe
 
   app.post("/api/playlists", MANY, async (req) => {
     const body = (req.body ?? {}) as { name?: unknown; tracks?: unknown };
-    const tracks = Array.isArray(body.tracks) ? body.tracks.slice(0, MANY_TRACKS).map(library.sanitizeTrack) : [];
+    const tracks = Array.isArray(body.tracks) ? library.storedBodies(body.tracks).slice(0, MANY_TRACKS).map(library.sanitizeTrack) : [];
     return library.createPlaylist(typeof body.name === "string" ? body.name : "", tracks);
   });
 
@@ -255,10 +255,13 @@ export async function startServer(opts: StartOptions = {}): Promise<RunningServe
     return reply.code(204).send();
   });
 
-  /** One track, or `{ tracks: [...] }` to add many at once; `duplicates: true` also adds those already in it. */
+  /**
+   * One track, or `{ tracks: [...] }` to add many at once; `duplicates: true` also adds those already in it. A
+   * performance row of the taste lists adds its movements.
+   */
   app.post("/api/playlists/:pid/tracks", MANY, async (req) => {
     const body = (req.body ?? {}) as { tracks?: unknown; duplicates?: unknown };
-    const tracks = Array.isArray(body.tracks) ? body.tracks.slice(0, MANY_TRACKS).map(library.sanitizeTrack) : library.sanitizeTrack(req.body);
+    const tracks = library.storedBodies(Array.isArray(body.tracks) ? body.tracks : [req.body]).slice(0, MANY_TRACKS).map(library.sanitizeTrack);
     return library.addToPlaylist((req.params as { pid: string }).pid, tracks, { duplicates: body.duplicates === true });
   });
 

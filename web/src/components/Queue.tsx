@@ -41,7 +41,7 @@ function BundleRow({ start, end, drag }: { start: number; end: number; drag: Row
           <p className="truncate text-sm font-medium text-fg">{title}</p>
           <p className="flex items-center gap-1.5 truncate text-xs text-fg-2">
             <span className="shrink-0 rounded-full bg-accent-soft px-1.5 leading-[18px] font-medium text-accent-text">
-              {t.songBox.bundle(parts.length)}
+              {first.part.movements ? t.works.movements(parts.length) : t.songBox.bundle(parts.length)}
             </span>
             <span className="truncate">{first.artist}</span>
           </p>

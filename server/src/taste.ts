@@ -247,15 +247,26 @@ export function mmr(taste: Taste, candidates: number[], relevance: ArrayLike<num
 export const RADIO_SIZE = 25;
 const RADIO_POOL = 200;
 
-/** A radio from one song: the song, then the most alike others picked for variety (MMR λ 0.75, 2 per artist). */
-export function radio(taste: Taste, seed: number, available: (i: number) => boolean, artistOf: (i: number) => string): number[] {
-  const rel = simsTo(taste, probeOf(taste, [seed]));
+/**
+ * A radio from one song: the song, then the most alike others picked for variety (MMR λ 0.75, 2 per artist). A
+ * performance that is one unit (`units`, works.ts) counts once, as its first movement: a movement seed is its whole
+ * performance (compared by all its movements), and no other movement of a picked performance is picked again.
+ */
+export function radio(
+  taste: Taste,
+  seed: number,
+  available: (i: number) => boolean,
+  artistOf: (i: number) => string,
+  units: Map<number, number[]> = new Map(),
+): number[] {
+  const first = units.get(seed)?.[0] ?? seed;
+  const rel = simsTo(taste, probeOf(taste, units.get(seed) ?? [seed]));
   const pool = taste.songs
     .map((_, i) => i)
-    .filter((i) => i !== seed && available(i))
+    .filter((i) => i !== first && available(i) && (units.get(i)?.[0] ?? i) === i)
     .sort((x, y) => rel[y] - rel[x])
     .slice(0, RADIO_POOL);
-  return [seed, ...mmr(taste, pool, rel, { count: RADIO_SIZE - 1, lambda: 0.75, perArtist: 2, artistOf, picked: [seed] })];
+  return [first, ...mmr(taste, pool, rel, { count: RADIO_SIZE - 1, lambda: 0.75, perArtist: 2, artistOf, picked: [first] })];
 }
 
 /** A small seeded random generator (mulberry32), so a day's mixes come out the same all day. */

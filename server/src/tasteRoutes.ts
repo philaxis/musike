@@ -10,6 +10,7 @@ import { dayLikeIds, dayOf } from "./stats.js";
 import { trackId } from "./serverRoutes.js";
 import { loadTaste, probeOf, radio, simsTo, type Taste } from "./taste.js";
 import { HttpError, VIDEO_ID, type Track } from "./types.js";
+import { buildWorks, unitOf, unitRow, unitRows, type Works } from "./works.js";
 
 // The taste API (#26): genres and sound groups of the analysis, the alike-tracks radio and the automatic playlists.
 // Track details (title, cover) come from the song box and the music folders; tracks in neither, and YouTube tracks
@@ -60,22 +61,33 @@ function topArtists(tracks: Track[], count: number): string[] {
   return [...n].sort((a, b) => b[1] - a[1]).slice(0, count).map(([a]) => a);
 }
 
-/** Songs of one sound group (or of a genre without a group: `none:<genre>`), most typical first. */
-function groupSongs(taste: Taste, known: Map<string, Known>, gid: string): number[] {
+/**
+ * The analysis, its tracks that can be played now and their albums and performances (works.ts). Where Musike lists
+ * or picks tracks itself, a performance that is one unit is one row (`unitRows`).
+ */
+export async function loadWorks() {
+  const taste = await loadTaste();
+  const known = await catalog(taste);
+  return { known, works: buildWorks(taste, new Map([...known].map(([id, k]) => [id, k.track]))) };
+}
+
+/** Songs of one sound group (or of a genre without a group: `none:<genre>`), a performance as its first movement, most typical first. */
+function groupSongs(works: Works, gid: string): number[] {
+  const { taste } = works;
   const none = gid.startsWith("none:") ? gid.slice(5) : null;
   const members = taste.songs
     .map((_, i) => i)
     .filter((i) => {
       const s = taste.songs[i];
-      return known.has(s.id) && (none === null ? s.group === gid : s.genre === none && !s.group);
+      return works.known.has(s.id) && unitOf(works, i) === i && (none === null ? s.group === gid : s.genre === none && !s.group);
     });
   const rel = simsTo(taste, probeOf(taste, members));
   return members.sort((a, b) => rel[b] - rel[a]);
 }
 
 async function currentMixes(now = Date.now()) {
-  const [taste, { plays }, lib, daylikes] = await Promise.all([loadTaste(), loadPlays(), library.getLibrary(), dayLikeIds()]);
-  const known = await catalog(taste);
+  const [{ known, works }, { plays }, lib, daylikes] = await Promise.all([loadWorks(), loadPlays(), library.getLibrary(), dayLikeIds()]);
+  const { taste } = works;
   // Tracks heard but not analysed (yet) still make "on repeat" and "forgotten".
   const lastPlay = new Map(plays.map((p) => [p.id, p]));
   for (const [id, p] of lastPlay) {
@@ -92,24 +104,31 @@ async function currentMixes(now = Date.now()) {
     favorites: lib.favorites.map((t) => t.id),
     daylikes,
     known: new Map([...known].map(([id, k]): [string, KnownTrack] => [id, { artist: k.track.artist, addedAt: k.addedAt }])),
+    units: works.units,
   });
   return {
     ready: taste.songs.length > 0,
     mixes: mixes.map(({ ids, ...mix }) => {
-      const tracks = ids.map((id) => known.get(id)!.track);
+      const tracks = ids.map((id) => {
+        const members = works.units.get(taste.index.get(id) ?? -1);
+        return members ? unitRow(works, members) : known.get(id)!.track;
+      });
       return { ...mix, artists: topArtists(tracks, 3), tracks };
     }),
   };
 }
 
 export function registerTasteRoutes(app: FastifyInstance) {
-  /** Genres with how many playable tracks and sound groups each has and four typical tracks, biggest first. */
+  /**
+   * Genres with how many playable tracks (a performance that is one unit counts once) and sound groups each has and
+   * four typical tracks, biggest first.
+   */
   app.get("/api/taste/genres", async () => {
-    const taste = await loadTaste();
-    const known = await catalog(taste);
+    const { works } = await loadWorks();
+    const { taste } = works;
     const genres = new Map<string, { songs: number[]; groups: Set<string> }>();
     taste.songs.forEach((s, i) => {
-      if (!known.has(s.id)) return;
+      if (!works.known.has(s.id) || unitOf(works, i) !== i) return;
       const g = genres.get(s.genre) ?? { songs: [], groups: new Set() };
       g.songs.push(i);
       g.groups.add(s.group ?? "");
@@ -122,26 +141,30 @@ export function registerTasteRoutes(app: FastifyInstance) {
         .map(([genre, g]) => {
           const rel = simsTo(taste, probeOf(taste, g.songs));
           const typical = [...g.songs].sort((a, b) => rel[b] - rel[a]).slice(0, 4);
-          return { genre, count: g.songs.length, groups: g.groups.size, tracks: typical.map((i) => known.get(taste.songs[i].id)!.track) };
+          return { genre, count: g.songs.length, groups: g.groups.size, tracks: unitRows(works, typical) };
         }),
     };
   });
 
   /**
    * A genre's sound groups: name, size, main artists and four typical tracks. When another group has the same name,
-   * `tell` is an artist that sets this one apart (a main artist of it that isn't one of the other's).
+   * `tell` is an artist that sets this one apart (a main artist of it that isn't one of the other's). A performance
+   * that is one unit belongs to the group of its first movement.
    */
   app.get("/api/taste/genres/:genre", async (req) => {
     const { genre } = req.params as { genre: string };
-    const taste = await loadTaste();
-    const known = await catalog(taste);
-    const ids = [...new Set(taste.songs.filter((s) => s.genre === genre && known.has(s.id)).map((s) => s.group ?? `none:${genre}`))];
+    const { works } = await loadWorks();
+    const { taste } = works;
+    const ids = [
+      ...new Set(
+        taste.songs.flatMap((s, i) => (s.genre === genre && works.known.has(s.id) && unitOf(works, i) === i ? [s.group ?? `none:${genre}`] : [])),
+      ),
+    ];
     if (!ids.length) throw new HttpError(404, msg("tasteGenreNotFound"));
     const groups = ids.map((id) => {
-      const songs = groupSongs(taste, known, id);
-      const tracks = songs.map((i) => known.get(taste.songs[i].id)!.track);
+      const tracks = unitRows(works, groupSongs(works, id));
       const name = taste.groups.find((g) => g.id === id)?.name ?? null;
-      return { id, name, size: songs.length, artists: topArtists(tracks, 6), tracks: tracks.slice(0, 4) };
+      return { id, name, size: tracks.length, artists: topArtists(tracks, 6), tracks: tracks.slice(0, 4) };
     });
     const rank = (id: string) => (id.startsWith("none:") ? 2 : id.endsWith("·etc") ? 1 : 0);
     groups.sort((a, b) => rank(a.id) - rank(b.id) || b.size - a.size);
@@ -159,37 +182,40 @@ export function registerTasteRoutes(app: FastifyInstance) {
 
   app.get("/api/taste/groups/:gid", async (req) => {
     const { gid } = req.params as { gid: string };
-    const taste = await loadTaste();
-    const known = await catalog(taste);
-    const songs = groupSongs(taste, known, gid);
+    const { works } = await loadWorks();
+    const songs = groupSongs(works, gid);
     if (!songs.length) throw new HttpError(404, msg("tasteGroupNotFound"));
-    const tracks = songs.map((i) => known.get(taste.songs[i].id)!.track);
-    const group = taste.groups.find((g) => g.id === gid);
+    const tracks = unitRows(works, songs);
+    const group = works.taste.groups.find((g) => g.id === gid);
     return {
-      group: { id: gid, name: group?.name ?? null, genre: group?.genre ?? taste.songs[songs[0]].genre, artists: topArtists(tracks, 3) },
+      group: { id: gid, name: group?.name ?? null, genre: group?.genre ?? works.taste.songs[songs[0]].genre, artists: topArtists(tracks, 3) },
       tracks,
     };
   });
 
   /**
    * The alike-tracks radio of an analysed track, the track first; `analyzed: false` for one the analysis lacks. A
-   * replaced video's radio is that of the video in its place.
+   * replaced video's radio is that of the video in its place. A movement of a performance that is one unit starts
+   * the radio with its whole performance (`seed`, a bundle row), and other performances come whole too.
    */
   app.get("/api/taste/radio/:id", async (req) => {
     const id = (await aliases()).resolve(trackId(req.params));
     const taste = await loadTaste();
     const seed = taste.index.get(id);
     if (seed === undefined) return { analyzed: false, seed: null, tracks: [] };
-    const known = await catalog(taste);
+    const { known, works } = await loadWorks();
     const seedTrack = known.get(id)?.track ?? (await box.findTrack(id));
     const picked = radio(
       taste,
       seed,
       (i) => known.has(taste.songs[i].id),
       (i) => (i === seed ? seedTrack?.artist ?? "" : known.get(taste.songs[i].id)!.track.artist),
+      works.units,
     );
-    const tracks = picked.map((i) => (i === seed ? seedTrack : known.get(taste.songs[i].id)!.track)).filter((t): t is Track => !!t);
-    return { analyzed: true, seed: seedTrack, tracks };
+    // A seed that can't be played here (put aside, not kept) isn't among `known`: its own track first.
+    const rows = unitRows(works, picked.filter((i) => known.has(taste.songs[i].id)));
+    const tracks = known.has(id) ? rows : [seedTrack, ...rows].filter((t): t is Track => !!t);
+    return { analyzed: true, seed: known.has(id) ? rows[0] : seedTrack, tracks };
   });
 
   app.get("/api/taste/mixes", () => currentMixes());

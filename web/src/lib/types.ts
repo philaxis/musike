@@ -24,6 +24,22 @@ export interface Track {
   blocked?: Unplayable;
   /** Never on the server: this queued track is one part of a bundle the player expanded (see lib/bundles.ts). */
   part?: BundlePart;
+  /** From the server, never stored: the performance this is (or is a movement of), when it is one unit (see WorkUnit). */
+  work?: WorkUnit;
+}
+
+/**
+ * A performance of a multi-movement work, which Musike plays and lists as one unit (the server's works.ts). A movement
+ * on a work page carries `key` and `title`: movements of one performance listed together play as one bundle run. The
+ * row standing for a whole performance in Musike's own lists (radio, mixes, sound groups, the map) is a bundle row
+ * (id "W" + its first movement's) that also has `parts`, its movements in order, and `labels`, each one's row title.
+ */
+export interface WorkUnit {
+  key: string;
+  /** "Dvořák: Symphony No. 7 in D minor, Op. 70" */
+  title: string;
+  parts?: Track[];
+  labels?: string[];
 }
 
 /** Where a queued track sits in the bundle it came from. `run` tells two plays of one bundle apart. */
@@ -33,6 +49,8 @@ export interface BundlePart {
   n: number;
   of: number;
   run: string;
+  /** The run is one performance's movements (WorkUnit), not a bundle of the library. */
+  movements?: boolean;
 }
 
 /** Several tracks played in order as one row (a symphony's movements, a live set). Rows elsewhere point here by id. */

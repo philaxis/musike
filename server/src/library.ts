@@ -65,6 +65,14 @@ export function sanitizeTrack(input: unknown): Track {
   };
 }
 
+/** Track bodies to store: a performance row of the taste lists (`work.parts`, works.ts; never stored) is its movements. */
+export function storedBodies(input: unknown[]): unknown[] {
+  return input.flatMap((raw) => {
+    const parts = (raw as { work?: { parts?: unknown } } | null)?.work?.parts;
+    return Array.isArray(parts) ? parts : [raw];
+  });
+}
+
 function findPlaylist(lib: Library, pid: string): Playlist {
   const p = lib.playlists.find((x) => x.id === pid);
   if (!p) throw new HttpError(404, msg("playlistNotFound"));

@@ -748,6 +748,8 @@ export const pt: Messages = {
     composerSub: (tracks, works) => [count(tracks, "faixa", "faixas"), works ? count(works, "obra", "obras") : ""].filter(Boolean).join(" · "),
     performances: (n) => count(n, "gravação", "gravações"),
     unknownPerformer: "Intérprete desconhecido",
+    movements: (n) => count(n, "movimento", "movimentos"),
+    showMovements: "Movimentos",
     otherTracks: "Outras faixas",
     empty: "Ainda não há compositores",
     emptyBody: "Aparecem quando a análise de gosto descobre quem compôs suas faixas.",

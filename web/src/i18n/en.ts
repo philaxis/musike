@@ -763,6 +763,9 @@ export const en = {
     composerSub: (tracks: number, works: number) => [count(tracks, "track", "tracks"), works ? count(works, "work", "works") : ""].filter(Boolean).join(" · "),
     performances: (n: number) => count(n, "performance", "performances"),
     unknownPerformer: "Unknown performer",
+    /** A row standing for a whole performance (radio, mixes, sound groups, the map): how many movements it plays. */
+    movements: (n: number) => count(n, "movement", "movements"),
+    showMovements: "Movements",
     otherTracks: "Other tracks",
     empty: "No composers yet",
     emptyBody: "They show up once the taste analysis finds who wrote your tracks.",

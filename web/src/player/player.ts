@@ -2,7 +2,7 @@ import { create } from "zustand";
 import { getT, useT } from "../i18n";
 import { api, capabilities, explainStreamError, streamSource, systemMedia, type ApiError, type ErrorCode } from "../lib/api";
 import { createAudio } from "../lib/audio";
-import { bundleParts, bundleRow, queueRows, trackTitle } from "../lib/bundles";
+import { bundleParts, bundleRow, joinMovements, queueRows, trackTitle, workBundle } from "../lib/bundles";
 import { shuffled } from "../lib/format";
 import { paths } from "../lib/routes";
 import { isLocal, server } from "../lib/server";
@@ -151,16 +151,22 @@ const AHEAD_PREV = 2;
 let preloaded: { el: HTMLMediaElement; id: string; offset: boolean } | null = null;
 
 /**
- * A radio from `track`, without it: alike tracks from the server's taste analysis when it knows the track (box or
- * music folder), else YouTube's radio. `alike` tells which. Local tracks and bundles have no YouTube radio.
+ * A radio from `track`, what stands for it first: alike tracks from the server's taste analysis when it knows the track
+ * (box or music folder), else YouTube's radio. `alike` tells which. The analysis starts a movement's radio with its
+ * whole performance (a row of `work.parts`) and asks a performance row's by its first movement. Local tracks and
+ * bundles have no YouTube radio.
  */
 async function radioFor(track: Track): Promise<{ tracks: Track[]; alike: boolean }> {
-  if (capabilities.serverLibrary && track.kind !== "bundle") {
-    const r = await server.tasteRadio(track.id).catch(() => null);
-    if (r?.analyzed && r.tracks.length > 1) return { tracks: r.tracks.filter((t) => t.id !== track.id), alike: true };
+  const seed = track.work?.parts?.[0] ?? track;
+  if (capabilities.serverLibrary && seed.kind !== "bundle") {
+    const r = await server.tasteRadio(seed.id).catch(() => null);
+    if (r?.analyzed && r.tracks.length > 1) {
+      const stands = (t: Track) => t.id === track.id || t.id === seed.id || !!t.work?.parts?.some((p) => p.id === seed.id);
+      return { tracks: [r.tracks.find(stands) ?? track, ...r.tracks.filter((t) => !stands(t))], alike: true };
+    }
   }
-  if (isLocal(track) || track.kind === "bundle") throw new Error(getT().taste.notAnalyzed);
-  return { tracks: await api.radio(track.id), alike: false };
+  if (isLocal(seed) || seed.kind === "bundle") throw new Error(getT().taste.notAnalyzed);
+  return { tracks: [track, ...(await api.radio(track.id)).filter((t) => t.id !== track.id)], alike: false };
 }
 
 const STORAGE_KEY = "musike:player";
@@ -224,13 +230,22 @@ const needsClipLookup = (track: Track, preferVideo: boolean) =>
   preferVideo && track.kind === "song" && !isLocal(track) && !clipFor.has(track.id);
 
 /**
- * Each of `tracks` as what it plays: a bundle row becomes its parts (lib/bundles.ts), anything else itself. Bundles the
- * library doesn't know yet (a /play/<id> link opened before it loaded) are fetched first.
+ * What `tracks` play, as queue rows: a bundle row becomes its parts (lib/bundles.ts), a performance row of the server
+ * its movements, movements of one performance listed together one run, anything else itself. `place[i]`: the row and
+ * position track `i` went to. Bundles the library doesn't know yet (a /play/<id> link opened before it loaded) are
+ * fetched first.
  */
-function withParts(tracks: Track[], then: (rows: Track[][]) => void) {
+function withParts(tracks: Track[], then: (rows: Track[][], place: { row: number; at: number }[]) => void) {
   const known = new Map<string, Bundle>((useLibrary.getState().bundles ?? []).map((b) => [b.id, b]));
-  const missing = [...new Set(tracks.filter((t) => t.kind === "bundle" && !known.has(t.id)).map((t) => t.id))];
-  const expand = () => then(tracks.map((t) => (t.kind !== "bundle" ? [t] : known.has(t.id) ? bundleParts(known.get(t.id)!) : [])));
+  const missing = [...new Set(tracks.filter((t) => t.kind === "bundle" && !t.work?.parts && !known.has(t.id)).map((t) => t.id))];
+  const expand = () => {
+    const expanded = tracks.map((t) => {
+      const bundle = workBundle(t) ?? (t.kind === "bundle" ? known.get(t.id) : undefined);
+      return bundle ? bundleParts(bundle) : t.kind === "bundle" ? [] : [t];
+    });
+    const { rows, place } = joinMovements(tracks, expanded);
+    then(rows, place);
+  };
   if (!missing.length) return expand();
   Promise.all(missing.map((id) => server.bundle(id))).then(
     (found) => {
@@ -549,8 +564,16 @@ export const usePlayer = create<PlayerState>((set, get, store) => {
     if (!last) return;
     set({ status: "loading", statusText: "fetchingRadio" });
     try {
-      const known = new Set(get().queue.map((t) => t.id));
-      const more = (await radioFor(last)).tracks.filter((t) => !known.has(t.id)).slice(0, 25);
+      // What stands for `last` comes first: the rest, without what is queued already (a performance by any movement).
+      const queued = new Set(get().queue.map((t) => t.id));
+      const more = (await radioFor(last)).tracks
+        .slice(1)
+        .filter((t) => !queued.has(t.id) && !t.work?.parts?.some((p) => queued.has(p.id)))
+        .slice(0, 25)
+        .flatMap((t) => {
+          const work = workBundle(t);
+          return work ? bundleParts(work) : [t];
+        });
       if (!more.length) throw new Error("empty");
       set((st) => ({
         queue: [...st.queue, ...more],
@@ -568,9 +591,11 @@ export const usePlayer = create<PlayerState>((set, get, store) => {
     const track = s.queue[s.index];
     if (!track || recordedToken === token) return;
     recordedToken = token;
-    // A bundle goes into the history as its row, not as the part that happens to start.
+    // A bundle goes into the history as its row, not as the part that happens to start; a performance's movement (no
+    // stored row) as the plain track, without its place in this queue.
     const bundle = track.part && useLibrary.getState().bundles?.find((b) => b.id === track.part!.bundle);
-    useLibrary.getState().recordPlay(bundle ? bundleRow(bundle) : track);
+    const { part: _part, work: _work, ...plain } = track;
+    useLibrary.getState().recordPlay(bundle ? bundleRow(bundle) : plain);
     startedAt = Date.now();
     scheduleAhead(AHEAD_DELAY_MS);
   }
@@ -832,11 +857,13 @@ export const usePlayer = create<PlayerState>((set, get, store) => {
 
     playList: (tracks, start = 0, part = 0, chosen = false) => {
       if (!tracks.length) return;
-      withParts(tracks, (rows) => {
-        const at = rows[start]?.length ? start : 0;
+      withParts(tracks, (rows, place) => {
+        const to = place[start] ?? place[0];
+        const at = rows[to.row]?.length ? to.row : 0;
         const all = rows.flat();
         if (!all.length) return;
-        const from = Math.min(part, rows[at].length - 1);
+        // A movement of a joined performance starts where it is in it.
+        const from = Math.min((at === to.row ? to.at : 0) + part, rows[at].length - 1);
         // Picked by hand and won't play: say why, and leave the queue as it is.
         const why = chosen && !unasked(rows[at][from]) && blockedReason(rows[at][from]);
         if (why) return explain(rows[at][from], why);
@@ -991,9 +1018,15 @@ export const usePlayer = create<PlayerState>((set, get, store) => {
       toast(getT().player.startingRadio(track.title));
       try {
         const { tracks, alike } = await radioFor(track);
-        get().playList([track, ...tracks.filter((t) => t.id !== track.id)], 0);
+        // A movement's radio plays its whole performance from the first movement, unless that movement is the one
+        // playing now: the radio then starts from it, and the movements after it follow.
+        const s = get();
+        const playing = s.queue[s.index]?.id === track.id;
+        const from = playing ? Math.max(0, tracks[0].work?.parts?.findIndex((p) => p.id === track.id) ?? 0) : 0;
+        get().playList(tracks, 0, from);
         // The alike-tracks radio is a list of its own too: open it to save it as a playlist.
-        if (alike) toast(getT().taste.radioReady(track.title), "info", { label: getT().taste.showList, to: paths.tasteRadio(track.id) });
+        const seed = track.work?.parts?.[0] ?? track;
+        if (alike) toast(getT().taste.radioReady(tracks[0].title), "info", { label: getT().taste.showList, to: paths.tasteRadio(seed.id) });
       } catch (e) {
         toast((e as Error).message, "error");
       }

@@ -747,6 +747,8 @@ export const ko: Messages = {
     composerSub: (tracks, works) => [`${tracks}곡`, works ? `작품 ${works}개` : ""].filter(Boolean).join(" · "),
     performances: (n) => `연주 ${n}개`,
     unknownPerformer: "연주자 모름",
+    movements: (n) => `${n}악장`,
+    showMovements: "악장 보기",
     otherTracks: "그 밖의 곡",
     empty: "아직 작곡가 정보가 없어요",
     emptyBody: "취향 분석이 곡의 작곡가를 찾으면 여기에 보여요.",

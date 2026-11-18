@@ -32,7 +32,8 @@ import { useNavigate } from "react-router";
 import { MD, useMediaQuery } from "../hooks/useMediaQuery";
 import { useT, type Messages } from "../i18n";
 import { capabilities } from "../lib/api";
-import { cn, shuffled } from "../lib/format";
+import { shuffledWorks } from "../lib/bundles";
+import { cn } from "../lib/format";
 import { isLocal, server, type TrackWorks } from "../lib/server";
 import { paths } from "../lib/routes";
 import type { Track } from "../lib/types";
@@ -312,7 +313,7 @@ function ManyItems({ menu, run }: { menu: Exclude<MenuState, { kind: "track" }>;
       <Item icon={<PlayIcon size={18} />} onClick={withTracks((list) => player().playList(list, 0))}>
         {menu.kind === "group" ? t.basics.playAll : t.common.play}
       </Item>
-      <Item icon={<ShuffleIcon size={18} />} onClick={withTracks((list) => player().playList(shuffled(list), 0))}>
+      <Item icon={<ShuffleIcon size={18} />} onClick={withTracks((list) => player().playList(shuffledWorks(list), 0))}>
         {t.basics.shuffle}
       </Item>
       <Item icon={<QueueIcon size={18} />} onClick={withTracks((list) => player().playNext(list))}>
