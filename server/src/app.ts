@@ -13,6 +13,7 @@ import * as local from "./local.js";
 import { registerPlayRoutes } from "./plays.js";
 import { registerTasteRoutes } from "./tasteRoutes.js";
 import { registerWorkRoutes } from "./workRoutes.js";
+import { registerHomeRoutes } from "./homeRoutes.js";
 import { registerLedgerRoutes } from "./ledgerRoutes.js";
 import * as ledger from "./ledger.js";
 import { registerMapRoutes } from "./mapRoutes.js";
@@ -287,6 +288,7 @@ export async function startServer(opts: StartOptions = {}): Promise<RunningServe
   registerStatsRoutes(app);
   registerTasteRoutes(app);
   registerWorkRoutes(app);
+  registerHomeRoutes(app);
   registerMapRoutes(app);
   registerLedgerRoutes(app);
 

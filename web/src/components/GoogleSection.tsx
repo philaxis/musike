@@ -4,7 +4,7 @@ import { useNavigate } from "react-router";
 import { useT } from "../i18n";
 import { ApiError } from "../lib/apiTypes";
 import { paths } from "../lib/routes";
-import { server, type GooglePlaylist, type GoogleStatus } from "../lib/server";
+import { server, type BoxSource, type GooglePlaylist, type GoogleStatus } from "../lib/server";
 import { toast, useUi } from "../stores/ui";
 import { Check } from "./Selection";
 
@@ -181,6 +181,55 @@ export function GoogleSection() {
           )}
         </div>
       )}
+
+      <YoutubeSources />
     </section>
+  );
+}
+
+type SourceCount = Omit<BoxSource, "at"> & { count: number };
+
+/**
+ * 「유튜브에서 들여온 곡」: the YouTube playlists, likes and pasted links that brought tracks into 「모든 곡」, biggest
+ * first; each opens 「모든 곡」 filtered to it.
+ */
+function YoutubeSources() {
+  const t = useT();
+  const navigate = useNavigate();
+  const [sources, setSources] = useState<SourceCount[]>([]);
+  useEffect(() => {
+    server.boxSources().then(
+      (r) => setSources(r.sources.filter((s) => s.kind !== "local").sort((a, b) => b.count - a.count)),
+      () => setSources([]),
+    );
+  }, []);
+  if (!sources.length) return null;
+  return (
+    <div className="flex flex-col gap-1 pt-3">
+      <h3 className="text-xs font-medium text-fg-3">{t.songBox.fromYoutube}</h3>
+      <p className="text-xs text-fg-3">{t.songBox.fromYoutubeHint}</p>
+      <ul className="flex flex-col">
+        {sources.map((s) => (
+          <li key={`${s.kind}:${s.ref}`}>
+            <button
+              type="button"
+              onClick={() => {
+                useUi.getState().setSettingsOpen(false);
+                navigate(paths.box({ source: `${s.kind}:${s.ref}` }));
+              }}
+              className="flex w-full items-center gap-3 rounded-xl px-2 py-2 text-left hover:bg-surface-3"
+            >
+              <span className="grid size-9 shrink-0 place-items-center rounded-[10px] bg-[#ff4e4522] text-[#ff4e45]">
+                <YoutubeLogoIcon size={18} weight="fill" />
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-sm font-medium">{s.kind === "youtube-liked" ? t.songBox.fromLiked : s.name || t.songBox.fromLink}</span>
+                <span className="block text-xs text-fg-2">{t.songBox.count(s.count)}</span>
+              </span>
+            </button>
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }

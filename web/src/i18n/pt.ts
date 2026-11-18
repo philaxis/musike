@@ -62,6 +62,18 @@ export const pt: Messages = {
     startBody: "Procure qualquer música ou clipe do YouTube. Toca como áudio ou vídeo, sem anúncios.",
     seeAll: "Ver tudo",
     yourFavorites: "Suas favoritas",
+    resume: "Continuar ouvindo",
+    resumeAt: (time) => `de ${time}`,
+    sunToday: "☀ Curtidas de hoje",
+    sunMore: "Ver todas",
+    sunHint: "Gostou? ☀",
+    sunHintSub: "O botão ☀ ao lado do que toca",
+    mixes: "Mixes de hoje",
+    daily: "Muda todo dia",
+    albums: "Álbuns para hoje",
+    albumsSub: "Muda todo dia · não ouvidos há tempo",
+    yearAgo: "Há um ano",
+    yearAgoSub: (from, to) => `${from} – ${to}`,
   },
 
   library: {
@@ -70,6 +82,15 @@ export const pt: Messages = {
     create: "Criar",
     playlistSub: (n) => `Playlist · ${count(n, "faixa", "faixas")}`,
     noPlaylists: "Você ainda não tem playlists. Crie uma aqui ou use o menu de qualquer faixa para começar uma.",
+    recentSub: "Na ordem em que tocaram",
+    count: (n) => String(n),
+    albums: "Álbuns",
+    albumSub: (artist, n) => (artist ? `${artist} · ${count(n, "faixa", "faixas")}` : count(n, "faixa", "faixas")),
+    shelfIntro: (n) => `${count(n, "álbum", "álbuns")} · ouvidos há pouco primeiro, depois por nome`,
+    albumsEmpty: "Ainda não há álbuns",
+    albumsEmptyBody: "Quando a análise de gosto encontrar os álbuns das suas faixas, os que têm 3 ou mais delas aparecem aqui por gênero.",
+    playlists: "Playlists",
+    newPlaylistSub: "Criar",
   },
 
   collection: {
@@ -493,19 +514,20 @@ export const pt: Messages = {
     failed: "Não foi possível ler esta playlist. Confira se ela é pública.",
   },
 
-  // Caixa de faixas, etiquetas, pacotes, conta do YouTube
+  // Todas as faixas (antes caixa de faixas), etiquetas, pacotes, conta do YouTube
   songBox: {
-    title: "Caixa de faixas",
-    tileSub: "Tudo o que entrou, com origens e etiquetas",
+    title: "Todas as faixas",
     fromYoutube: "Trazidas do YouTube",
+    fromYoutubeHint: "Toque em uma para ver só as faixas dela em Todas as faixas.",
+    moreViews: "Por origem, deixadas de lado, mudanças",
     all: "Todas",
     untagged: "Sem organizar",
     bySource: "Por origem",
     byTag: "Por etiqueta",
     count: (n) => count(n, "faixa", "faixas"),
     loadMore: "Mostrar mais",
-    failed: "Não foi possível abrir a caixa de faixas",
-    empty: "A caixa de faixas está vazia",
+    failed: "Não foi possível abrir Todas as faixas",
+    empty: "Ainda não há faixas",
     emptyBody: "Cole o link de uma playlist do YouTube na Busca ou conecte sua conta do YouTube nas Configurações.",
     emptyFiltered: "Nada aqui corresponde",
     noTags: "Ainda sem etiquetas",
@@ -514,11 +536,11 @@ export const pt: Messages = {
     fromLocal: (name) => `Minha pasta · ${name}`,
     fromLink: "Adicionada à mão",
     fromSearch: "Busca",
-    openBox: "Abrir a caixa de faixas",
+    openBox: "Abrir Todas as faixas",
 
-    importAction: (n) => `Trazer para a caixa (${count(n, "faixa", "faixas")})`,
+    importAction: (n) => `Trazer para Todas as faixas (${count(n, "faixa", "faixas")})`,
     imported: (name, added, merged) =>
-      (added ? `"${name}": ${count(added, "faixa", "faixas")} na caixa` : `Todas as faixas de "${name}" já estão na caixa`) +
+      (added ? `"${name}": ${count(added, "faixa", "faixas")} em Todas as faixas` : `Todas as faixas de "${name}" já estão aqui`) +
       (merged ? ` (${merged} já existentes ganharam esta origem)` : ""),
 
     tags: "Etiquetas",
@@ -546,7 +568,7 @@ export const pt: Messages = {
     connected: "Conectada",
     connect: "Conectar",
     reconnect: "Conectar de novo",
-    googleBody: "Faixas novas das suas playlists e vídeos curtidos do YouTube entram na caixa todo dia. Só leitura.",
+    googleBody: "Faixas novas das suas playlists e vídeos curtidos do YouTube entram em Todas as faixas todo dia. Só leitura.",
     noClient: "O servidor ainda não tem as configurações de login do Google, então não dá para conectar.",
     revoked: "A conexão terminou. Conecte de novo.",
     myPlaylists: "Minhas playlists do YouTube",
@@ -555,7 +577,7 @@ export const pt: Messages = {
     playlistsFailed: "Não foi possível ler suas playlists",
     syncNow: "Trazer agora",
     syncing: "Trazendo…",
-    synced: (added) => (added ? `${count(added, "faixa nova", "faixas novas")} na caixa` : "Nenhuma faixa nova"),
+    synced: (added) => (added ? `${count(added, "faixa nova", "faixas novas")} em Todas as faixas` : "Nenhuma faixa nova"),
     disconnect: "Desconectar",
     disconnected: "Conta do YouTube desconectada",
     connectedToast: "Conta do YouTube conectada",
@@ -619,7 +641,6 @@ export const pt: Messages = {
   // 「Meu histórico」: estatísticas de escuta, curtidas do dia ☀ e o histórico de uma faixa.
   stats: {
     title: "Meu histórico",
-    tileSub: "Tempo ouvido, mais tocadas, calendário",
     period4w: "4 semanas",
     period6m: "6 meses",
     periodAll: "Tudo",
@@ -698,15 +719,13 @@ export const pt: Messages = {
 
   taste: {
     genres: "Gêneros",
-    genresSub: (n) => `${count(n, "gênero", "gêneros")} · por som`,
     genreSub: (tracks, groups) => `${count(tracks, "faixa", "faixas")} · ${count(groups, "grupo de som", "grupos de som")}`,
-    genresIntro: "Sua caixa de músicas por gênero e, dentro dele, pelo som.",
+    genresIntro: "Suas faixas por gênero e, dentro dele, pelo som.",
     noGroup: "Sem grupo de som",
     group: "Grupo de som",
     groupSub: (n, artists) => [count(n, "faixa", "faixas"), artists.join(", ")].filter(Boolean).join(" · "),
     mixes: "Playlists automáticas",
-    mixesSub: "Mixes diários e mais, do que você ouve",
-    mixesIntro: "Feitas no servidor com o que você ouve, suas favoritas e a caixa de músicas. Mudam todo dia.",
+    mixesIntro: "Feitas no servidor com o que você ouve, suas favoritas e todas as suas faixas. Mudam todo dia.",
     mixesEmpty: "Ainda não há playlists automáticas",
     mixesEmptyBody: "Elas aparecem quando houver a análise de gosto ou depois de ouvir algumas faixas.",
     daily: (n) => `Mix diário ${n}`,
@@ -729,9 +748,8 @@ export const pt: Messages = {
     notAnalyzed: "Esta faixa ainda não foi analisada, então não há rádio para ela.",
     openFailed: "Não foi possível abrir",
     map: "Mapa musical",
-    mapSub: (n) => (n ? `${n.toLocaleString()} faixas em 3D · busque por palavras ou som` : "Faixas em 3D · busque por palavras ou som"),
     mapMissing: "Ainda não há mapa musical",
-    mapMissingBody: "A análise de gosto desenha o mapa a partir da caixa de músicas toda manhã. Volte depois da próxima execução.",
+    mapMissingBody: "A análise de gosto desenha o mapa a partir de todas as suas faixas toda manhã. Volte depois da próxima execução.",
   },
 
   works: {
@@ -763,7 +781,7 @@ export const pt: Messages = {
     notChecked: "ainda não verificado",
     state: { region: "Bloqueado aqui", gone: "Removido", private: "Privado", premium: "Só Premium", age: "Restrição de idade" },
     empty: "Nada mudou ainda",
-    emptyBody: "Cada sincronização da conta verifica todas as faixas da caixa; o que mudou no YouTube aparece aqui.",
+    emptyBody: "Cada sincronização da conta verifica cada faixa sua do YouTube; o que mudou no YouTube aparece aqui.",
     failed: "Não foi possível carregar as mudanças",
     loadMore: "Mais",
     title: (from, to) => `Título mudou: ${from} → ${to}`,
@@ -774,5 +792,29 @@ export const pt: Messages = {
     history: "No YouTube",
     noChanges: "Nada mudou no YouTube",
     youtubeTitle: (title) => `Título no YouTube: ${title}`,
+  },
+
+  // 「☀ Curtidas do dia」 reunidas
+  sun: {
+    title: "☀ Curtidas do dia",
+    collection: "☀ Todas as curtidas do dia",
+    recent: "Recentes",
+    all: "Todas",
+    calendar: "Calendário",
+    ago: "Nesta época",
+    recentIntro: "Últimos 28 dias, mais dias com ☀ primeiro",
+    allIntro: "Desde o começo, mais dias com ☀ primeiro",
+    calendarIntro: "Cada dia mostra o seu primeiro ☀. Toque num dia para ver as faixas.",
+    agoIntro: (span) => `☀ a até ${span} dias de hoje em anos anteriores`,
+    days: (n) => `☀ ${count(n, "dia", "dias")}`,
+    yearsAgo: (n) => (n === 1 ? "Há um ano" : `Há ${n} anos`),
+    prevMonth: "Mês anterior",
+    nextMonth: "Próximo mês",
+    empty: "Ainda sem ☀",
+    emptyBody: "Quando gostar do que está tocando, toque em ☀ ao lado. As curtidas de cada dia se juntam aqui.",
+    recentEmpty: "Nenhum ☀ nos últimos 28 dias",
+    agoEmpty: "Ainda nada de um ano atrás",
+    agoEmptyBody: "O ☀ guarda a data. A partir desta época no ano que vem, o que você curtiu por volta de hoje aparece aqui.",
+    failed: "Não foi possível carregar",
   },
 };

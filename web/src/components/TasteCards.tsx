@@ -29,10 +29,25 @@ export function CardGridSkeleton() {
   );
 }
 
-export function TrackCard({ to, title, sub, tracks, menu }: { to: string; title: string; sub: string; tracks: Track[]; menu?: () => MenuTarget }) {
+export function TrackCard({
+  to,
+  title,
+  sub,
+  tracks,
+  menu,
+  className,
+}: {
+  to: string;
+  title: string;
+  sub: string;
+  tracks: Track[];
+  menu?: () => MenuTarget;
+  /** A width, in a TileRow. */
+  className?: string;
+}) {
   const t = useT();
   return (
-    <li className="relative">
+    <li className={cn("relative", className)}>
       <Link to={to} state={{ name: title }} {...(menu && menuTrigger(menu))} draggable={false} className={cn("group flex flex-col gap-2", NO_CALLOUT)}>
         <span className="block overflow-hidden rounded-[14px]">
           <Cover kind="playlist" tracks={tracks} className="aspect-square w-full transition-transform duration-300 ease-out-expo group-hover:scale-[1.04]" />

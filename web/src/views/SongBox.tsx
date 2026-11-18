@@ -1,6 +1,7 @@
-import { DotsThreeIcon, TrayIcon } from "@phosphor-icons/react";
-import { useEffect, useMemo, useState } from "react";
+import { ArrowsLeftRightIcon, ClockCounterClockwiseIcon, DotsThreeIcon, FunnelSimpleIcon, ProhibitIcon, TrayIcon, type Icon } from "@phosphor-icons/react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Navigate, useSearchParams } from "react-router";
+import { IconButton } from "../components/IconButton";
 import { openMenuFromButton } from "../components/menuTrigger";
 import { Chip, EmptyState, PageHeader } from "../components/Page";
 import { SelectableRow, SelectedCount, SelectionBar, Short, useListSelection } from "../components/Selection";
@@ -20,12 +21,75 @@ import { isTvMode } from "../tv/tvMode";
 
 type SourceCount = Omit<BoxSource, "at"> & { count: number };
 
+/** A view of 「모든 곡」 kept in ⋯ (the address it opens, and how many tracks when that is known). */
+interface BoxView {
+  mode: string;
+  label: string;
+  icon: Icon;
+  count?: number;
+  params: Record<string, string>;
+}
+
+/** ⋯ in the header: the views for tidying up. */
+function ViewsMenu({ views, current, onPick }: { views: BoxView[]; current: string; onPick: (params: Record<string, string>) => void }) {
+  const t = useT();
+  const [open, setOpen] = useState(false);
+  const box = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const away = (e: PointerEvent) => !box.current?.contains(e.target as Node) && setOpen(false);
+    const key = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
+    document.addEventListener("pointerdown", away);
+    document.addEventListener("keydown", key);
+    return () => {
+      document.removeEventListener("pointerdown", away);
+      document.removeEventListener("keydown", key);
+    };
+  }, [open]);
+  return (
+    <div ref={box} className="relative">
+      <IconButton
+        label={t.songBox.moreViews}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        active={views.some((v) => v.mode === current)}
+        onClick={() => setOpen((o) => !o)}
+      >
+        <DotsThreeIcon size={24} weight="bold" />
+      </IconButton>
+      {open && (
+        <div role="menu" className="absolute top-full right-0 z-20 mt-1 w-64 rounded-[14px] bg-surface-2 p-1.5 shadow-[0_16px_40px_rgb(0_0_0/0.45)] ring-1 ring-line">
+          {views.map(({ mode, label, icon: ViewIcon, count, params }) => (
+            <button
+              key={mode}
+              type="button"
+              role="menuitemradio"
+              aria-checked={mode === current}
+              onClick={() => {
+                setOpen(false);
+                onPick(params);
+              }}
+              className={cn(
+                "flex h-11 w-full items-center gap-3 rounded-[10px] px-3 text-left text-sm hover:bg-surface-3",
+                mode === current ? "font-medium text-accent-text" : "text-fg",
+              )}
+            >
+              <ViewIcon size={18} className="shrink-0" />
+              <span className="min-w-0 flex-1 truncate">{label}</span>
+              {count !== undefined && <span className="font-mono text-xs text-fg-3">{count}</span>}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 /**
- * Library's 「곡 상자」: every track brought in (and the music folders), newest first, 200 at a time. Filter by
- * unsorted (no tags), source or tag; pick several to play or put in a playlist. Tracks that won't play here are put
- * aside under their own chip, each with 「다른 판 찾기」; the stand-ins put in their place have a chip too, each
- * with 「되돌리기」 and 「다른 판 고르기」; 「변경 기록」 lists what changed about the tracks on YouTube. Not in TV
- * mode, which only plays.
+ * Library's 「모든 곡」 (once 「곡 상자」): every track brought in (and the music folders), newest first, 200 at a
+ * time. Filter by unsorted (no tags) or tag; pick several to play or put in a playlist. In ⋯: by source, the tracks
+ * that won't play here (put aside, each with 「다른 판 찾기」), the stand-ins put in their place (each with 「되돌리기」
+ * and 「다른 판 고르기」), and 「변경 기록」, what changed about the tracks on YouTube. Not in TV mode, which only plays.
  */
 export default function SongBox() {
   const [params, setParams] = useSearchParams();
@@ -156,9 +220,20 @@ export default function SongBox() {
   const allSelected = tracks.length > 0 && chosen.length === tracks.length;
   const menuFor = (i: number) => sel.menuFor(i, { kind: "track", track: tracks[i] });
 
+  // Views for tidying up, kept out of the way in ⋯: where tracks came from, those put aside, the stand-ins, what changed.
+  const views: BoxView[] = [
+    { mode: "source", label: t.songBox.bySource, icon: FunnelSimpleIcon, params: { by: "source" } },
+    ...(asideTotal > 0 || aside ? [{ mode: "aside", label: t.aside.chip, icon: ProhibitIcon, count: asideTotal, params: { filter: "blocked" } }] : []),
+    ...(standInTotal > 0 || standIns
+      ? [{ mode: "standIns", label: t.standIns.chip, icon: ArrowsLeftRightIcon, count: standInTotal, params: { filter: "replaced" } }]
+      : []),
+    { mode: "changes", label: t.ledger.chip, icon: ClockCounterClockwiseIcon, params: { filter: "changes" } },
+  ];
+  const shownView = views.find((v) => v.mode === mode);
+
   return (
     <div className="pb-8">
-      <PageHeader title={t.songBox.title} />
+      <PageHeader title={t.songBox.title} actions={<ViewsMenu views={views} current={mode} onPick={(p) => setParams(p)} />} />
 
       <div className="flex flex-col gap-2 px-4 pt-1 pb-3 md:px-6">
         <div className="scroll-area -mx-4 flex gap-2 overflow-x-auto px-4 pb-1 md:mx-0 md:flex-wrap md:px-0">
@@ -168,25 +243,15 @@ export default function SongBox() {
           <Chip on={mode === "untagged"} onClick={() => setParams({ filter: "untagged" })}>
             {t.songBox.untagged}
           </Chip>
-          <Chip on={mode === "source"} onClick={() => setParams({ by: "source" })}>
-            {t.songBox.bySource}
-          </Chip>
           <Chip on={mode === "tag"} onClick={() => setParams({ by: "tag" })}>
             {t.songBox.byTag}
           </Chip>
-          {(asideTotal > 0 || aside) && (
-            <Chip on={mode === "aside"} onClick={() => setParams({ filter: "blocked" })}>
-              {t.aside.chip} <span className="font-mono opacity-70">{asideTotal}</span>
+          {/* A view picked in ⋯ shows as a chip while it is open. */}
+          {shownView && (
+            <Chip on onClick={() => setParams(shownView.params)}>
+              {shownView.label} {shownView.count !== undefined && <span className="font-mono opacity-70">{shownView.count}</span>}
             </Chip>
           )}
-          {(standInTotal > 0 || standIns) && (
-            <Chip on={mode === "standIns"} onClick={() => setParams({ filter: "replaced" })}>
-              {t.standIns.chip} <span className="font-mono opacity-70">{standInTotal}</span>
-            </Chip>
-          )}
-          <Chip on={mode === "changes"} onClick={() => setParams({ filter: "changes" })}>
-            {t.ledger.chip}
-          </Chip>
         </div>
 
         {mode === "source" && (

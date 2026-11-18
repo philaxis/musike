@@ -1,9 +1,11 @@
 import { CheckIcon, PaletteIcon } from "@phosphor-icons/react";
 import { useT } from "../i18n";
+import { capabilities } from "../lib/api";
 import { inkFor } from "../lib/accent";
 import { cn } from "../lib/format";
 import { ACCENTS, useAppearance } from "../stores/appearance";
 import { useUi } from "../stores/ui";
+import { isTvMode } from "../tv/tvMode";
 
 /** Ready-made accent swatches plus any colour from the system picker. */
 export function AccentPicker() {
@@ -113,25 +115,30 @@ export function LayoutSection() {
         <SwitchRow label={t.customize.texture} checked={a.texture} onChange={(v) => a.set({ texture: v })} />
       </div>
 
-      <p className="pt-2 text-[13px] text-fg-2">{t.customize.home}</p>
-      <div className="flex flex-wrap gap-2">
-        {homeSections.map(([key, label]) => (
-          <button
-            key={key}
-            type="button"
-            role="checkbox"
-            aria-checked={a[key]}
-            onClick={() => a.set({ [key]: !a[key] })}
-            className={cn(
-              "flex h-9 items-center gap-1.5 rounded-full px-3.5 text-[13px] font-medium ring-1 transition-colors",
-              a[key] ? "bg-accent-soft text-accent-text ring-accent/40" : "text-fg-2 ring-line hover:text-fg",
-            )}
-          >
-            {a[key] && <CheckIcon size={14} weight="bold" />}
-            {label}
-          </button>
-        ))}
-      </div>
+      {/* With the server, Home is made each day (views/Home.tsx); these choose the classic Home's sections (TV, no server). */}
+      {(!capabilities.serverLibrary || isTvMode()) && (
+        <>
+          <p className="pt-2 text-[13px] text-fg-2">{t.customize.home}</p>
+          <div className="flex flex-wrap gap-2">
+            {homeSections.map(([key, label]) => (
+              <button
+                key={key}
+                type="button"
+                role="checkbox"
+                aria-checked={a[key]}
+                onClick={() => a.set({ [key]: !a[key] })}
+                className={cn(
+                  "flex h-9 items-center gap-1.5 rounded-full px-3.5 text-[13px] font-medium ring-1 transition-colors",
+                  a[key] ? "bg-accent-soft text-accent-text ring-accent/40" : "text-fg-2 ring-line hover:text-fg",
+                )}
+              >
+                {a[key] && <CheckIcon size={14} weight="bold" />}
+                {label}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
 
       <button
         type="button"

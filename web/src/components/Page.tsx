@@ -1,6 +1,6 @@
-import { ArrowLeftIcon, GearSixIcon } from "@phosphor-icons/react";
+import { ArrowLeftIcon, CaretRightIcon, GearSixIcon } from "@phosphor-icons/react";
 import type { ReactNode } from "react";
-import { useNavigate } from "react-router";
+import { Link, useNavigate } from "react-router";
 import { useT } from "../i18n";
 import { cn } from "../lib/format";
 import { needsAttention, useSystem } from "../stores/system";
@@ -51,15 +51,41 @@ export function PageHeader({
   );
 }
 
-export function Section({ title, action, children, className }: { title: string; action?: ReactNode; children: ReactNode; className?: string }) {
+export function Section({
+  title,
+  sub,
+  action,
+  children,
+  className,
+}: {
+  title: string;
+  /** A short note after the title ("매일 바뀜"). */
+  sub?: string;
+  action?: ReactNode;
+  children: ReactNode;
+  className?: string;
+}) {
   return (
     <section className={cn("flex flex-col gap-3", className)}>
       <div className="flex items-end justify-between gap-4 px-4 md:px-6">
-        <h2 className="text-xl font-semibold tracking-tight">{title}</h2>
+        <h2 className="min-w-0 text-xl font-semibold tracking-tight">
+          {title}
+          {sub && <span className="ml-2 text-[13px] font-normal tracking-normal text-fg-3">{sub}</span>}
+        </h2>
         {action}
       </div>
       {children}
     </section>
+  );
+}
+
+/** A section's way to the whole of it: 「모두 보기 ›」. */
+export function MoreLink({ to, children }: { to: string; children: ReactNode }) {
+  return (
+    <Link to={to} className="flex shrink-0 items-center gap-0.5 pb-0.5 text-sm font-medium whitespace-nowrap text-fg-2 hover:text-fg">
+      {children}
+      <CaretRightIcon size={14} weight="bold" />
+    </Link>
   );
 }
 

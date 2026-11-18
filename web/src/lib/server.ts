@@ -276,6 +276,58 @@ export interface ComposerPage {
   titles: Record<string, string>;
 }
 
+/** An album of my tracks (3 or more of them), as the Library's shelves and Home show it. */
+export interface ShelfAlbum {
+  key: string;
+  name: string;
+  artists: string[];
+  genre: string;
+  count: number;
+  /** When one of its tracks was last listened to (ms), 0 when never. */
+  last: number;
+  /** Its first track, for the cover. */
+  cover: Track;
+}
+
+/** One genre's albums, heard lately first and then by name; `count` is all of them even when `albums` is cut. */
+export interface AlbumShelf {
+  genre: string;
+  count: number;
+  albums: ShelfAlbum[];
+}
+
+/** What Home gets from the server besides the mixes and today's ☀ (dates are Seoul's). */
+export interface HomeData {
+  date: string;
+  /** 「오늘 꺼내 볼 앨범」: not heard in 30 days, a new pick each day. */
+  albums: ShelfAlbum[];
+  /** 「1년 전 이맘때」: that time's ☀ (the first `liked`) and most listened; null when there was nothing. */
+  yearAgo: { from: string; to: string; liked: number; tracks: Track[] } | null;
+}
+
+export type SunPeriod = "4w" | "all";
+
+/** A track on the ☀ page: on how many days it got ☀, and the last of them. */
+export interface SunItem {
+  track: Track;
+  days: number;
+  last: string;
+}
+
+export interface SunCalendar {
+  month: string;
+  /** The month of the first ☀ ever, null when there is none. */
+  first: string | null;
+  /** Days with ☀, each with its first ☀ (the cover). */
+  days: { date: string; count: number; track: Track }[];
+}
+
+export interface SunAgo {
+  date: string;
+  span: number;
+  items: { track: Track; date: string; years: number }[];
+}
+
 const q = (params: Record<string, string | number | undefined>) => {
   const p = new URLSearchParams();
   for (const [k, v] of Object.entries(params)) if (v !== undefined && v !== "") p.set(k, String(v));
@@ -367,6 +419,15 @@ export const server = {
   dayLikes: () => request<DayLikes>("/api/daylikes"),
   likeToday: (track: Track) => request<DayLikes>(`/api/daylikes/${track.id}`, { method: "PUT", json: track }),
   unlikeToday: (id: string) => request<DayLikes>(`/api/daylikes/${id}`, { method: "DELETE" }),
+  /** One day's 「오늘 좋음 ☀」. */
+  dayLikesOn: (date: string, signal?: AbortSignal) => request<DayLikes>(`/api/daylikes${q({ date })}`, { signal }),
+  sunTop: (period: SunPeriod, signal?: AbortSignal) => request<{ period: SunPeriod; items: SunItem[] }>(`/api/daylikes/top${q({ period })}`, { signal }),
+  sunCalendar: (month: string, signal?: AbortSignal) => request<SunCalendar>(`/api/daylikes/calendar${q({ month })}`, { signal }),
+  sunAgo: (signal?: AbortSignal) => request<SunAgo>("/api/daylikes/ago", { signal }),
+  home: (signal?: AbortSignal) => request<HomeData>("/api/home", { signal }),
+  /** Albums of my tracks per genre; `genre` for one shelf, `limit` albums per shelf. */
+  albumShelves: (query: { genre?: string; limit?: number }, signal?: AbortSignal) =>
+    request<{ ready: boolean; total: number; shelves: AlbumShelf[] }>(`/api/works/albums${q(query)}`, { signal }),
 
   tasteGenres: (signal?: AbortSignal) => request<{ ready: boolean; genres: TasteGenre[] }>("/api/taste/genres", { signal }),
   tasteGenre: (genre: string, signal?: AbortSignal) =>
