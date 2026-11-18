@@ -566,15 +566,16 @@ export const pt: Messages = {
   },
 
   aside: {
-    reason: { region: "Bloqueado aqui", gone: "Sumiu do YouTube", private: "Privado", age: "Restrição de idade" },
+    reason: { region: "Bloqueado aqui", gone: "Sumiu do YouTube", private: "Privado", age: "Restrição de idade", premium: "Só YouTube Premium" },
     why: {
       region: "Este vídeo está bloqueado neste país por direitos autorais.",
       gone: "Este vídeo foi removido do YouTube.",
       private: "Este vídeo é privado.",
       age: "Este vídeo tem restrição de idade.",
+      premium: "Este vídeo é só para assinantes do YouTube Music Premium.",
     },
     chosen: (title, why) => `「${title}」: ${why}`,
-    kind: { region: "bloqueadas aqui", gone: "removidas do YouTube", private: "privadas", age: "com restrição de idade", any: "que não tocam" },
+    kind: { region: "bloqueadas aqui", gone: "removidas do YouTube", private: "privadas", age: "com restrição de idade", premium: "só Premium", any: "que não tocam" },
     skipped: (what, n) => `${n === 1 ? "Pulei 1 faixa" : `Pulei ${n} faixas`} (${what})`,
     cantPlay: "Não toca",
     findOther: "Achar outra versão",
@@ -588,10 +589,23 @@ export const pt: Messages = {
     lengthOff: (seconds) => `${seconds > 0 ? "+" : "−"}${Math.abs(seconds)}s`,
     replace: "Usar esta",
     replaced: (title) => `Trocada por 「${title}」`,
+    switched: (title) => `Tocando uma versão nova no lugar: 「${title}」`,
+    moved: "movida pelo YouTube Music",
     chip: "Deixadas de lado",
     title: "Faixas deixadas de lado",
-    body: "Estas não tocam aqui, então listas e reprodução as deixam de fora. Ache outra versão, ou espere: se voltar a tocar, ela volta sozinha.",
+    body: "Estas não tocam aqui e nada encontrado as substitui, então listas e reprodução as deixam de fora. Ache outra versão, ou espere: se voltar a tocar, ela volta sozinha.",
     count: (reason, n) => `${reason} ${n}`,
+  },
+
+  standIns: {
+    chip: "Substituídas",
+    body: "Estas tocam no lugar de faixas que não tocam aqui, nos mesmos lugares das playlists. As achadas por busca vêm primeiro: confira, volte à original ou escolha outra versão.",
+    by: { redirect: "Movida pelo YouTube Music", alternative: "Achada por busca", manual: "Escolhida por você" },
+    was: (title) => `era 「${title}」`,
+    restore: "Desfazer",
+    pickOther: "Escolher outra",
+    restored: (title) => `「${title}」 voltou (deixada de lado)`,
+    count: (by, n) => `${by} ${n}`,
   },
 
   openLink: {

@@ -34,18 +34,25 @@ export interface BoxItem {
   addedAt: number;
   /** Why it won't play here, and since when (ms); such tracks are put aside (only the "blocked" filter lists them). */
   blocked?: { reason: Unplayable; at: number };
+  /** It stands in for `was`, a track that won't play here, and how it came; 「되돌리기」 puts `was` back. */
+  replaced?: { by: ReplacedBy; was: Track; reason?: Unplayable; at: number };
 }
+
+/** How a stand-in came: where YouTube Music moved the track, found by search by itself, or picked by hand. */
+export type ReplacedBy = "redirect" | "alternative" | "manual";
 
 /** Another version of a track that won't play here, and why it is offered. */
 export interface Alternative {
   track: Track;
   sameTitle: boolean;
   sameArtist: boolean;
+  /** Where YouTube Music moved the track itself. */
+  redirect?: boolean;
 }
 
 export interface BoxQuery {
-  /** "blocked": only the tracks put aside because they won't play here. */
-  filter?: "untagged" | "blocked";
+  /** "blocked": only the tracks put aside because they won't play here; "replaced": the stand-ins for such tracks. */
+  filter?: "untagged" | "blocked" | "replaced";
   /** A source kind, or kind:ref for one playlist or folder. */
   source?: string;
   tag?: string;
@@ -179,7 +186,7 @@ export interface VideoRef {
 export type VideoEvent = { at: number; id: string; track: Track; video: VideoRef } & (
   | { kind: "title" | "channel"; from: string; to: string }
   | { kind: "status"; from: VideoStatus; to: VideoStatus }
-  | { kind: "replaced"; to: string; by: "redirect" | "alternative" | "manual"; other: VideoRef }
+  | { kind: "replaced"; to: string; by: ReplacedBy; other: VideoRef }
   | { kind: "restored"; from: string; other: VideoRef }
 );
 
@@ -311,17 +318,25 @@ export const server = {
   importToBox: (url: string) => request<BoxImport>("/api/import/youtube/box", { method: "POST", json: { url } }),
 
   box: (query: BoxQuery, signal?: AbortSignal) => request<BoxPage>(`/api/box${q({ ...query })}`, { signal }),
-  /** Sources and how many tracks each brought; `aside`: tracks put aside because they won't play here, by reason. */
+  /**
+   * Sources and how many tracks each brought; `aside`: tracks put aside because they won't play here, by reason;
+   * `replaced`: stand-ins for such tracks, by how they came.
+   */
   boxSources: () =>
-    request<{ sources: (Omit<BoxSource, "at"> & { count: number })[]; total: number; aside: Partial<Record<Unplayable, number>> }>(
-      "/api/box/sources",
-    ),
-  /** Up to 5 other versions of a track that won't play here (alike titles only), closest in length first, with why. */
+    request<{
+      sources: (Omit<BoxSource, "at"> & { count: number })[];
+      total: number;
+      aside: Partial<Record<Unplayable, number>>;
+      replaced: Partial<Record<ReplacedBy, number>>;
+    }>("/api/box/sources"),
+  /** Where YouTube Music moved a track that won't play here (first), then up to 5 alike titles, closest in length first, with why. */
   alternatives: (id: string, signal?: AbortSignal) =>
     request<{ alternatives: Alternative[] }>(`/api/box/${id}/alternatives`, { signal }).then((r) => r.alternatives),
   /** Puts `track` in place of `id` in the song box, playlists, favorites and bundles. */
   replaceTrack: (id: string, track: Track) =>
     request<{ track: Track; rows: number }>(`/api/box/${id}/replace`, { method: "POST", json: { track } }),
+  /** 「되돌리기」: the original back in place of stand-in `id` (put aside again); `track` is the original. */
+  restoreTrack: (id: string) => request<{ track: Track; rows: number }>(`/api/box/${id}/restore`, { method: "POST" }),
   /** YouTube tracks into the box, as added by hand. */
   addToBox: (tracks: Track[]) => request<unknown>("/api/box", { method: "POST", json: { tracks, source: { kind: "link" } } }),
 

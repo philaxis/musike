@@ -6,8 +6,8 @@ import { ensureComponent } from "./bootstrap.js";
 import { config } from "./config.js";
 import { DEFAULT_CLIENTS, directAudio, fetchRemoteClients } from "./directAudio.js";
 import { tools } from "./tools.js";
-import { msg } from "./i18n.js";
-import { HttpError, unplayableError } from "./types.js";
+import { msg, type MsgKey } from "./i18n.js";
+import { HttpError, unplayableError, type Unplayable } from "./types.js";
 
 export interface StreamFormat {
   formatId: string;
@@ -84,16 +84,28 @@ export async function run(args: string[], timeoutMs: number): Promise<string> {
 // Failures that usually mean YouTube changed and yt-dlp needs an update.
 const OUTDATED = /nsig|signature|n challenge|JavaScript runtime|Unable to extract|Failed to extract|player response|Requested format is not available|HTTP Error 403/i;
 
+/** What a person is told about a video that won't play here, by why. */
+const UNPLAYABLE_TEXT = {
+  region: "videoRegion",
+  gone: "videoUnavailable",
+  private: "videoPrivate",
+  age: "ageRestricted",
+  premium: "videoPremium",
+} as const satisfies Record<Unplayable, MsgKey>;
+
+export const unplayableBecause = (reason: Unplayable) => unplayableError(reason, msg(UNPLAYABLE_TEXT[reason]));
+
 export function toHttpError(stderr: string): HttpError {
   const line = stderr.split("\n").find((l) => l.includes("ERROR")) ?? stderr.trim().split("\n").pop() ?? "";
   // Videos that won't play here whatever is tried; the app skips them (age first: its message also says "Sign in to confirm").
-  if (/age-restricted|inappropriate|confirm your age/i.test(line)) return unplayableError("age", msg("ageRestricted"));
+  if (/age-restricted|inappropriate|confirm your age/i.test(line)) return unplayableBecause("age");
   if (/confirm you.re not a bot|Sign in to confirm/i.test(line)) {
     return new HttpError(503, msg("botCheck"), "bot_check");
   }
-  if (/in your country|claimed content|copyright grounds/i.test(line)) return unplayableError("region", msg("videoRegion"));
-  if (/Private video/i.test(line)) return unplayableError("private", msg("videoPrivate"));
-  if (/Video unavailable|video is unavailable|removed/i.test(line)) return unplayableError("gone", msg("videoUnavailable"));
+  if (/in your country|claimed content|copyright grounds/i.test(line)) return unplayableBecause("region");
+  if (/Private video/i.test(line)) return unplayableBecause("private");
+  if (/Music Premium members/i.test(line)) return unplayableBecause("premium");
+  if (/Video unavailable|video is unavailable|removed/i.test(line)) return unplayableBecause("gone");
   // yt-dlp's own words stay as they are (English); only the advice around them is translated.
   const detail = line.replace(/^ERROR:\s*/, "").slice(0, 240);
   if (!detail) return new HttpError(502, msg("ytdlpFailed"), "maybe_outdated");

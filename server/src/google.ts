@@ -7,6 +7,7 @@ import * as box from "./box.js";
 import { config } from "./config.js";
 import { langOf, msg, tr, type Lang } from "./i18n.js";
 import * as ledger from "./ledger.js";
+import { fixAside } from "./standIn.js";
 import { HttpError, VIDEO_ID, type Track, type Unplayable } from "./types.js";
 
 // The user's YouTube account, read-only: Google sign-in (OAuth web flow, scope youtube.readonly), the playlists
@@ -294,6 +295,8 @@ export async function checkBox(): Promise<{ checked: number; blocked: number; ch
   );
   const addedAt = new Map(entries.map((e) => [e.track.id, e.addedAt]));
   const changes = await ledger.recordCheck(seen, at, (id) => addedAt.get(id) ?? at);
+  // Then stand-ins for what is put aside: minutes (YouTube Music, yt-dlp, search), not waited for.
+  void fixAside().catch(() => {});
   return { checked: ids.length, blocked, changes: changes.length };
 }
 

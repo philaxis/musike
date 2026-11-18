@@ -1,5 +1,6 @@
 import * as library from "./library.js";
 import type { LibraryStorage } from "./library.js";
+import type { ReplacedBy } from "./ledger.js";
 import * as local from "./local.js";
 import { isBundleId, isLocalId, VIDEO_ID, type Track, type Unplayable } from "./types.js";
 
@@ -29,6 +30,16 @@ export interface Blocked {
   at: number;
 }
 
+/** The track an entry's track stands in for (see standIn.ts), and how it came: what 「되돌리기」 puts back. */
+export interface Replaced {
+  by: ReplacedBy;
+  /** The original track, as it was in the box (its ID is the sources' `was`). */
+  was: Track;
+  /** Why the original won't play here; it is put aside for that again when restored. */
+  reason?: Unplayable;
+  at: number;
+}
+
 export interface BoxEntry {
   track: Track;
   sources: BoxSource[];
@@ -36,6 +47,12 @@ export interface BoxEntry {
   addedAt: number;
   /** Won't play here: blocked in this country, deleted, private, age-restricted. Never removed from the box for that. */
   blocked?: Blocked;
+  /** In place of a track that won't play here. */
+  replaced?: Replaced;
+  /** When a stand-in was last looked for while it was put aside (ms); see standIn.ts. */
+  standInAt?: number;
+  /** Put back by hand (「되돌리기」): no stand-in is put in its place again by itself. */
+  keepAside?: true;
 }
 
 interface BoxData {
@@ -113,7 +130,10 @@ export function mergeTracks(entries: BoxEntry[], tracks: Track[], source: BoxSou
 }
 
 export interface BoxQuery {
-  /** "untagged": no tags yet (not sorted by the agent); "blocked": won't play here (see `Blocked`). */
+  /**
+   * "untagged": no tags yet (not sorted by the agent); "blocked": won't play here (see `Blocked`); "replaced": stand-ins
+   * for tracks that won't play (see `Replaced`), searched and hand-picked ones first, then YouTube Music's moves.
+   */
   filter?: string;
   /** A source kind ("youtube-liked") or kind:ref ("youtube-playlist:PL…", "local:카시오페아"). */
   source?: string;
@@ -123,13 +143,16 @@ export interface BoxQuery {
 
 const sourceKey = (s: BoxSource) => `${s.kind}:${s.ref}`;
 
+const BY_ORDER: Record<ReplacedBy, number> = { alternative: 0, manual: 1, redirect: 2 };
+
 export function filterItems(items: BoxEntry[], query: BoxQuery): BoxEntry[] {
   const words = (query.q ?? "").toLocaleLowerCase().split(/\s+/).filter(Boolean);
   const aside = query.filter === "blocked";
-  return items.filter((it) => {
+  const replaced = query.filter === "replaced";
+  const out = items.filter((it) => {
     // Box tracks that won't play here (and have no kept copy, see `present`) are put aside: every listing leaves
-    // them out, and only the "blocked" filter shows them.
-    if (!!it.track.blocked !== aside) return false;
+    // them out, and only the "blocked" filter shows them. Stand-ins list whatever their state.
+    if (replaced ? !it.replaced : !!it.track.blocked !== aside) return false;
     if (query.filter === "untagged" && it.tags.length) return false;
     if (query.source && !it.sources.some((s) => s.kind === query.source || sourceKey(s) === query.source)) return false;
     if (query.tag && !it.tags.includes(query.tag)) return false;
@@ -140,6 +163,8 @@ export function filterItems(items: BoxEntry[], query: BoxQuery): BoxEntry[] {
     }
     return true;
   });
+  if (replaced) out.sort((a, b) => BY_ORDER[a.replaced!.by] - BY_ORDER[b.replaced!.by] || b.replaced!.at - a.replaced!.at);
+  return out;
 }
 
 /** 200 items from `cursor` (an offset); `next` is the cursor of the following page, null at the end. */
@@ -179,14 +204,17 @@ export async function listBox(query: BoxQuery & { cursor?: string }) {
 
 /**
  * Every source with how many tracks came from it, most tracks first, how many tracks the box holds (a track with two
- * sources counts once) and how many are put aside, by reason. Tracks put aside count only there.
+ * sources counts once), how many are put aside, by reason, and how many stand in for another, by how they came.
+ * Tracks put aside count only there.
  */
 export async function boxSources() {
   const items = await allItems();
   const counts = new Map<string, { kind: SourceKind; ref: string; name: string; count: number }>();
   const aside: Partial<Record<Unplayable, number>> = {};
+  const replaced: Partial<Record<ReplacedBy, number>> = {};
   let total = 0;
   for (const it of items) {
+    if (it.replaced) replaced[it.replaced.by] = (replaced[it.replaced.by] ?? 0) + 1;
     if (it.track.blocked) {
       aside[it.track.blocked] = (aside[it.track.blocked] ?? 0) + 1;
       continue;
@@ -199,7 +227,7 @@ export async function boxSources() {
       counts.set(key, c);
     }
   }
-  return { sources: [...counts.values()].sort((a, b) => b.count - a.count), total, aside };
+  return { sources: [...counts.values()].sort((a, b) => b.count - a.count), total, aside, replaced };
 }
 
 /** Adds YouTube tracks from one source; local tracks and bundles are not box entries and are skipped. */
@@ -236,7 +264,8 @@ export async function annotator(): Promise<(t: Track) => Track> {
 
 /**
  * Stores a check of whether box tracks play here: `results` maps track IDs to why one won't, or null when it plays.
- * Returns how many tracks are newly marked. Marks the whole box as checked when `complete`.
+ * Returns how many tracks are newly marked. Marks the whole box as checked when `complete`. The account's check
+ * can't see Premium-only videos, so its null leaves a "premium" mark (yt-dlp's) as it is.
  */
 export async function applyChecks(results: Map<string, Unplayable | null>, at: number, complete = true): Promise<number> {
   const data = await load();
@@ -244,8 +273,9 @@ export async function applyChecks(results: Map<string, Unplayable | null>, at: n
   for (const [id, reason] of results) {
     const e = byId.get(id);
     if (!e) continue;
-    if (!reason) delete e.blocked;
-    else if (e.blocked?.reason !== reason) {
+    if (!reason) {
+      if (e.blocked?.reason !== "premium") delete e.blocked;
+    } else if (e.blocked?.reason !== reason) {
       if (!e.blocked) n++;
       e.blocked = { reason, at };
     } else e.blocked.at = at;
@@ -273,32 +303,111 @@ export async function youtubeEntries(): Promise<readonly BoxEntry[]> {
 }
 
 /**
+ * Box tracks put aside (no kept copy) whose stand-in was not looked for since `before` (ms), skipping those put back
+ * by hand; oldest look first.
+ */
+export async function asideForStandIn(before: number): Promise<Track[]> {
+  const data = await load();
+  return data.entries
+    .filter((e) => e.blocked && !e.keepAside && (e.standInAt ?? 0) < before && present(e.track).blocked)
+    .sort((a, b) => (a.standInAt ?? 0) - (b.standInAt ?? 0))
+    .map((e) => e.track);
+}
+
+/** Notes that a stand-in for `id` was looked for at `at` and none was put in. */
+export async function markLooked(id: string, at: number): Promise<void> {
+  await load();
+  const e = byId.get(id);
+  if (!e) return;
+  e.standInAt = at;
+  await persist();
+}
+
+/** The track that took the place of `oldId` (a source's `was`), when the box no longer has `oldId` itself. */
+export async function replacementOf(oldId: string): Promise<Track | null> {
+  const data = await load();
+  if (byId.has(oldId)) return null;
+  return data.entries.find((e) => e.sources.some((s) => s.was === oldId))?.track ?? null;
+}
+
+/** How a replacement came, for `replaceEntry`: the reason is the original's when the box knows none. */
+export interface ReplaceHow {
+  by: ReplacedBy;
+  reason?: Unplayable;
+  at: number;
+}
+
+/**
  * Puts `track` in place of the entry of `oldId` (another version of a track that won't play): sources, tags and the
  * date it came in stay, and each source remembers `oldId` as `was` so a later sync doesn't bring it back. When the
- * box has `track` already, that entry takes the sources and tags and the old one goes.
+ * box has `track` already, that entry takes the sources and tags and the old one goes. The entry remembers the
+ * original track (`replaced`; the first one when a stand-in is replaced again) so it can be put back.
  */
-export function replaceEntry(entries: BoxEntry[], oldId: string, track: Track): BoxEntry[] {
+export function replaceEntry(entries: BoxEntry[], oldId: string, track: Track, how: ReplaceHow): BoxEntry[] {
   const old = entries.find((e) => e.track.id === oldId);
   if (!old) return entries;
   const sources = old.sources.map((s) => ({ ...s, was: s.was ?? oldId }));
+  const replaced: Replaced = old.replaced
+    ? { ...old.replaced, by: how.by, at: how.at }
+    : { by: how.by, was: old.track, reason: old.blocked?.reason ?? how.reason, at: how.at };
   const existing = entries.find((e) => e.track.id === track.id);
   if (!existing) {
-    const entry: BoxEntry = { ...old, track, sources };
+    const entry: BoxEntry = { ...old, track, sources, replaced };
     delete entry.blocked;
+    delete entry.standInAt;
+    delete entry.keepAside;
     return entries.map((e) => (e === old ? entry : e));
   }
   for (const s of sources) if (!existing.sources.some((x) => x.kind === s.kind && x.ref === s.ref)) existing.sources.push(s);
   existing.tags = library.cleanTags([...existing.tags, ...old.tags]);
+  existing.replaced ??= replaced;
   return entries.filter((e) => e !== old);
 }
 
 /** `replaceEntry` in the stored box (nothing changes there when `oldId` isn't a box track). */
-export async function replaceTrack(oldId: string, track: Track): Promise<void> {
+export async function replaceTrack(oldId: string, track: Track, how: ReplaceHow): Promise<void> {
   const data = await load();
   if (!byId.has(oldId)) return;
-  data.entries = replaceEntry(data.entries, oldId, track);
+  data.entries = replaceEntry(data.entries, oldId, track, how);
   byId = new Map(data.entries.map((e) => [e.track.id, e]));
   await persist();
+}
+
+/**
+ * Puts the original track back in place of the stand-in `id` (「되돌리기」): put aside again for its reason, never
+ * replaced by itself again. When the stand-in was a box track of its own before (`replaceEntry` merged them), only
+ * the sources that came with the original go back to it (`split`). Null when `id` stands in for nothing.
+ */
+export function restoreEntry(entries: BoxEntry[], id: string, at: number): { entries: BoxEntry[]; was: Track; split: boolean } | null {
+  const e = entries.find((x) => x.track.id === id);
+  if (!e?.replaced) return null;
+  const { was, reason } = e.replaced;
+  const moved = e.sources.filter((s) => s.was === was.id);
+  const rest = e.sources.filter((s) => s.was !== was.id);
+  const split = moved.length > 0 && rest.length > 0;
+  const back: BoxEntry = {
+    track: was,
+    sources: (split ? moved : e.sources).map(({ was: _, ...s }) => s),
+    tags: [...e.tags],
+    addedAt: e.addedAt,
+    ...(reason ? { blocked: { reason, at } } : {}),
+    keepAside: true,
+  };
+  if (!split) return { entries: entries.map((x) => (x === e ? back : x)), was, split };
+  const kept: BoxEntry = { ...e, sources: rest };
+  delete kept.replaced;
+  return { entries: entries.flatMap((x) => (x === e ? [kept, back] : [x])), was, split };
+}
+
+/** `restoreEntry` in the stored box. */
+export async function restoreTrack(id: string, at: number): Promise<{ was: Track; split: boolean } | null> {
+  const data = await load();
+  const r = restoreEntry(data.entries, id, at);
+  if (!r) return null;
+  data.entries = r.entries;
+  byId = new Map(data.entries.map((e) => [e.track.id, e]));
+  await persist();
+  return { was: r.was, split: r.split };
 }
 
 /**
@@ -342,9 +451,18 @@ export interface Alternative {
   /** Why it is offered: the same title (bar track numbers and notes), the same artist (channel). */
   sameTitle: boolean;
   sameArtist: boolean;
+  /** Where YouTube Music moved the track itself (offered first even when its title differs). */
+  redirect?: boolean;
 }
 
 const artistKey = (a: string) => a.normalize("NFKC").toLocaleLowerCase().replace(/\s*-\s*topic$/, "").replace(/[^\p{L}\p{N}]+/gu, "");
+
+/** Whether two artist (channel) names are the same artist: one contains the other, "- Topic" and punctuation aside. */
+export function sameArtist(a: string, b: string): boolean {
+  const x = artistKey(a);
+  const y = artistKey(b);
+  return !!x && !!y && (x.includes(y) || y.includes(x));
+}
 
 /**
  * Other versions of `original`: search results that are another video, play here (`blocked` says when one doesn't)
@@ -352,16 +470,82 @@ const artistKey = (a: string) => a.normalize("NFKC").toLocaleLowerCase().replace
  */
 export function pickAlternatives(original: Track, found: Track[], blocked: (t: Track) => boolean, count = 5): Alternative[] {
   const title = titleWords(original.title).join(" ");
-  const artist = artistKey(original.artist);
   return found
     .filter((t) => t.id !== original.id && !blocked(t) && titleLikeness(original.title, t.title) >= LIKE_ENOUGH)
     .map((t, i) => ({ t, i, off: original.duration && t.duration ? Math.abs(t.duration - original.duration) : Number.MAX_SAFE_INTEGER }))
     .sort((a, b) => a.off - b.off || a.i - b.i)
     .slice(0, count)
-    .map(({ t }) => {
-      const other = artistKey(t.artist);
-      return { track: t, sameTitle: titleWords(t.title).join(" ") === title, sameArtist: !!artist && !!other && (other.includes(artist) || artist.includes(other)) };
-    });
+    .map(({ t }) => ({ track: t, sameTitle: titleWords(t.title).join(" ") === title, sameArtist: sameArtist(original.artist, t.artist) }));
+}
+
+/** Lengths this close (s) count as the same recording when a stand-in is chosen. */
+const SAME_LENGTH_S = 3;
+/** The last tier needs the same song name: this alike as names (`nameLikeness`; "High Heart" vs "Can You Hear My Heart" is not). */
+const SAME_NAME = 0.8;
+/** …and a length this close (share of the original's) unless the artist is the same: a cover or another performance. */
+const NEAR_LENGTH = 0.15;
+
+/**
+ * A title as the song's name: `titleWords` without notes in parentheses ("(Live)", "(feat. …)") and without the
+ * words of the artists' names that uploads put in titles ("Bernard Herrmann - Twisted Nerve"); the plain words when
+ * nothing else is left.
+ */
+function nameWords(title: string, artists: string[]): string[] {
+  const named = new Set(artists.flatMap((a) => titleWords(a)).filter((w) => w !== "topic"));
+  const words = titleWords(title.replace(/\([^)]*\)|（[^）]*）/g, " ")).filter((w) => !named.has(w));
+  return words.length ? words : titleWords(title);
+}
+
+/**
+ * How alike two tracks' titles are as song names, 0–1, both ways: the shared words over the longer title's, or the
+ * character pairs' Dice for titles written without spaces. Unlike `titleLikeness`, a long title that merely contains
+ * the words ("Epik High … 'Can You Hear My Heart'" for "High Heart") is not alike.
+ */
+export function nameLikeness(original: Track, other: Track): number {
+  const artists = [original.artist, other.artist];
+  const a = nameWords(original.title, artists);
+  const b = nameWords(other.title, artists);
+  if (!a.length || !b.length) return 0;
+  const inB = new Set(b);
+  const words = new Set(a.filter((w) => inB.has(w))).size / Math.max(new Set(a).size, inB.size);
+  const pa = pairs(a);
+  const pb = pairs(b);
+  const shared = [...pa].filter((p) => pb.has(p)).length;
+  return Math.max(words, pa.size + pb.size ? (2 * shared) / (pa.size + pb.size) : 0);
+}
+
+/**
+ * Which tier `a` (from `pickAlternatives`) goes in by itself as a stand-in for `original`: 0 the same title and length
+ * (±3 s), 1 the same title and artist, 2 the same song name (`nameLikeness` ≥ 0.8) with a length within 15% or the
+ * same artist. Null: not by itself (another song, an album, a medley); it is only offered in 「다른 판 찾기」.
+ */
+export function standInTier(original: Track, a: Alternative): 0 | 1 | 2 | null {
+  const off = original.duration && a.track.duration ? Math.abs(a.track.duration - original.duration) : Number.MAX_SAFE_INTEGER;
+  if (a.sameTitle && off <= SAME_LENGTH_S) return 0;
+  if (a.sameTitle && a.sameArtist) return 1;
+  if (nameLikeness(original, a.track) >= SAME_NAME && (off <= original.duration * NEAR_LENGTH || a.sameArtist)) return 2;
+  return null;
+}
+
+/** The alternatives that may go in by themselves, in the order they are tried: by `standInTier`, `pickAlternatives`' order within each. */
+export function standInOrder(original: Track, alternatives: Alternative[]): Alternative[] {
+  return alternatives
+    .map((a, i) => ({ a, i, t: standInTier(original, a) }))
+    .filter((x): x is { a: Alternative; i: number; t: 0 | 1 | 2 } => x.t !== null)
+    .sort((x, y) => x.t - y.t || x.i - y.i)
+    .map(({ a }) => a);
+}
+
+/** Lengths this close (s) make a moved track by the same artist the same song even when its title is worded otherwise. */
+const REDIRECT_LENGTH_S = 5;
+
+/**
+ * Whether the track YouTube Music moved `original` to is the same song: an alike title (as for alternatives), or the
+ * same artist and a length within 5 s.
+ */
+export function redirectFits(original: Track, moved: Pick<Track, "title" | "artist" | "duration">): boolean {
+  if (titleLikeness(original.title, moved.title) >= LIKE_ENOUGH) return true;
+  return sameArtist(original.artist, moved.artist) && !!original.duration && !!moved.duration && Math.abs(original.duration - moved.duration) <= REDIRECT_LENGTH_S;
 }
 
 /** A track by ID from the box, the local folders or the library, without response-only flags. */

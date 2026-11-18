@@ -56,10 +56,11 @@ export function AlternativesDialog() {
     navigate(`${paths.search}?q=${encodeURIComponent(track.title)}`);
   };
 
-  /** Why a candidate is offered, in a few words: same title, same artist, how its length compares. */
+  /** Why a candidate is offered, in a few words: moved by YouTube Music, same title, same artist, how its length compares. */
   const why = (a: Alternative) => {
     const off = track?.duration && a.track.duration ? a.track.duration - track.duration : null;
     return [
+      a.redirect && t.aside.moved,
       a.sameTitle && t.aside.sameTitle,
       a.sameArtist && t.aside.sameArtist,
       off !== null && (off === 0 ? t.aside.sameLength : t.aside.lengthOff(off)),

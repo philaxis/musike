@@ -1,5 +1,5 @@
-/** Why a YouTube video won't play on this server: blocked in its country, deleted, private, age-restricted. */
-export type Unplayable = "region" | "gone" | "private" | "age";
+/** Why a YouTube video won't play on this server: blocked in its country, deleted, private, age-restricted, Premium only. */
+export type Unplayable = "region" | "gone" | "private" | "age" | "premium";
 
 export interface Track {
   id: string;
