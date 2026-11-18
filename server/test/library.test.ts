@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { isPermutation, sanitizeTrack } from "../src/library.ts";
-import { cleanName, localId, mediaFiles, nameTrack, parseFileName, parseRoots, relInRoot } from "../src/localNames.ts";
+import { albumFolderName, cleanName, localId, mediaFiles, nameTrack, parseFileName, parseRoots, relInRoot } from "../src/localNames.ts";
 import { parsePlaylistLink } from "../src/playlistImport.ts";
 import { HttpError, TRACK_ID, VIDEO_ID } from "../src/types.ts";
 
@@ -72,6 +72,12 @@ describe("file names", () => {
 
   it("cleans folder names without eating dots", () => {
     assert.deepEqual(cleanName("[1996.xx.xx] Super Best Vol.2 (Lossless)"), { title: "Super Best Vol.2", year: 1996 });
+  });
+
+  it("names a disc folder after its album folder", () => {
+    assert.deepEqual(albumFolderName("[1987.xx.xx] Perfect, Live II (192 Kbps)/CD 2"), { title: "Perfect, Live II (CD 2)", year: 1987 });
+    assert.deepEqual(albumFolderName("[1982.xx.xx] Mint Jams (320 Kbps)"), { title: "Mint Jams", year: 1982 });
+    assert.deepEqual(albumFolderName("CD 1"), { title: "CD 1" });
   });
 });
 
