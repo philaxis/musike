@@ -1,5 +1,5 @@
-import { DatabaseIcon, PlusIcon, TrayIcon } from "@phosphor-icons/react";
-import { useState } from "react";
+import { DatabaseIcon, PlusIcon, TrayIcon, YoutubeLogoIcon } from "@phosphor-icons/react";
+import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router";
 import { Cover, type CoverKind } from "../components/Cover";
 import { NamePlaylistDialog } from "../components/Dialogs";
@@ -8,6 +8,7 @@ import { PageHeader } from "../components/Page";
 import { useT } from "../i18n";
 import { capabilities } from "../lib/api";
 import { paths } from "../lib/routes";
+import { server, type BoxSource } from "../lib/server";
 import type { Track } from "../lib/types";
 import { IconButton } from "../components/IconButton";
 import { useLibrary } from "../stores/library";
@@ -39,12 +40,57 @@ function Entry({ to, name, kind, tracks, sub }: { to: string; name: string; kind
   );
 }
 
+type SourceCount = Omit<BoxSource, "at"> & { count: number };
+
+/** Where the song box's YouTube tracks came from, each a way into the box filtered to it. Biggest first. */
+function YoutubeSources({ sources }: { sources: SourceCount[] }) {
+  const t = useT();
+  const yt = sources.filter((s) => s.kind !== "local").sort((a, b) => b.count - a.count);
+  if (!yt.length) return null;
+  return (
+    <section className="px-2 pt-8 md:px-4">
+      <h2 className="px-2 pb-2 text-lg font-bold md:px-2">{t.songBox.fromYoutube}</h2>
+      <ul className="grid grid-cols-1 gap-1 sm:grid-cols-2 md:gap-2 lg:grid-cols-3 2xl:grid-cols-5">
+        {yt.map((s) => (
+          <li key={`${s.kind}:${s.ref}`}>
+            <Link
+              to={paths.box({ source: `${s.kind}:${s.ref}` })}
+              className="flex items-center gap-3 rounded-[14px] p-2 transition-colors hover:bg-surface-2"
+            >
+              <span className="grid size-12 shrink-0 place-items-center rounded-[10px] bg-[#ff4e4522] text-[#ff4e45]">
+                <YoutubeLogoIcon size={22} weight="fill" />
+              </span>
+              <span className="min-w-0">
+                <span className="block truncate font-medium">{s.kind === "youtube-liked" ? t.songBox.fromLiked : s.name || t.songBox.fromLink}</span>
+                <span className="block truncate text-sm text-fg-2">{t.songBox.count(s.count)}</span>
+              </span>
+            </Link>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
 export default function Library() {
   const { favorites, playlists, history, createPlaylist } = useLibrary();
   const [creating, setCreating] = useState(false);
   const setSettingsOpen = useUi((s) => s.setSettingsOpen);
   const navigate = useNavigate();
   const t = useT();
+  const showBox = capabilities.serverLibrary && !isTvMode();
+  const [sources, setSources] = useState<SourceCount[] | null>(null);
+  const [boxTotal, setBoxTotal] = useState(0);
+  useEffect(() => {
+    if (!showBox) return;
+    server.boxSources().then(
+      (r) => {
+        setSources(r.sources);
+        setBoxTotal(r.total);
+      },
+      () => setSources([]),
+    );
+  }, [showBox]);
 
   return (
     <div className="pb-8">
@@ -74,8 +120,14 @@ export default function Library() {
         <Entry to={paths.favorites} name={t.nav.favorites} kind="favorites" tracks={favorites} sub={t.common.tracks(favorites.length)} />
         <Entry to={paths.history} name={t.nav.recentlyPlayed} kind="history" tracks={history} sub={t.common.tracks(history.length)} />
         {/* The song box is for sorting, which TV mode leaves to the phone and Hermes. */}
-        {capabilities.serverLibrary && !isTvMode() && (
-          <Entry to={paths.box()} name={t.songBox.title} kind="box" tracks={[]} sub={t.songBox.tileSub} />
+        {showBox && (
+          <Entry
+            to={paths.box()}
+            name={t.songBox.title}
+            kind="box"
+            tracks={[]}
+            sub={boxTotal ? `${t.songBox.count(boxTotal)} · ${t.songBox.tileSub}` : t.songBox.tileSub}
+          />
         )}
         {playlists.map((p) => (
           <Entry
@@ -94,6 +146,8 @@ export default function Library() {
           {t.library.noPlaylists}
         </p>
       )}
+
+      {showBox && sources && <YoutubeSources sources={sources} />}
 
       {capabilities.serverLibrary && <LocalRoots />}
 

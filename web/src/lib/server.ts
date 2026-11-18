@@ -151,8 +151,7 @@ export const server = {
   importToBox: (url: string) => request<BoxImport>("/api/import/youtube/box", { method: "POST", json: { url } }),
 
   box: (query: BoxQuery, signal?: AbortSignal) => request<BoxPage>(`/api/box${q({ ...query })}`, { signal }),
-  boxSources: () =>
-    request<{ sources: (Omit<BoxSource, "at"> & { count: number })[] }>("/api/box/sources").then((r) => r.sources),
+  boxSources: () => request<{ sources: (Omit<BoxSource, "at"> & { count: number })[]; total: number }>("/api/box/sources"),
   /** YouTube tracks into the box, as added by hand. */
   addToBox: (tracks: Track[]) => request<unknown>("/api/box", { method: "POST", json: { tracks, source: { kind: "link" } } }),
 

@@ -53,7 +53,7 @@ export function registerBoxRoutes(app: FastifyInstance) {
     return box.listBox({ filter, source, tag, q: q?.slice(0, 200), cursor });
   });
 
-  app.get("/api/box/sources", async () => ({ sources: await box.boxSources() }));
+  app.get("/api/box/sources", () => box.boxSources());
 
   /** `{ tracks, source?: { kind: "link" | "search", name? } }`: tracks the agent found, into the box. */
   app.post("/api/box", async (req) => {

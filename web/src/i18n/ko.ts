@@ -493,6 +493,7 @@ export const ko: Messages = {
   songBox: {
     title: "곡 상자",
     tileSub: "들여온 곡 전부, 출처와 꼬리표",
+    fromYoutube: "유튜브에서 들여온 곡",
     all: "전체",
     untagged: "정리 안 됨",
     bySource: "출처별",
