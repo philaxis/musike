@@ -19,7 +19,8 @@ interface Known {
   addedAt: number;
 }
 
-async function lookup(id: string): Promise<Known | null> {
+/** A track the analysis knows, as it can be played now (also the music map's tracks), or null. */
+export async function lookup(id: string): Promise<Known | null> {
   const entry = await box.boxEntry(id);
   if (entry) {
     const track = local.annotate(entry.track);

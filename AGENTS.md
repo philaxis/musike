@@ -12,7 +12,7 @@
 - 데이터: `~/.local/share/musike/data`(`library.json`, `local-index.json`, `backups/`). 캐시·받아 둔 곡: `/mnt/backup8t/orca-data/musike/{cache,keep}`(HDD).
 - 내 음악 폴더(`MUSIKE_LOCAL_DIRS`, 읽기 전용, 절대 쓰지 않음): `/mnt/backup8t/gdrive/current/MUSICS/{야마시타 타츠로,카시오페아}`(구글 드라이브 사본), `~/보관함/유튜브`(yt-bulk).
 - yt-dlp: `uv tool`로 설치, `yt-dlp-update.timer`가 매일 업데이트.
-- 취향 분석(#26, `analysis/` 파이썬, 설계 `openspec/changes/analysis-move/design.md`): `musike-analysis.timer`가 매일 06:50 `uv run python -m musike_analysis update`(곡 상자 → 카드·소리/글 벡터·소리 묶음 → `~/.local/share/musike/analysis/{taste.json,audio.f32,text.f32,map/}`). 원본(조각·카드·parquet)은 `/mnt/backup8t/orca-data/musike/analysis/`. 마지막 결과 `python -m musike_analysis status`. 시험: `cd analysis && uv run --group dev pytest`.
+- 취향 분석(#26, `analysis/` 파이썬, 설계 `openspec/changes/analysis-move/design.md`): `musike-analysis.timer`가 매일 06:50 `uv run python -m musike_analysis update`(곡 상자 → 카드·소리/글 벡터·소리 묶음 → `~/.local/share/musike/analysis/{taste.json,audio.f32,text.f32,map/}`). 원본(조각·카드·parquet)은 `/mnt/backup8t/orca-data/musike/analysis/`. 마지막 결과 `python -m musike_analysis status`. 지도 웹 파일(`analysis/musike_analysis/web/`)만 고쳤으면 `python -m musike_analysis map`(계산 없이 `map/index.html`만 다시, 시험은 `MUSIKE_ANALYSIS_DIR=/tmp/…`). 시험: `cd analysis && uv run --group dev pytest`.
 - 헤르메스 기술: `~/.hermes/skills/media/musike/SKILL.md`(API 표와 답장 모양). API를 바꾸면 같이 고친다.
 
 ## 개발
@@ -47,6 +47,7 @@
 | GET | `/api/taste/radio/:id` | 닮은 곡 라디오 25곡(그 곡 먼저, 소리·설명 반반 닮음 + MMR, 아티스트 2곡까지). 분석에 없는 곡은 `analyzed: false` |
 | GET | `/api/taste/mixes` · `/api/taste/mixes/:mid` | 오늘의 자동 재생목록(`daily-1`~`daily-5`, `on-repeat`, `new-for-you`, `forgotten`, `upbeat`, `calm`; 서울 날짜로 하루 동안 같음) |
 | GET | `/api/works/track/:id` · `/api/works/album?key=` · `/api/works/instance?key=` · `/api/works/composers?genre=` · `/api/works/composer?name=` | 분석의 앨범·작곡가·연주(`instance`)로 내 곡만 묶기: 곡 하나가 이어지는 곳(없으면 null, 내 파일은 `album.local` = 내 음악 앨범) · 앨범의 내 곡(흔한 이름에 아티스트마다 1곡이면 아티스트별 따로, 키 `이름\t아티스트`) · 한 연주 악장 순(번호 없는 곡은 뒤에 제목 순, 다른 연주 안 섞음) · 작곡가 목록(곡 수 순) · 작곡가의 작품 → 연주 → 곡. 앨범·연주·작곡가 응답의 `titles`는 악장 있는 곡의 줄 제목(`II. Adagio`, 여러 작품 앨범은 `· 작품`), 곡 자체 제목은 그대로 |
+| GET | `/api/taste/map` · `/api/map/<파일>` · `POST /api/taste/map/tracks {ids}` | 3D 음악 지도: 있는지·곡 수 · 분석 폴더 `map/` 정적 파일(밖으로 나가는 경로 404, gzip·ETag, 없으면 404 안내) · 지도 점 곡 번호 → 지금 들을 수 있는 곡(순서대로, 모르는 곡·지워진 영상 빠짐) |
 
 원작 API(검색, 재생목록 만들기·넣기·빼기, 즐겨찾기, 스트림)는 README의 API 표.
-웹 경로: `/play/:id`(곡·묶음 바로 재생), `/list/:pid`(재생목록 처음부터), `/library/box`(곡 상자, `?filter=untagged`·`?source=kind:ref`·`?tag=`), `/library/stats`(내 기록, `?period=4w|6m|all`·`&day=YYYY-MM-DD`), `/library/genres`(장르 → 소리 묶음), `/library/mixes`(자동 재생목록), `/library/radio/:id`(닮은 곡 라디오 목록), `/library/albums/:key`(내 곡 앨범), `/library/performances/:key`(한 연주), `/library/composers?genre=`(작곡가 목록, 장르 화면 「작곡가별」) · `/library/composers/:name`, `/settings`(설정 열기, 구글 로그인 뒤 `?google=connected|error`로 돌아오는 곳).
+웹 경로: `/play/:id`(곡·묶음 바로 재생), `/list/:pid`(재생목록 처음부터), `/library/box`(곡 상자, `?filter=untagged`·`?source=kind:ref`·`?tag=`), `/library/stats`(내 기록, `?period=4w|6m|all`·`&day=YYYY-MM-DD`), `/library/genres`(장르 → 소리 묶음), `/library/mixes`(자동 재생목록), `/library/radio/:id`(닮은 곡 라디오 목록), `/library/albums/:key`(내 곡 앨범), `/library/performances/:key`(한 연주), `/library/composers?genre=`(작곡가 목록, 장르 화면 「작곡가별」) · `/library/composers/:name`, `/library/map`(3D 음악 지도, `#v=<곡 번호>`로 그 곡 고르기), `/settings`(설정 열기, 구글 로그인 뒤 `?google=connected|error`로 돌아오는 곳).

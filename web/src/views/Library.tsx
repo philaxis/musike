@@ -1,4 +1,4 @@
-import { ChartBarIcon, DatabaseIcon, PlusIcon, SparkleIcon, SquaresFourIcon, TrayIcon, YoutubeLogoIcon } from "@phosphor-icons/react";
+import { ChartBarIcon, DatabaseIcon, MapTrifoldIcon, PlusIcon, SparkleIcon, SquaresFourIcon, TrayIcon, YoutubeLogoIcon } from "@phosphor-icons/react";
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router";
 import { Cover, type CoverKind } from "../components/Cover";
@@ -19,7 +19,7 @@ import { isTvMode } from "../tv/tvMode";
 
 const COVER = "size-16 shrink-0 rounded-[12px] md:aspect-square md:size-auto md:w-full md:rounded-[14px] md:shadow-[0_12px_32px_rgb(0_0_0/0.3)]";
 /** Tiles that are a place rather than a list of tracks: an icon instead of a cover. */
-const ICONS = { box: TrayIcon, stats: ChartBarIcon, genres: SquaresFourIcon, mixes: SparkleIcon };
+const ICONS = { box: TrayIcon, stats: ChartBarIcon, genres: SquaresFourIcon, mixes: SparkleIcon, map: MapTrifoldIcon };
 
 function Entry({
   to,
@@ -112,6 +112,15 @@ export default function Library() {
       () => setGenres(0),
     );
   }, []);
+  // The 3D music map, once the analysis has drawn it. Not on TV: it wants a mouse or a finger.
+  const [mapSongs, setMapSongs] = useState<number | null>(null);
+  useEffect(() => {
+    if (!showBox) return;
+    server.musicMap().then(
+      (r) => setMapSongs(r.ready ? r.songs : null),
+      () => setMapSongs(null),
+    );
+  }, [showBox]);
   useEffect(() => {
     if (!showBox) return;
     server.boxSources().then(
@@ -177,6 +186,7 @@ export default function Library() {
         {/* Stats too: TV mode only plays. */}
         {showBox && <Entry to={paths.stats} name={t.stats.title} kind="stats" tracks={[]} sub={t.stats.tileSub} />}
         {genres > 0 && <Entry to={paths.tasteGenres} name={t.taste.genres} kind="genres" tracks={[]} sub={t.taste.genresSub(genres)} />}
+        {mapSongs !== null && <Entry to={paths.musicMap} name={t.taste.map} kind="map" tracks={[]} sub={t.taste.mapSub(mapSongs)} />}
         {capabilities.serverLibrary && (
           <Entry to={paths.mixes} name={t.taste.mixes} kind="mixes" tracks={[]} sub={t.taste.mixesSub} />
         )}

@@ -13,6 +13,7 @@ import * as local from "./local.js";
 import { registerPlayRoutes } from "./plays.js";
 import { registerTasteRoutes } from "./tasteRoutes.js";
 import { registerWorkRoutes } from "./workRoutes.js";
+import { registerMapRoutes } from "./mapRoutes.js";
 import { findVideoFor, radio, search, suggestions } from "./search.js";
 import { registerStatsRoutes } from "./stats.js";
 import { mediaId, registerServerRoutes, trackId } from "./serverRoutes.js";
@@ -267,6 +268,7 @@ export async function startServer(opts: StartOptions = {}): Promise<RunningServe
   registerStatsRoutes(app);
   registerTasteRoutes(app);
   registerWorkRoutes(app);
+  registerMapRoutes(app);
 
   // Web app (production build)
 

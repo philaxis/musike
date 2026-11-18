@@ -728,6 +728,10 @@ export const en = {
     showList: "Show list",
     notAnalyzed: "This track hasn't been analysed yet, so there's no radio for it.",
     openFailed: "Couldn't open this",
+    map: "Music map",
+    mapSub: (n: number) => (n ? `${n.toLocaleString()} tracks in 3D · find by words or sound` : "Tracks in 3D · find by words or sound"),
+    mapMissing: "No music map yet",
+    mapMissingBody: "The taste analysis draws the map from the song box every morning. Come back after the next run.",
   },
 
   // Albums, composers and performances of the taste analysis: from a track to where it belongs.

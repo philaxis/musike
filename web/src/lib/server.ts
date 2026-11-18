@@ -339,6 +339,12 @@ export const server = {
   composers: (genre: string | undefined, signal?: AbortSignal) =>
     request<{ ready: boolean; composers: ComposerCard[] }>(`/api/works/composers${q({ genre })}`, { signal }),
   composer: (name: string, signal?: AbortSignal) => request<ComposerPage>(`/api/works/composer${q({ name })}`, { signal }),
+  /** The analysis's 3D music map (served at /api/map/): whether it is there and how many tracks it has. */
+  musicMap: (signal?: AbortSignal) =>
+    request<{ ready: boolean; songs: number; generatedAt: string | null }>("/api/taste/map", { signal }),
+  /** Map points as playable tracks, in order (unknown and gone ones left out). */
+  mapTracks: (ids: string[]) =>
+    request<{ tracks: Track[] }>("/api/taste/map/tracks", { method: "POST", json: { ids } }).then((r) => r.tracks),
 };
 
 /** A YouTube / YouTube Music playlist link (playlist?list=, watch?v=…&list=, album OLAK5uy_…), or null. */

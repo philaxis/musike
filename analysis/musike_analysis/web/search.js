@@ -142,7 +142,10 @@
   if (!qEl || !box) return;
   const P = window.P || [];
   const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
-  const ytURL = id => id ? `https://www.youtube.com/watch?v=${encodeURIComponent(id)}` : '';
+  const ACT = '<span class="ract"><button type="button" data-rp title="여기부터 재생(결과 목록을 Musike 대기열로)" aria-label="여기부터 재생">▶</button>'
+    + '<button type="button" data-rm title="다음에 재생 · 대기열에 추가 · 재생목록에 추가 …" aria-label="곡 메뉴">⋯</button></span>';
+  const TO_MUSIKE = 100;  // 결과에서 Musike 로 넘기는 곡 수(재생·대기열·재생목록)
+  const rowIds = rows => rows.map(r => (P[r.it.point] || {}).id).filter(Boolean);
   const pointIdx = new Map(P.map((p, i) => [p.id, i]));
   const pointOf = id => pointIdx.has(id) ? pointIdx.get(id) : -1;
 
@@ -301,23 +304,17 @@
   let recActive = -1;
   const SEARCH_KEY = 'musicmap-search';
 
-  // ---------------------------------------------------------------- 최근 검색(user.js 의 검색 기록: 서버가 있으면 서버, 없으면 이 브라우저)
-  const mu = () => window.musicUser || null;
+  // ---------------------------------------------------------------- 최근 검색(이 브라우저 localStorage)
   function recentList() {
-    const u = mu();
-    const a = u && u.searches ? u.searches() : store.get(SEARCH_KEY, []);
+    const a = store.get(SEARCH_KEY, []);
     return (Array.isArray(a) ? a : []).filter(q => typeof q === 'string' && q.trim()).slice(0, 20);
   }
   function forgetRecent(q) {
-    const u = mu();
-    if (u && u.forgetSearch) u.forgetSearch(q);
-    else store.set(SEARCH_KEY, q === '*' ? [] : recentList().filter(x => x !== q));
+    store.set(SEARCH_KEY, q === '*' ? [] : recentList().filter(x => x !== q));
   }
   function rememberSearch(q) {
     q = String(q || '').trim();
     if (!q) return;
-    const u = mu();
-    if (u && u.addSearch) { u.addSearch(q); return; }
     const a = recentList().filter(x => x.toLowerCase() !== q.toLowerCase());
     a.unshift(q);
     store.set(SEARCH_KEY, a.slice(0, 20));
@@ -390,6 +387,7 @@
       + `<b>${count}</b><span class="sst${loading ? ' ld' : ''}">${esc(status)}</span>`
       + `<span class="sfold">${folded ? '펼치기' : '접기'}<i>⌃</i></span></button>`
       + (rows.length && window.chips ? `<button class="spin${pinned ? ' on' : ''}" type="button" title="이 검색 결과만 지도에 남기기(조건 버블)"${pinned ? ' disabled' : ''}>${pinned ? '거르는 중' : '결과만 보기'}</button>` : '')
+      + (rows.length && window.musike ? `<button class="sall" type="button" title="결과 ${rows.length > TO_MUSIKE ? `상위 ${TO_MUSIKE}` : rows.length}곡: 재생 · 다음에 재생 · 대기열에 추가 · 재생목록에 추가" aria-label="결과 전체 메뉴">⋯ 전체</button>` : '')
       + `</div>`;
     let list;
     if (!rows.length) list = `<div class="snone">${total == null ? '검색 자료를 읽는 중…' : '맞는 곡이 없습니다.'}</div>`;
@@ -405,10 +403,9 @@
           + `<span class="rk">소리</span>`
           + `<div class="rm"><div class="rt">${esc(it.title || '제목 없음')}</div><div class="ra">${esc(metaLine(it))}</div>`
           + (r.why && r.why.length ? `<div class="rwhy">${r.why.map(w => `<span>${esc(w)}</span>`).join('')}</div>` : '')
-          + '</div></div>';
+          + '</div>' + ACT + '</div>';
       }
       const moods = String(it.moods || '').split(/\s+/).filter(Boolean).slice(0, 3);
-      const link = ytURL(it.videoId);
       const kind = kindOf(r);
       const cls = 'rr' + (k === active ? ' act' : '') + (it.point === current ? ' cur' : '');
       return (k === 0 && hasSnd ? '<div class="sdiv">글자로 찾음</div>' : '') + (prev && prev.snd ? '<div class="sdiv">나머지 곡</div>' : '')
@@ -419,8 +416,7 @@
         + (moods.length && window.chips ? `<div class="rtg">${moods.map(m => `<button type="button" data-mood="${esc(m)}" title="분위기 '${esc(m)}' 버블 더하기">~ ${esc(m)}</button>`).join('')}</div>` : '')
         + `<div class="rf"><span class="rkind ${kind === '의미' ? 'sem' : kind === '키워드' ? 'kw' : 'both'}">${kind}</span>`
         + `<span class="rsc" title="${r.semantic == null ? '키워드 점수' : '키워드+의미 점수'}">${Math.round(r.score * 100)}점</span>`
-        + (link ? `<a class="rd" href="${link}" target="_blank" rel="noopener" title="유튜브에서 열기">유튜브 ↗</a>` : '')
-        + '</div></div></div>';
+        + '</div></div>' + ACT + '</div>';
     }).join('');
     if (!semOK && !modelPromise) list = '<button class="semon" type="button">의미 검색 켜기 (모델 약 130MB 내려받기)</button>' + list;
     const y = box.querySelector('.slist') ? box.querySelector('.slist').scrollTop : 0;
@@ -473,10 +469,29 @@
     } catch (_) { /* 상태 문구는 ensureModel 쪽에서 */ }
   }
 
-  // 좁은 화면에서 검색창에 포커스가 있으면(키보드 배치) 누르는 순간 포커스가 빠지며 목록이 아래로 옮겨가 클릭이 엇나간다 → 결과 줄은 포커스를 뺏지 않는다
-  box.addEventListener('mousedown', e => { if (document.activeElement === qEl && e.target.closest('.rr, .rc') && !e.target.closest('a')) e.preventDefault(); });
+  // 좁은 화면에서 검색창에 포커스가 있으면(키보드 배치) 누르는 순간 포커스가 빠지며 목록이 아래로 옮겨가 클릭이 엇나간다 → 결과 줄·결과 메뉴는 포커스를 뺏지 않는다
+  box.addEventListener('mousedown', e => { if (document.activeElement === qEl && e.target.closest('.rr, .rc, .sall') && !e.target.closest('a')) e.preventDefault(); });
   box.addEventListener('click', e => {
-    if (e.target.closest('.rd')) return;
+    if (view === 'list' && window.musike) {
+      // Musike 쪽 메뉴·재생으로 넘어가면 키보드는 내린다(누른 자리는 위 mousedown 이 지켰다)
+      if (e.target.closest('.sall, [data-rp], [data-rm]') && narrow()) qEl.blur();
+      const all = e.target.closest('.sall');
+      if (all) {
+        const r = all.getBoundingClientRect(), ids = rowIds(last.rows), q = qEl.value.trim();
+        rememberSearch(q);
+        window.musike.menu(ids.slice(0, TO_MUSIKE), r.left, r.bottom, ids.length > TO_MUSIKE ? `검색 ‘${q}’ 상위 ${TO_MUSIKE}곡` : `검색 ‘${q}’`);
+        return;
+      }
+      const act = e.target.closest('[data-rp], [data-rm]');
+      const at = act && act.closest('.rr');
+      if (at) {
+        const k = +at.dataset.k, id = (P[(last.rows[k] || { it: {} }).it.point] || {}).id;
+        rememberSearch(qEl.value);
+        if (act.dataset.rp != null) window.musike.play(rowIds(last.rows.slice(k, k + TO_MUSIKE)), 0);
+        else { const r = act.getBoundingClientRect(); window.musike.menu([id], r.left, r.bottom); }
+        return;
+      }
+    }
     if (view === 'recents') {
       const x = e.target.closest('.rcx');
       if (x) { const q = recentList()[+x.dataset.x]; if (q) forgetRecent(q); recActive = -1; paintRecents(); return; }
