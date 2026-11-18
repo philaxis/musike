@@ -11,10 +11,12 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { LANGUAGES, useI18n, useT, type Lang } from "../i18n";
 import { capabilities, type Channel } from "../lib/api";
 import { cn } from "../lib/format";
+import { crossfadeSupported } from "../player/crossfade";
 import { useSystem } from "../stores/system";
 import { useUi } from "../stores/ui";
 import { BackupSection } from "./BackupSection";
 import { AccentPicker, LayoutSection } from "./CustomizeSection";
+import { FadeSection } from "./FadeSection";
 import { Modal } from "./Modal";
 
 function Segmented<T extends string>({
@@ -151,6 +153,8 @@ export function SettingsDialog() {
             options={LANGUAGES.map(({ id, name }): [Lang, ReactNode] => [id, <span lang={id}>{name}</span>])}
           />
         </section>
+
+        {crossfadeSupported && <FadeSection />}
 
         <LayoutSection />
 

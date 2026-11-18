@@ -360,6 +360,14 @@ export const en = {
     depMissingAfter: "and restart Musike.",
   },
 
+  fade: {
+    section: "Playback",
+    title: "Fade between tracks",
+    body: "The next track starts this many seconds early and the two overlap. Not within one local album, or in Video mode.",
+    off: "Off",
+    seconds: (n: number) => `${n} s`,
+  },
+
   customize: {
     accent: "Accent color",
     customColor: "Custom color",

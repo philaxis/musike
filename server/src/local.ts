@@ -534,10 +534,14 @@ export function streamLocalAudio(req: FastifyRequest, reply: FastifyReply, id: s
   const codec = e.probe.acodec ?? "";
   const webm = codec === "opus" || codec === "vorbis";
   const copy = webm || ["aac", "mp3", "alac"].includes(codec);
+  // `-ss` before the input snaps back to the video's previous keyframe (8 s apart with a still cover), so the sound
+  // would start early: jump there a little before `t`, then drop the audio up to `t` exactly (cheap with stream copy).
+  const lead = Math.min(t, 30);
   const args = [
     "-hide_banner", "-loglevel", "error", "-nostdin",
-    ...(t ? ["-ss", t.toFixed(3)] : []),
+    ...(t > lead ? ["-ss", (t - lead).toFixed(3)] : []),
     "-i", e.file,
+    ...(lead ? ["-ss", lead.toFixed(3)] : []),
     "-map", "0:a:0", "-vn", "-sn", "-dn",
     ...(copy ? ["-c:a", "copy"] : ["-c:a", "aac", "-b:a", "256k"]),
     // 1 s fragments: on a pipe, keyframe-only fragmenting of an audio stream makes huge fragments that decode badly.

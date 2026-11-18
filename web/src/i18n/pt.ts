@@ -354,6 +354,14 @@ export const pt: Messages = {
     depMissingAfter: "e reinicie o Musike.",
   },
 
+  fade: {
+    section: "Reprodução",
+    title: "Transição entre faixas",
+    body: "A próxima faixa começa esses segundos antes e as duas se sobrepõem. Não dentro de um mesmo álbum local, nem no modo Vídeo.",
+    off: "Desligado",
+    seconds: (n) => `${n} s`,
+  },
+
   customize: {
     accent: "Cor de destaque",
     customColor: "Cor personalizada",

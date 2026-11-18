@@ -354,6 +354,14 @@ export const ko: Messages = {
     depMissingAfter: "실행한 뒤 Musike를 다시 켜 주세요.",
   },
 
+  fade: {
+    section: "재생",
+    title: "곡 사이 페이드",
+    body: "다음 곡을 이만큼 일찍 시작해 두 곡을 겹쳐 넘겨요. 같은 로컬 앨범 안에서와 영상 모드에서는 겹치지 않아요.",
+    off: "끔",
+    seconds: (n) => `${n}초`,
+  },
+
   customize: {
     accent: "강조 색",
     customColor: "직접 고른 색",
