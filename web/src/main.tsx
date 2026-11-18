@@ -7,6 +7,7 @@ import { registerSW } from "virtual:pwa-register";
 import App from "./App";
 import { getT } from "./i18n";
 import { desktop } from "./lib/desktop";
+import { startPlayLog } from "./player/playLog";
 import { usePlayer } from "./player/player";
 import { useUi } from "./stores/ui";
 import "./styles.css";
@@ -32,6 +33,8 @@ if (!desktop) {
     },
   });
 }
+
+startPlayLog();
 
 // Android TV: spatial D-pad navigation + 10-foot styling (no-op elsewhere).
 installTvMode();

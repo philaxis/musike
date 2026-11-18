@@ -10,6 +10,7 @@ import { config } from "./config.js";
 import * as library from "./library.js";
 import { fileStorage } from "./libraryFile.js";
 import * as local from "./local.js";
+import { registerPlayRoutes } from "./plays.js";
 import { findVideoFor, radio, search, suggestions } from "./search.js";
 import { mediaId, registerServerRoutes, trackId } from "./serverRoutes.js";
 import { proxyStream, serveFile } from "./stream.js";
@@ -253,6 +254,7 @@ export async function startServer(opts: StartOptions = {}): Promise<RunningServe
   registerServerRoutes(app);
   registerBoxRoutes(app);
   registerGoogleRoutes(app);
+  registerPlayRoutes(app);
 
   // Web app (production build)
 
