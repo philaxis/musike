@@ -6,6 +6,7 @@ import type { FastifyInstance } from "fastify";
 import * as box from "./box.js";
 import { config } from "./config.js";
 import { langOf, msg, tr, type Lang } from "./i18n.js";
+import * as ledger from "./ledger.js";
 import { HttpError, VIDEO_ID, type Track, type Unplayable } from "./types.js";
 
 // The user's YouTube account, read-only: Google sign-in (OAuth web flow, scope youtube.readonly), the playlists
@@ -254,23 +255,46 @@ export function unplayable(video: Video | undefined, region: string): Unplayable
   return null;
 }
 
-/** `unplayable` for each of `ids` here (MUSIKE_LOCATION), 50 per request. */
-export async function checkVideos(ids: string[]): Promise<Map<string, Unplayable | null>> {
-  const out = new Map<string, Unplayable | null>();
-  const region = config.location.toUpperCase();
+/** `videos.list` with `part` for `ids`, 50 per request (one quota unit each, whatever the parts); deleted videos are left out. */
+async function videoDetails(ids: string[], part = "contentDetails"): Promise<Map<string, Video>> {
+  const out = new Map<string, Video>();
   for (let i = 0; i < ids.length; i += 50) {
-    const chunk = ids.slice(i, i + 50);
-    const page = await api<Video>("videos", { part: "status,contentDetails", id: chunk.join(","), maxResults: "50" });
-    const found = new Map((page.items ?? []).map((v) => [v.id, v]));
-    for (const id of chunk) out.set(id, unplayable(found.get(id), region));
+    const page = await api<Video>("videos", { part, id: ids.slice(i, i + 50).join(","), maxResults: "50" });
+    for (const v of page.items ?? []) out.set(v.id, v);
   }
   return out;
 }
 
-/** Checks every YouTube track of the song box and stores the result; returns how many newly won't play. */
-async function checkBox(): Promise<number> {
-  const ids = (await box.youtubeIds()).filter((id) => VIDEO_ID.test(id));
-  return box.applyChecks(await checkVideos(ids), Date.now());
+/** `unplayable` for each of `ids` here (MUSIKE_LOCATION), 50 per request. */
+export async function checkVideos(ids: string[]): Promise<Map<string, Unplayable | null>> {
+  const region = config.location.toUpperCase();
+  const found = await videoDetails(ids, "status,contentDetails");
+  return new Map(ids.map((id) => [id, unplayable(found.get(id), region)]));
+}
+
+/**
+ * Checks every YouTube track of the song box: stores whether each plays here in the box, and what YouTube says of
+ * each (title, channel, length, status) in the video ledger, which notes what changed. Returns how many newly won't
+ * play and the changes found.
+ */
+export async function checkBox(): Promise<{ checked: number; blocked: number; changes: number }> {
+  const entries = (await box.youtubeEntries()).filter((e) => VIDEO_ID.test(e.track.id));
+  const ids = entries.map((e) => e.track.id);
+  const region = config.location.toUpperCase();
+  const at = Date.now();
+  const found = await videoDetails(ids, "snippet,status,contentDetails");
+  const verdicts = new Map(ids.map((id) => [id, unplayable(found.get(id), region)]));
+  const blocked = await box.applyChecks(verdicts, at);
+  const seen = new Map(
+    ids.map((id): [string, ledger.Seen | null] => {
+      const v = found.get(id);
+      const status = verdicts.get(id) ?? "ok";
+      return [id, v ? { title: v.snippet?.title ?? "", channel: v.snippet?.channelTitle ?? "", duration: isoDuration(v.contentDetails?.duration), status } : null];
+    }),
+  );
+  const addedAt = new Map(entries.map((e) => [e.track.id, e.addedAt]));
+  const changes = await ledger.recordCheck(seen, at, (id) => addedAt.get(id) ?? at);
+  return { checked: ids.length, blocked, changes: changes.length };
 }
 
 /** The first check of the song box, at startup when there was none yet and the account is connected. */
@@ -353,16 +377,6 @@ export function itemGone(item: PlaylistItem): boolean {
   return !item.snippet?.videoOwnerChannelTitle || item.status?.privacyStatus === "private";
 }
 
-/** Durations (and which videos still exist) for the given IDs, 50 per request. */
-async function videoDetails(ids: string[]): Promise<Map<string, Video>> {
-  const out = new Map<string, Video>();
-  for (let i = 0; i < ids.length; i += 50) {
-    const page = await api<Video>("videos", { part: "contentDetails", id: ids.slice(i, i + 50).join(","), maxResults: "50" });
-    for (const v of page.items ?? []) out.set(v.id, v);
-  }
-  return out;
-}
-
 export interface SyncResult {
   added: { id: string; title: string; source: string }[];
   merged: number;
@@ -405,8 +419,9 @@ async function runSync(lang: Lang): Promise<SyncResult> {
     result.added.push(...r.added.map((e) => ({ id: e.track.id, title: e.track.title, source: p.title })));
     result.merged += r.merged;
   }
-  // Then whether each box track (old and new) still plays here: deleted, private, blocked in this country.
-  result.blocked = await checkBox();
+  // Then whether each box track (old and new) still plays here (deleted, private, blocked in this country), and
+  // what changed about each on YouTube (the video ledger).
+  result.blocked = (await checkBox()).blocked;
   return result;
 }
 

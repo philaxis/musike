@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import * as box from "./box.js";
 import { msg } from "./i18n.js";
+import { aliases } from "./ledger.js";
 import * as library from "./library.js";
 import * as local from "./local.js";
 import { buildMixes, type KnownTrack } from "./mixes.js";
@@ -170,9 +171,12 @@ export function registerTasteRoutes(app: FastifyInstance) {
     };
   });
 
-  /** The alike-tracks radio of an analysed track, the track first; `analyzed: false` for one the analysis lacks. */
+  /**
+   * The alike-tracks radio of an analysed track, the track first; `analyzed: false` for one the analysis lacks. A
+   * replaced video's radio is that of the video in its place.
+   */
   app.get("/api/taste/radio/:id", async (req) => {
-    const id = trackId(req.params);
+    const id = (await aliases()).resolve(trackId(req.params));
     const taste = await loadTaste();
     const seed = taste.index.get(id);
     if (seed === undefined) return { analyzed: false, seed: null, tracks: [] };

@@ -3,7 +3,7 @@ import { createServer } from "node:net";
 import fastifyStatic from "@fastify/static";
 import Fastify from "fastify";
 import { ALBUM_ID, album, ARTIST_ID, artist, GENRE_ID, genre, genreArtists, genres, searchAlbums } from "./browse.js";
-import { annotator as boxAnnotator, markBlocked, useBoxStorage } from "./box.js";
+import { annotator as boxAnnotator, markBlocked, useBoxStorage, youtubeEntries } from "./box.js";
 import { registerBoxRoutes } from "./boxRoutes.js";
 import { checkBoxOnce, registerGoogleRoutes } from "./google.js";
 import { config } from "./config.js";
@@ -13,6 +13,8 @@ import * as local from "./local.js";
 import { registerPlayRoutes } from "./plays.js";
 import { registerTasteRoutes } from "./tasteRoutes.js";
 import { registerWorkRoutes } from "./workRoutes.js";
+import { registerLedgerRoutes } from "./ledgerRoutes.js";
+import * as ledger from "./ledger.js";
 import { registerMapRoutes } from "./mapRoutes.js";
 import { findVideoFor, radio, search, suggestions } from "./search.js";
 import { registerStatsRoutes } from "./stats.js";
@@ -150,10 +152,15 @@ export async function startServer(opts: StartOptions = {}): Promise<RunningServe
     const kept = local.keptFile(id) && local.keptTrack(id);
     if (kept) return { id, title: kept.title, duration: kept.duration, hasSdVideo: false, audioMode: "range" };
     const r = await resolveStreams(id).catch(async (e: unknown) => {
-      // What yt-dlp says won't play shows in the song box too, without waiting for the next check.
-      if (e instanceof HttpError && e.reason) await markBlocked(id, e.reason);
+      // What yt-dlp says won't play shows in the song box and the video ledger too, without waiting for the next check.
+      if (e instanceof HttpError && e.reason) {
+        await markBlocked(id, e.reason);
+        await ledger.recordPlayFailure(id, e.reason);
+      }
       throw e;
     });
+    // It plays: a status only a failed play had set (Premium-only, say) is over.
+    await ledger.recordPlayable(id);
     // A freshly resolved googlevideo URL refuses for a second or two; wait that out here so playing it starts at once.
     if (r.audio) await warmStream(r.audio);
     return { id: r.id, title: r.title, duration: r.duration, hasSdVideo: !!r.video, audioMode: "range" };
@@ -271,6 +278,7 @@ export async function startServer(opts: StartOptions = {}): Promise<RunningServe
   registerTasteRoutes(app);
   registerWorkRoutes(app);
   registerMapRoutes(app);
+  registerLedgerRoutes(app);
 
   // Web app (production build)
 
@@ -289,8 +297,12 @@ export async function startServer(opts: StartOptions = {}): Promise<RunningServe
   await app.listen({ port, host });
 
   pruneCache().catch(() => {});
-  // Which song-box tracks won't play here: once, when it was never checked (later with each account sync).
-  checkBoxOnce().catch((e: unknown) => app.log.warn(e));
+  // The video ledger's first record (once, from the box), then which song-box tracks won't play here: once, when it
+  // was never checked (later with each account sync).
+  youtubeEntries()
+    .then(ledger.seed)
+    .then(() => checkBoxOnce())
+    .catch((e: unknown) => app.log.warn(e));
   return {
     port,
     tools: found,

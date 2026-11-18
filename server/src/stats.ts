@@ -4,6 +4,7 @@ import type { FastifyInstance } from "fastify";
 import { annotator, findTrack } from "./box.js";
 import { config } from "./config.js";
 import { msg } from "./i18n.js";
+import { aliases } from "./ledger.js";
 import * as library from "./library.js";
 import * as local from "./local.js";
 import { isListen, loadPlays, type Play } from "./plays.js";
@@ -282,13 +283,13 @@ async function loadLikes(): Promise<Record<string, DayLike[]>> {
   return (likes ??= out);
 }
 
-/** Every track ever marked 「오늘 좋음」, newest day first (automatic playlists start from them). */
+/** Every track ever marked 「오늘 좋음」 (a replaced video as the one in its place), newest day first (automatic playlists start from them). */
 export async function dayLikeIds(): Promise<string[]> {
-  const days = await loadLikes();
+  const [days, { resolve }] = await Promise.all([loadLikes(), aliases()]);
   return Object.keys(days)
     .sort()
     .reverse()
-    .flatMap((d) => days[d].map((t) => t.id));
+    .flatMap((d) => days[d].map((t) => resolve(t.id)));
 }
 
 async function saveLikes(): Promise<void> {
@@ -309,7 +310,19 @@ function dateParam(v: unknown, now: number): string {
   return v;
 }
 
-const dayView = async (date: string) => ({ date, tracks: ((await loadLikes())[date] ?? []).map(local.annotate) });
+/** A day's 「오늘 좋음」; a video that was replaced shows as the one in its place (see the video ledger). */
+async function dayView(date: string) {
+  const [all, { resolve }] = await Promise.all([loadLikes(), aliases()]);
+  const tracks = await Promise.all(
+    (all[date] ?? []).map(async (t) => {
+      const id = resolve(t.id);
+      const now = id === t.id ? null : await findTrack(id);
+      const like: DayLike = now ? { ...now, at: t.at } : t;
+      return local.annotate(like);
+    }),
+  );
+  return { date, tracks };
+}
 
 export function registerStatsRoutes(app: FastifyInstance) {
   app.get("/api/stats", async (req) => {
@@ -347,9 +360,9 @@ export function registerStatsRoutes(app: FastifyInstance) {
     const track = library.sanitizeTrack(req.body);
     if (track.id !== (req.params as { id: string }).id) throw new HttpError(400, msg("idMismatch"));
     const date = dayOf(Date.now());
-    const all = await loadLikes();
+    const [all, { resolve }] = await Promise.all([loadLikes(), aliases()]);
     const list = all[date] ?? [];
-    if (!list.some((t) => t.id === track.id)) {
+    if (!list.some((t) => resolve(t.id) === track.id)) {
       all[date] = [...list, { ...track, at: Date.now() }].slice(-MAX_PER_DAY);
       await saveLikes();
     }
@@ -360,10 +373,11 @@ export function registerStatsRoutes(app: FastifyInstance) {
   app.delete("/api/daylikes/:id", async (req) => {
     const date = dateParam((req.query as { date?: string }).date, Date.now());
     const { id } = req.params as { id: string };
-    const all = await loadLikes();
+    const [all, { resolve }] = await Promise.all([loadLikes(), aliases()]);
     const list = all[date] ?? [];
-    if (list.some((t) => t.id === id)) {
-      const rest = list.filter((t) => t.id !== id);
+    // A replaced video's like is the like of the one in its place.
+    if (list.some((t) => resolve(t.id) === id)) {
+      const rest = list.filter((t) => resolve(t.id) !== id);
       if (rest.length) all[date] = rest;
       else delete all[date];
       await saveLikes();

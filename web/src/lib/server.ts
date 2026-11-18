@@ -162,6 +162,41 @@ export interface TrackRecord {
   last: number | null;
 }
 
+/** What the server's video ledger says of a YouTube video: plays here, or why not. */
+export type VideoStatus = "ok" | "region" | "gone" | "private" | "premium" | "age";
+
+/** A video as YouTube last named it (empty title when never seen). */
+export interface VideoRef {
+  id: string;
+  title: string;
+  channel: string;
+}
+
+/**
+ * One change the video ledger noted. `track`: the track standing for that video now, as the song box shows it (the
+ * user's title); `video`: the event's own video as YouTube named it; `other`: the other side of a replacement or undo.
+ */
+export type VideoEvent = { at: number; id: string; track: Track; video: VideoRef } & (
+  | { kind: "title" | "channel"; from: string; to: string }
+  | { kind: "status"; from: VideoStatus; to: VideoStatus }
+  | { kind: "replaced"; to: string; by: "redirect" | "alternative" | "manual"; other: VideoRef }
+  | { kind: "restored"; from: string; other: VideoRef }
+);
+
+export interface VideoEvents {
+  events: VideoEvent[];
+  total: number;
+  next: string | null;
+  summary: { videos: number; status: Record<VideoStatus, number>; checkedAt: number | null };
+}
+
+/** One video's ledger: what YouTube last said of it (null when not recorded) and its changes, newest first. */
+export interface VideoHistory {
+  video: { title: string; channel: string; duration: number; status: VideoStatus; firstSeen: number; lastChecked: number } | null;
+  current: string;
+  events: VideoEvent[];
+}
+
 export interface DayLikes {
   date: string;
   tracks: Track[];
@@ -310,6 +345,9 @@ export const server = {
   stats: (period: StatsPeriod, signal?: AbortSignal) => request<Stats>(`/api/stats${q({ period })}`, { signal }),
   statsDay: (date: string, signal?: AbortSignal) => request<StatsDay>(`/api/stats/day/${date}`, { signal }),
   trackRecord: (id: string, signal?: AbortSignal) => request<TrackRecord>(`/api/stats/track/${id}`, { signal }),
+  /** The video ledger's changes, newest first (100 a page from `cursor`). */
+  videoEvents: (cursor?: string, signal?: AbortSignal) => request<VideoEvents>(`/api/videos/events${q({ cursor })}`, { signal }),
+  videoHistory: (id: string, signal?: AbortSignal) => request<VideoHistory>(`/api/videos/${id}`, { signal }),
   /** Today's (Seoul) 「오늘 좋음 ☀」: the server says which day that is. */
   dayLikes: () => request<DayLikes>("/api/daylikes"),
   likeToday: (track: Track) => request<DayLikes>(`/api/daylikes/${track.id}`, { method: "PUT", json: track }),

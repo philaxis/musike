@@ -753,6 +753,30 @@ export const en = {
     empty: "No composers yet",
     emptyBody: "They show up once the taste analysis finds who wrote your tracks.",
   },
+
+  // The video ledger: what changed about the song box's videos on YouTube (song box 「Changes」, 「Track record」).
+  ledger: {
+    chip: "Changes",
+    body: "What changed about your tracks on YouTube: renamed, taken down, made private, blocked, swapped for another video. Your own titles stay as they are.",
+    watching: (n: number) => `Watching ${count(n, "video", "videos")}`,
+    checked: (when: string) => `last checked ${when}`,
+    notChecked: "not checked yet",
+    /** What a video is now, for the counts. */
+    state: { region: "Blocked here", gone: "Deleted", private: "Private", premium: "Premium only", age: "Age-restricted" },
+    empty: "Nothing has changed yet",
+    emptyBody: "Every account sync checks each track of the song box; what changed on YouTube shows up here.",
+    failed: "Couldn't load the changes",
+    loadMore: "More",
+    title: (from: string, to: string) => `Renamed: ${from} → ${to}`,
+    channel: (from: string, to: string) => `Channel renamed: ${from} → ${to}`,
+    /** A status change, by the new status. */
+    status: { ok: "Plays again", region: "Blocked here", gone: "Deleted", private: "Made private", premium: "Premium only", age: "Age-restricted" },
+    replaced: { redirect: "Moved to a new video", alternative: "Swapped for a stand-in", manual: "Swapped for another version" },
+    restored: "Put back the original",
+    history: "On YouTube",
+    noChanges: "Nothing changed on YouTube",
+    youtubeTitle: (title: string) => `YouTube title: ${title}`,
+  },
 };
 
 export type Messages = typeof en;

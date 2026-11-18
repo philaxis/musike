@@ -5,6 +5,7 @@ import { gzip } from "node:zlib";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { config } from "./config.js";
 import { langOf, msg, tr, type Msg } from "./i18n.js";
+import { aliases } from "./ledger.js";
 import { lookup } from "./tasteRoutes.js";
 import type { Track } from "./types.js";
 
@@ -113,9 +114,14 @@ async function serve(req: FastifyRequest, reply: FastifyReply) {
 
 const MAP_TRACKS = 500;
 
-/** The playable tracks of map points, in order: a play or menu from the map. Unknown and gone tracks are left out. */
+/**
+ * The playable tracks of map points, in order: a play or menu from the map. A replaced video's point is the video in
+ * its place (the map is only redrawn by the next analysis). Unknown and gone tracks are left out.
+ */
 export async function mapTracks(ids: unknown): Promise<Track[]> {
-  const list = Array.isArray(ids) ? [...new Set(ids.filter((x): x is string => typeof x === "string"))].slice(0, MAP_TRACKS) : [];
+  const { resolve } = await aliases();
+  const given = Array.isArray(ids) ? ids.filter((x): x is string => typeof x === "string").map(resolve) : [];
+  const list = [...new Set(given)].slice(0, MAP_TRACKS);
   const found = await Promise.all(list.map(lookup));
   return found.flatMap((k) => (k ? [k.track] : []));
 }

@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import * as box from "./box.js";
 import { checkVideos } from "./google.js";
 import { langOf, msg } from "./i18n.js";
+import * as ledger from "./ledger.js";
 import * as library from "./library.js";
 import * as local from "./local.js";
 import { parsePlaylistLink, readPlaylist } from "./playlistImport.js";
@@ -107,6 +108,7 @@ export function registerBoxRoutes(app: FastifyInstance) {
     if (track.id === id) throw new HttpError(400, msg("sameTrack"));
     await box.replaceTrack(id, track);
     const rows = await library.replaceTrack(id, track);
+    await ledger.recordReplaced(id, track, "manual");
     return { track: (await box.annotator())(track), rows };
   });
 

@@ -1,6 +1,7 @@
 import { readFile, stat } from "node:fs/promises";
 import path from "node:path";
 import { config } from "./config.js";
+import { aliases } from "./ledger.js";
 
 // The taste analysis (#26): per track a genre, a sound group, mood scores and two embeddings, written by the
 // analysis worker into config.analysisDir (see openspec taste-mixes). Read whole into memory (a few thousand
@@ -86,19 +87,34 @@ export function parseTaste(json: string | null, audio: Buffer | null, text: Buff
   };
 }
 
+/**
+ * Songs of videos that were replaced by another (the video ledger's alias map) as songs of the one in their place: the
+ * same song, so its genre, group and vectors carry over until the analysis has the new video itself. Changes `taste`.
+ */
+export function aliasSongs(taste: Taste, resolve: (id: string) => string): Taste {
+  taste.songs.forEach((s, i) => {
+    const id = resolve(s.id);
+    if (id === s.id || taste.index.has(id)) return;
+    taste.index.delete(s.id);
+    s.id = id;
+    taste.index.set(id, i);
+  });
+  return taste;
+}
+
 const FILES = ["taste.json", "audio.f32", "text.f32"];
 let cached: { key: string; taste: Taste } | null = null;
 let loading: Promise<Taste> | null = null;
 
-/** The current analysis; read again when a file's modification time or size changed. */
+/** The current analysis, replaced videos followed; read again when a file's modification time or size, or the alias map, changed. */
 export async function loadTaste(dir = config.analysisDir): Promise<Taste> {
   if (loading) return loading;
   loading = (async () => {
-    const stats = await Promise.all(FILES.map((f) => stat(path.join(dir, f)).catch(() => null)));
-    const key = `${dir}|${stats.map((s) => (s ? `${s.mtimeMs}:${s.size}` : "-")).join("|")}`;
+    const [stats, alias] = await Promise.all([Promise.all(FILES.map((f) => stat(path.join(dir, f)).catch(() => null))), aliases()]);
+    const key = `${dir}|${stats.map((s) => (s ? `${s.mtimeMs}:${s.size}` : "-")).join("|")}|aliases:${alias.map.size ? alias.version : 0}`;
     if (cached?.key === key) return cached.taste;
     const [json, audio, text] = await Promise.all(FILES.map((f) => readFile(path.join(dir, f)).catch(() => null)));
-    const taste = parseTaste(json?.toString("utf8") ?? null, audio, text);
+    const taste = aliasSongs(parseTaste(json?.toString("utf8") ?? null, audio, text), alias.resolve);
     cached = { key, taste };
     return taste;
   })();

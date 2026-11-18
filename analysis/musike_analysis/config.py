@@ -11,6 +11,9 @@ OUT_DIR = Path(os.environ.get("MUSIKE_ANALYSIS_DIR") or Path.home() / ".local" /
 MAP_DIR = OUT_DIR / "map"
 API_DIR = MAP_DIR / "api"
 
+# 서버 데이터 폴더(읽기만): 바꿔 넣은 영상의 옛 번호 → 지금 번호(서버 영상 기록이 씀).
+DATA_DIR = Path(os.environ.get("MUSIKE_DATA_DIR") or Path.home() / ".local" / "share" / "musike" / "data")
+ALIASES_PATH = DATA_DIR / "video-aliases.json"
 WORK_DIR = Path(os.environ.get("MUSIKE_ANALYSIS_WORK") or "/mnt/backup8t/orca-data/musike/analysis")
 CLIP_DIR = WORK_DIR / "clips"
 CARD_DIR = WORK_DIR / "cards"

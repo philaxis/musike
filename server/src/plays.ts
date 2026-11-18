@@ -5,6 +5,7 @@ import { createInterface } from "node:readline";
 import type { FastifyInstance } from "fastify";
 import { config } from "./config.js";
 import { msg } from "./i18n.js";
+import { aliases } from "./ledger.js";
 import { HttpError } from "./types.js";
 
 // The listening log: one line per time a track was on, in data/plays.jsonl, append-only. Every device sends its own
@@ -108,8 +109,8 @@ async function readLines(file: string): Promise<Play[]> {
   return plays.sort((a, b) => a.startedAt - b.startedAt);
 }
 
-/** Every line of the log, oldest first, and a key that changes when the file does. */
-export async function loadPlays(file = playsFile()): Promise<{ key: string; plays: Play[] }> {
+/** Every line of the log as written, oldest first, and a key that changes when the file does. */
+async function readLog(file: string): Promise<{ key: string; plays: Play[] }> {
   const st = await stat(file).catch(() => null);
   if (!st) return { key: "none", plays: [] };
   const key = `${file}:${st.mtimeMs}:${st.size}`;
@@ -120,6 +121,28 @@ export async function loadPlays(file = playsFile()): Promise<{ key: string; play
     done.catch(() => {}).finally(() => reading?.done === done && (reading = null));
   }
   return reading.done;
+}
+
+/** Lines of a video that was replaced by another (the video ledger's alias map) as lines of the one now in its place. */
+export function followAliases(plays: Play[], resolve: (id: string) => string): Play[] {
+  return plays.map((p) => {
+    const id = resolve(p.id);
+    return id === p.id ? p : { ...p, id };
+  });
+}
+
+let followed: { key: string; plays: Play[] } | null = null;
+
+/**
+ * Every line of the log, oldest first, under the track IDs of now: a replaced video's lines count for the one in its
+ * place. `key` changes when the file or the alias map does.
+ */
+export async function loadPlays(file = playsFile()): Promise<{ key: string; plays: Play[] }> {
+  const [raw, alias] = await Promise.all([readLog(file), aliases()]);
+  if (!alias.map.size) return raw;
+  const key = `${raw.key}|aliases:${alias.version}`;
+  if (followed?.key !== key) followed = { key, plays: followAliases(raw.plays, alias.resolve) };
+  return followed;
 }
 
 export function registerPlayRoutes(app: FastifyInstance) {
