@@ -3,12 +3,15 @@ import { createServer } from "node:net";
 import fastifyStatic from "@fastify/static";
 import Fastify from "fastify";
 import { ALBUM_ID, album, ARTIST_ID, artist, GENRE_ID, genre, genreArtists, genres, searchAlbums } from "./browse.js";
+import { useBoxStorage } from "./box.js";
+import { registerBoxRoutes } from "./boxRoutes.js";
+import { registerGoogleRoutes } from "./google.js";
 import { config } from "./config.js";
 import * as library from "./library.js";
 import { fileStorage } from "./libraryFile.js";
 import * as local from "./local.js";
 import { findVideoFor, radio, search, suggestions } from "./search.js";
-import { registerServerRoutes, trackId } from "./serverRoutes.js";
+import { mediaId, registerServerRoutes, trackId } from "./serverRoutes.js";
 import { proxyStream, serveFile } from "./stream.js";
 import { langOf, msg, tr } from "./i18n.js";
 import { presentJob, startJob, systemInfo, type Channel } from "./system.js";
@@ -44,6 +47,7 @@ export interface RunningServer {
 /** Builds the Musike HTTP server (API + web app) and starts listening. */
 export async function startServer(opts: StartOptions = {}): Promise<RunningServer> {
   library.useLibraryStorage(fileStorage());
+  useBoxStorage(fileStorage(config.dataDir, "box.json"));
   const found = await refreshTools();
   await local.startLocal();
   const app = Fastify({ logger: { level: process.env.LOG_LEVEL ?? "warn" } });
@@ -131,7 +135,7 @@ export async function startServer(opts: StartOptions = {}): Promise<RunningServe
 
   /** Resolves stream URLs ahead of time so the next track starts instantly. */
   app.post("/api/prepare/:id", async (req) => {
-    const id = trackId(req.params);
+    const id = mediaId(req.params);
     // Local tracks and kept YouTube copies need no YouTube round trip. "offset": audio only restarts at ?t=.
     if (isLocalId(id)) {
       const { track, hasVideo } = local.localInfo(id);
@@ -144,7 +148,7 @@ export async function startServer(opts: StartOptions = {}): Promise<RunningServe
   });
 
   app.get("/api/stream/:id/audio", (req, reply) => {
-    const id = trackId(req.params);
+    const id = mediaId(req.params);
     if (isLocalId(id)) return local.streamLocalAudio(req, reply, id);
     const kept = local.keptFile(id);
     if (kept) return serveFile(req, reply, kept, local.audioMime(kept));
@@ -152,7 +156,7 @@ export async function startServer(opts: StartOptions = {}): Promise<RunningServe
   });
 
   app.get("/api/stream/:id/video", async (req, reply) => {
-    const id = trackId(req.params);
+    const id = mediaId(req.params);
     if (isLocalId(id)) return local.streamLocalVideo(req, reply, id);
     const { q } = req.query as { q?: string };
     if (q === "hd") return serveFile(req, reply, await downloadHd(id), "video/mp4");
@@ -170,6 +174,8 @@ export async function startServer(opts: StartOptions = {}): Promise<RunningServe
       favorites: lib.favorites.map(local.annotate),
       playlists: lib.playlists.map((p) => ({ ...p, tracks: p.tracks.map(local.annotate) })),
       history: lib.history.map(local.annotate),
+      // Bundle rows elsewhere are references; the app expands them from here.
+      bundles: (lib.bundles ?? []).map((b) => ({ ...b, parts: b.parts.map(local.annotate) })),
     };
   });
 
@@ -235,6 +241,8 @@ export async function startServer(opts: StartOptions = {}): Promise<RunningServe
   );
 
   registerServerRoutes(app);
+  registerBoxRoutes(app);
+  registerGoogleRoutes(app);
 
   // Web app (production build)
 

@@ -30,6 +30,13 @@
 | PUT | `/api/playlists/:pid/tracks` `{ids}` | 순서 통째로 바꾸기(지금 곡 번호의 순열만) |
 | GET/POST | `/api/import/youtube/preview?url=` · `/api/import/youtube {url,name?}` | 유튜브 재생목록 미리 보기 · 가져오기 |
 | GET/POST/DELETE | `/api/keep` · `/api/keep/:id` | 유튜브 곡 서버에 받아 두기 |
+| GET/POST | `/api/box?filter=all\|untagged&source=&tag=&q=&cursor=` · `/api/box/sources` · `POST /api/box {tracks, source}` | 곡 상자(아는 곡 전부 + 출처, 200줄씩) · 출처 목록 · 곡 넣기(같은 곡이면 출처만 더함) |
+| POST | `/api/import/youtube/box {url}` | 붙여 넣은 유튜브 재생목록을 곡 상자로(재생목록 안 만듦) |
+| GET/POST/DELETE | `/api/tags` · `{ids, tags}` | 꼬리표 목록(개수) · 붙이기 · 떼기. 관례: `작품:` `판본:` `편곡:` `작곡:` `연주:` `분위기:` `장르:` |
+| GET | `/api/tracks/:id/versions` | 같은 `작품:` 꼬리표 곡들(원곡 · 편곡) |
+| GET/POST/PATCH/DELETE | `/api/bundles/:id` · `POST /api/bundles {title, artist?, ids}` | 묶음(여러 곡을 한 곡처럼, id `B`+20자). 재생목록엔 묶음 줄로 넣음 |
+| GET/DELETE | `/api/google/login` · `/api/google/status` · `DELETE /api/google` | 유튜브 계정 연결(읽기 전용, 토큰 `~/.config/musike/google.json`) |
+| GET/PUT/POST | `/api/google/playlists` · `PUT /api/google/excluded {ids}` · `POST /api/google/sync` | 내 유튜브 재생목록(체크 끈 것 `excluded`) · 들여오지 않을 목록 · 새 곡을 곡 상자로(409 `google_login`이면 다시 연결) |
 
 원작 API(검색, 재생목록 만들기·넣기·빼기, 즐겨찾기, 스트림)는 README의 API 표.
 웹 경로: `/play/:id`(곡 바로 재생), `/list/:pid`(재생목록 처음부터).

@@ -1,3 +1,4 @@
+import { homedir } from "node:os";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 
@@ -25,6 +26,11 @@ export const config = {
   localDirs: process.env.MUSIKE_LOCAL_DIRS ?? "",
   /** Where "keep on server" puts YouTube audio; also indexed as the root "받아 둔 곡". */
   keepDir: process.env.MUSIKE_KEEP_DIR || "/mnt/backup8t/orca-data/musike/keep",
+  /** Google OAuth web client (`client_id`, `client_secret`) and the account's tokens: secrets, outside the repo and data. */
+  googleClient: process.env.MUSIKE_GOOGLE_CLIENT || path.join(homedir(), ".config", "musike", "google-client.json"),
+  googleTokens: process.env.MUSIKE_GOOGLE_TOKENS || path.join(homedir(), ".config", "musike", "google.json"),
+  /** Must be listed in the client's authorized redirect URIs. */
+  googleRedirect: process.env.MUSIKE_GOOGLE_REDIRECT || "https://philaxis-b760m-aorus-elite.taildeaa80.ts.net:4443/api/google/callback",
   /** YouTube Music language when a request doesn't say (the app always does). */
   lang: process.env.MUSIKE_LANG ?? "en",
   location: process.env.MUSIKE_LOCATION ?? "BR",
