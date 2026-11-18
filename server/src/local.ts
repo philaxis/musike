@@ -7,7 +7,7 @@ import type { FastifyReply, FastifyRequest } from "fastify";
 import { config } from "./config.js";
 import { msg } from "./i18n.js";
 import { HiddenStore, visibleTracks, type HideTarget } from "./hidden.js";
-import { cleanName, localId, mediaFiles, nameTrack, naturalCompare, parseRoots, relInRoot, stripExt, YT_ID_SUFFIX, type Tags } from "./localNames.js";
+import { albumFolderName, localId, mediaFiles, nameTrack, naturalCompare, parseRoots, relInRoot, stripExt, YT_ID_SUFFIX, type Tags } from "./localNames.js";
 import { serveFile } from "./stream.js";
 import { tools } from "./tools.js";
 import { HttpError, isLocalId, VIDEO_ID, type Track } from "./types.js";
@@ -148,7 +148,7 @@ function derive() {
     for (const [key, rels] of groups) {
       rels.sort(naturalCompare);
       const isFolder = path.posix.dirname(rels[0]) !== ".";
-      const folder = isFolder ? cleanName(path.posix.basename(key)) : null;
+      const folder = isFolder ? albumFolderName(key) : null;
       const albumEntries = rels.map((rel): Entry => {
         const probe = root.files.get(rel)!;
         const id = localId(root.name, rel);

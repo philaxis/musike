@@ -88,6 +88,18 @@ export function cleanName(name: string): ParsedName {
   return { title: s || name.trim(), ...(year ? { year } : {}) };
 }
 
+const DISC_FOLDER = /^(?:cd|disc|disk)\s*(\d+)$/i;
+
+/** An album folder's name; a disc folder ("…/CD 1") takes its album folder's name: "Perfect, Live II (CD 1)". */
+export function albumFolderName(key: string): ParsedName {
+  const base = key.slice(key.lastIndexOf("/") + 1);
+  const disc = DISC_FOLDER.exec(base.trim());
+  const parent = key.includes("/") ? key.slice(0, key.lastIndexOf("/")) : "";
+  if (!disc || !parent) return cleanName(base);
+  const album = cleanName(parent.slice(parent.lastIndexOf("/") + 1));
+  return { ...album, title: `${album.title} (CD ${Number(disc[1])})` };
+}
+
 /** A media file name: "[1980.09.21] RIDE ON TIME (Lossless).mp4" → "RIDE ON TIME", 1980. */
 export const parseFileName = (file: string) => cleanName(stripExt(file));
 
