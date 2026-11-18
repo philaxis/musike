@@ -58,9 +58,26 @@ describe("choosing a stand-in", () => {
     ];
     const picked = box.pickAlternatives(original, found, () => false);
     assert.deepEqual(picked.map((a) => a.track.id), [vid(1), vid(3), vid(2), vid(4)], "the dialog: closest in length");
-    assert.deepEqual(box.standInOrder(original, picked).map((a) => a.track.id), [vid(3), vid(2), vid(1), vid(4)]);
-    assert.deepEqual(box.standInOrder(original, picked.filter((a) => a.track.id !== vid(3))).map((a) => a.track.id), [vid(2), vid(1), vid(4)]);
+    // vid(4): the same title by someone else, 60 s longer (> 15%): only offered, never put in by itself.
+    assert.deepEqual(box.standInOrder(original, picked).map((a) => a.track.id), [vid(3), vid(2), vid(1)]);
+    assert.deepEqual(picked.map((a) => box.standInTier(original, a)), [2, 0, 1, null]);
+    assert.deepEqual(box.standInOrder(original, picked.filter((a) => a.track.id !== vid(3))).map((a) => a.track.id), [vid(2), vid(1)]);
     assert.deepEqual(box.standInOrder(original, []), []);
+  });
+
+  it("never puts in another song or a far other length by itself", () => {
+    const offered = (original: Track, other: Track) => box.pickAlternatives(original, [other], () => false);
+    const highHeart = track(vid(0), "High Heart", "9 and the Numbers", 239);
+    const epik = track(vid(1), "Epik High (ft. Lee Hi)- 'Can You Hear My Heart' (Scarlet Heart:Ryeo OST, Part 6)[Han|Rom|Eng lyrics]", "ashleygold25", 247);
+    assert.equal(box.standInTier(highHeart, { track: epik, sameTitle: false, sameArtist: false }), null, "another song name");
+    const headWind = track(vid(2), "A HEAD WIND", "Naoya Matsuoka", 321);
+    const anime = track(vid(3), "『灰と幻想のグリムガル』第1話挿入歌「Head Wind」(K)NoW_NAME《アニメMV》", "TOHO animation チャンネル", 146);
+    const [a] = offered(headWind, anime);
+    assert.ok(a, "still offered in 「다른 판 찾기」");
+    assert.equal(box.standInTier(headWind, a), null, "146 s for 321 s, another artist");
+    const cover = track(vid(4), "The Prime of Life / Naoya Matsuoka【Cover】", "profkyao", 475);
+    const prime = track(vid(5), "THE PRIME OF LIFE", "Naoya Matsuoka", 479);
+    assert.equal(box.standInTier(prime, offered(prime, cover)[0]), 2, "a cover of the same piece, length within 15%");
   });
 });
 

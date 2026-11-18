@@ -480,19 +480,60 @@ export function pickAlternatives(original: Track, found: Track[], blocked: (t: T
 
 /** Lengths this close (s) count as the same recording when a stand-in is chosen. */
 const SAME_LENGTH_S = 3;
+/** The last tier needs the same song name: this alike as names (`nameLikeness`; "High Heart" vs "Can You Hear My Heart" is not). */
+const SAME_NAME = 0.8;
+/** …and a length this close (share of the original's) unless the artist is the same: a cover or another performance. */
+const NEAR_LENGTH = 0.15;
 
 /**
- * The order in which alternatives (from `pickAlternatives`) are tried as a stand-in put in by itself: the same title
- * and length (±3 s) first, then the same title and artist, then the rest; `pickAlternatives`' order within each.
+ * A title as the song's name: `titleWords` without notes in parentheses ("(Live)", "(feat. …)") and without the
+ * words of the artists' names that uploads put in titles ("Bernard Herrmann - Twisted Nerve"); the plain words when
+ * nothing else is left.
  */
+function nameWords(title: string, artists: string[]): string[] {
+  const named = new Set(artists.flatMap((a) => titleWords(a)).filter((w) => w !== "topic"));
+  const words = titleWords(title.replace(/\([^)]*\)|（[^）]*）/g, " ")).filter((w) => !named.has(w));
+  return words.length ? words : titleWords(title);
+}
+
+/**
+ * How alike two tracks' titles are as song names, 0–1, both ways: the shared words over the longer title's, or the
+ * character pairs' Dice for titles written without spaces. Unlike `titleLikeness`, a long title that merely contains
+ * the words ("Epik High … 'Can You Hear My Heart'" for "High Heart") is not alike.
+ */
+export function nameLikeness(original: Track, other: Track): number {
+  const artists = [original.artist, other.artist];
+  const a = nameWords(original.title, artists);
+  const b = nameWords(other.title, artists);
+  if (!a.length || !b.length) return 0;
+  const inB = new Set(b);
+  const words = new Set(a.filter((w) => inB.has(w))).size / Math.max(new Set(a).size, inB.size);
+  const pa = pairs(a);
+  const pb = pairs(b);
+  const shared = [...pa].filter((p) => pb.has(p)).length;
+  return Math.max(words, pa.size + pb.size ? (2 * shared) / (pa.size + pb.size) : 0);
+}
+
+/**
+ * Which tier `a` (from `pickAlternatives`) goes in by itself as a stand-in for `original`: 0 the same title and length
+ * (±3 s), 1 the same title and artist, 2 the same song name (`nameLikeness` ≥ 0.8) with a length within 15% or the
+ * same artist. Null: not by itself (another song, an album, a medley); it is only offered in 「다른 판 찾기」.
+ */
+export function standInTier(original: Track, a: Alternative): 0 | 1 | 2 | null {
+  const off = original.duration && a.track.duration ? Math.abs(a.track.duration - original.duration) : Number.MAX_SAFE_INTEGER;
+  if (a.sameTitle && off <= SAME_LENGTH_S) return 0;
+  if (a.sameTitle && a.sameArtist) return 1;
+  if (nameLikeness(original, a.track) >= SAME_NAME && (off <= original.duration * NEAR_LENGTH || a.sameArtist)) return 2;
+  return null;
+}
+
+/** The alternatives that may go in by themselves, in the order they are tried: by `standInTier`, `pickAlternatives`' order within each. */
 export function standInOrder(original: Track, alternatives: Alternative[]): Alternative[] {
-  const tier = (a: Alternative) => {
-    const off = original.duration && a.track.duration ? Math.abs(a.track.duration - original.duration) : Number.MAX_SAFE_INTEGER;
-    if (a.sameTitle && off <= SAME_LENGTH_S) return 0;
-    if (a.sameTitle && a.sameArtist) return 1;
-    return 2;
-  };
-  return alternatives.map((a, i) => ({ a, i, t: tier(a) })).sort((x, y) => x.t - y.t || x.i - y.i).map(({ a }) => a);
+  return alternatives
+    .map((a, i) => ({ a, i, t: standInTier(original, a) }))
+    .filter((x): x is { a: Alternative; i: number; t: 0 | 1 | 2 } => x.t !== null)
+    .sort((x, y) => x.t - y.t || x.i - y.i)
+    .map(({ a }) => a);
 }
 
 /** Lengths this close (s) make a moved track by the same artist the same song even when its title is worded otherwise. */
