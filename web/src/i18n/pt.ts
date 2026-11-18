@@ -717,6 +717,10 @@ export const pt: Messages = {
     showList: "Ver lista",
     notAnalyzed: "Esta faixa ainda não foi analisada, então não há rádio para ela.",
     openFailed: "Não foi possível abrir",
+    map: "Mapa musical",
+    mapSub: (n) => (n ? `${n.toLocaleString()} faixas em 3D · busque por palavras ou som` : "Faixas em 3D · busque por palavras ou som"),
+    mapMissing: "Ainda não há mapa musical",
+    mapMissingBody: "A análise de gosto desenha o mapa a partir da caixa de músicas toda manhã. Volte depois da próxima execução.",
   },
 
   works: {

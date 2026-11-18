@@ -5,7 +5,10 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover">
 <title>음악 지도</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
-<link rel="stylesheet" href="user.css">
+<script>
+// Musike 「음악 지도」 화면(/library/map) 안 iframe 에서만 쓴다(재생·메뉴는 Musike 쪽). 주소창으로 열면 그 화면으로 옮긴다.
+if (window.parent === window) location.replace("/library/map" + location.hash);
+</script>
 <style>
 :root{color-scheme:light;--bg:#fafaf9;--fg:#1c1d21;--mut:#6b7079;--card:rgba(255,255,255,.92);--solid:#fff;--line:#e3e5e9;--chip:#f1f2f4;--acc:#0b8a7c;--acc-ink:#fff;--play:#c27c0e;--fav:#e8457a;--shadow:0 8px 28px rgba(20,24,32,.10);--grey:#c9cdd3;--axis:#c3c7ce}
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){color-scheme:dark;--bg:#0e1014;--fg:#e6e7ea;--mut:#959aa4;--card:rgba(24,27,33,.92);--solid:#181b21;--line:#2a2e36;--chip:#232730;--acc:#5fd3c4;--acc-ink:#04201c;--play:#f0b35b;--fav:#ff6f9c;--shadow:0 8px 28px rgba(0,0,0,.45);--grey:#3a3f48;--axis:#4a505b}}
@@ -106,7 +109,6 @@ details[open] summary::before{content:"▾ ";}
 #results .rkind.both{color:var(--acc)}
 .sbadge{display:inline-block;vertical-align:middle;margin-left:6px;padding:0 7px;border-radius:999px;border:1px solid var(--line);background:var(--chip);color:var(--mut);font-size:11px;font-weight:500;line-height:18px;white-space:nowrap}
 #results .rsc{color:var(--mut);font-variant-numeric:tabular-nums}
-#results .rd{margin-left:auto;color:var(--acc);text-decoration:none;border:1px solid var(--line);border-radius:6px;padding:0 6px;white-space:nowrap}
 
 /* 최근 검색(빈 검색창에 포커스) */
 #results .rch{flex:none;display:flex;align-items:center;gap:8px;padding:9px 12px 7px;border-bottom:1px solid var(--line);font-size:12px;color:var(--mut)}
@@ -404,8 +406,8 @@ details[open] summary::before{content:"▾ ";}
 #panel .pbtns{display:flex;gap:8px;margin:0 0 14px}
 #panel .pbtns .pp{flex:1;border:0;background:var(--acc);color:var(--acc-ink);font-weight:650;padding:10px;border-radius:10px;cursor:pointer}
 #panel .pbtns .pp.on{background:var(--play);color:#1a1206}
-#panel .pbtns .yt{flex:none;display:grid;place-items:center;padding:0 14px;border:1px solid var(--line);border-radius:10px;text-decoration:none;color:var(--fg);font-size:13px}
-#panel .pbtns .yt:hover{border-color:var(--acc);color:var(--acc)}
+#panel .pbtns .more{flex:none;min-width:48px;display:grid;place-items:center;padding:0 12px;border:1px solid var(--line);border-radius:10px;background:var(--solid);color:var(--fg);font-size:18px;line-height:1;cursor:pointer}
+#panel .pbtns .more:hover{border-color:var(--acc);color:var(--acc)}
 #panel .chip.cb2{border:0;cursor:pointer;font:inherit;font-size:12px;color:inherit}
 #panel .chip.cb2:hover{color:var(--acc)}
 #panel .chip.snd{background:color-mix(in srgb,#8a6cff 14%,var(--chip))}
@@ -422,44 +424,16 @@ details[open] summary::before{content:"▾ ";}
 #results .rtg button{border:0;background:var(--chip);border-radius:999px;padding:0 8px;font-size:11px;line-height:20px;cursor:pointer;color:var(--fg)}
 #results .rtg button:hover{color:var(--acc)}
 #tags .tsec{font-size:11px;font-weight:700;color:var(--mut);padding:10px 4px 4px;letter-spacing:.02em}
-#card .cb.fav{font-size:18px;padding:0 10px;color:var(--mut)}
-#card .cb.fav.on{color:var(--fav)}
+#card .cb.more{font-size:18px;padding:0 10px}
 #card .cb.play.on{background:var(--play);border-color:var(--play);color:#1a1206}
-
-/* 미니 플레이어: 재생 중이면 화면 아래 가운데(정보 패널을 뺀 영역), 폰은 하단 카드 위 두 줄 */
-#mini{position:fixed;z-index:29;left:50%;bottom:calc(16px + env(safe-area-inset-bottom));transform:translateX(-50%);width:min(580px,calc(100% - 32px));display:flex;align-items:center;gap:10px;padding:6px 8px 6px 6px;background:var(--solid);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow)}
-#mini[hidden]{display:none}
-#mini .mv{flex:none;width:112px;aspect-ratio:16/9;border-radius:8px;overflow:hidden;background:#000}
-#mini .mv iframe,#mini .mv>div{width:100%;height:100%;border:0;display:block}
-#mini .mt{flex:1;min-width:0;border:0;background:none;text-align:left;cursor:pointer;padding:3px 6px;border-radius:8px;color:var(--fg)}
-#mini .mt:hover{background:var(--chip)}
-#mini .mt b,#mini .mt small{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-#mini .mt b{font-weight:650}
-#mini .mt small{color:var(--mut);font-size:12px}
-#mini .mt em{font-style:normal;color:var(--play)}
-#mini .mc{flex:none;display:flex;align-items:center;gap:2px}
-#mini .mc button{width:38px;height:38px;border:0;background:none;border-radius:10px;cursor:pointer;color:var(--fg);display:grid;place-items:center;padding:0}
-#mini .mc button:hover:not(:disabled){background:var(--chip)}
-#mini .mc button:disabled{opacity:.35;cursor:default}
-#mini .mc button svg{width:19px;height:19px}
-#mini .mc .pp{background:var(--acc);color:var(--acc-ink);border-radius:50%}
-#mini .mc .pp:hover:not(:disabled){background:var(--acc);filter:brightness(1.08)}
-#mini .mc [data-m="auto"]{color:var(--mut)}
-#mini .mc [data-m="auto"].on{color:var(--acc);background:var(--chip)}
-body.popen #mini{left:calc((100% - 412px) / 2)}
-body.playing #legend{bottom:calc(16px + 84px)}
-body.playing #status{bottom:calc(16px + 84px)}
-body.playing #undo{bottom:calc(20px + 84px + env(safe-area-inset-bottom))}
-@media (max-width:720px){
-  #mini{left:10px;right:10px;width:auto;transform:none;bottom:calc(10px + env(safe-area-inset-bottom));flex-wrap:wrap;gap:4px 8px;padding:6px}
-  #mini .mv{width:84px}
-  #mini .mc{flex:1 1 100%;justify-content:space-around}
-  #mini .mc button{width:44px;height:44px}
-  body.popen #mini{left:10px;bottom:calc(56vh + 8px)}
-  body.cardup #mini{bottom:calc(82px + env(safe-area-inset-bottom))}
-  body.playing #legend{bottom:calc(10px + 118px + env(safe-area-inset-bottom))}
-  body.playing #undo{bottom:calc(84px + 118px + env(safe-area-inset-bottom))}
-}
+/* 검색 결과 줄의 ▶(여기부터 재생)·⋯(곡 메뉴), 결과 머리의 ⋯(결과 전체) — Musike 플레이어·메뉴 */
+#results .ract{flex:none;display:flex;gap:2px;align-self:center}
+#results .ract button{width:34px;height:34px;border:0;background:none;border-radius:8px;cursor:pointer;color:var(--mut);display:grid;place-items:center;font-size:15px;padding:0}
+#results .ract button:hover{background:var(--solid);color:var(--acc)}
+#results .ract [data-rp]{color:var(--acc)}
+#results .sall{flex:none;margin:6px 8px 6px 0;border:1px solid var(--line);background:var(--solid);border-radius:999px;padding:0 10px;font-size:12px;cursor:pointer;color:var(--fg);white-space:nowrap}
+#results .sall:hover{border-color:var(--acc);color:var(--acc)}
+@media (pointer:coarse){#results .ract button{width:42px;height:42px}}
 </style>
 </head>
 <body>
@@ -469,14 +443,12 @@ body.playing #undo{bottom:calc(20px + 84px + env(safe-area-inset-bottom))}
     <span class="brand">음악 지도</span>
     <input id="q" type="search" placeholder="곡·아티스트·분위기 검색 (예: 비 오는 날 재즈)" autocomplete="off" enterkeyhint="search">
     <button class="ib tagb" id="tagbtn" type="button" title="분위기·소리 태그" aria-label="분위기·소리 태그">#</button>
-    <span id="user-slot"></span>
     <button class="ib cmdk" id="cmdk" type="button" title="설정·명령 (Ctrl+K)" aria-label="설정·명령" aria-haspopup="dialog"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6a3 3 0 1 0-3 3h12a3 3 0 1 0-3-3v12a3 3 0 1 0 3-3H6a3 3 0 1 0 3 3V6Z"/></svg><span>설정</span><kbd>Ctrl K</kbd></button>
-    <button id="toggle" type="button" hidden aria-label="내 기록"></button>
+    <button id="toggle" type="button" hidden aria-label="조작법"></button>
   </div>
   <div id="chips" aria-label="조건"></div>
-  <!-- 내 기록(♥·평점·최근 들은 곡·검색 기록): 상단 ♥ 버튼·팔레트로 연다. 보기 설정은 명령 팔레트(#pal) -->
+  <!-- 조작법: 명령 팔레트(#pal)의 '조작법'으로 연다. 보기 설정은 명령 팔레트 -->
   <div id="more">
-    <div class="sec" id="user-sec"></div>
     <div class="hint"><span class="pc">드래그 회전 · 휠 확대 · 오른쪽 드래그 이동 · 점 클릭 = 선택 · Ctrl+K = 설정·명령 · Space = 재생/일시정지 · N = 다음 곡 · 조건은 버블 ✕ 로만 풀린다</span><span class="ph">한 손가락 회전 · 두 손가락 확대·이동 · 점 누르기 = 선택 · ⌘ = 설정·명령 · 조건은 버블 ✕ 로만 풀린다</span></div>
   </div>
 </div>
@@ -491,15 +463,13 @@ body.playing #undo{bottom:calc(20px + 84px + env(safe-area-inset-bottom))}
 <aside id="addmenu" class="fpane" aria-label="조건 더하기"></aside>
 <aside id="tags" class="fpane" aria-label="분위기·소리 태그"></aside>
 <aside id="panel" aria-label="곡 정보"></aside>
-<div id="card" role="dialog" aria-label="고른 곡"><button class="cb bk" type="button" aria-label="이전 곡" title="이전 곡" hidden>←</button><div class="cm"><b></b><small></small></div><button class="cb fav" type="button" hidden></button><button class="cb pri play" type="button" aria-label="재생">▶</button><button class="cb det" type="button">상세</button></div>
-<div id="mini" hidden role="region" aria-label="미니 플레이어"></div>
+<div id="card" role="dialog" aria-label="고른 곡"><button class="cb bk" type="button" aria-label="이전 곡" title="이전 곡" hidden>←</button><div class="cm"><b></b><small></small></div><button class="cb more" type="button" aria-label="곡 메뉴" title="다음에 재생 · 대기열에 추가 · 재생목록에 추가 …">⋯</button><button class="cb pri play" type="button" aria-label="재생">▶</button><button class="cb det" type="button">상세</button></div>
 <div id="tip"></div>
 <div id="legend"></div>
 <div id="status"></div>
 <button id="edge" type="button" aria-label="선택한 곡으로 이동" title="선택한 곡으로 이동" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5M5 12l7-7 7 7"/></svg></button>
 <script>
 const DATA = __DATA__;
-const STATIC = __STATIC__;
 window.P = DATA.points;
 </script>
 <script type="importmap">
@@ -514,8 +484,8 @@ const D = DATA, P = D.points, n = P.length, R = 100;
 const $ = id => document.getElementById(id);
 const store = window.store || { get: (k, f = null) => f, set() {}, on() {}, off() {} };  // search.js 가 먼저 정의한다
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
-const ytUrl = id => `https://www.youtube.com/watch?v=${encodeURIComponent(id)}`;
-const thumbUrl = id => `https://i.ytimg.com/vi/${encodeURIComponent(id)}/hqdefault.jpg`;
+// 내 파일 곡(L + 20자)은 Musike 표지, 유튜브 곡은 유튜브 썸네일
+const thumbUrl = id => /^L[A-Za-z0-9_-]{20}$/.test(id) ? `/api/local/${encodeURIComponent(id)}/cover` : `https://i.ytimg.com/vi/${encodeURIComponent(id)}/hqdefault.jpg`;
 const isTouch = matchMedia("(pointer: coarse)").matches;
 const narrow = () => innerWidth <= 720;
 const mobile = () => isTouch || innerWidth <= 768;  // 점을 누르면 카드부터, 자동 회전 끔, 뒤로가기로 시트 닫기
@@ -524,9 +494,10 @@ const css = name => getComputedStyle(document.documentElement).getPropertyValue(
 const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)");
 const fract = x => x - Math.floor(x);
 const jit = (i, k) => fract(Math.sin(i * 12.9898 + k * 78.233) * 43758.5453) * 2 - 1;  // 점마다 고정된 −1~1
-const U = () => window.musicUser || null;  // user.js(♥·내 평점)
-const player = () => window.musicPlayer || null;  // player.js(미니 플레이어)
-const VID = /^[A-Za-z0-9_-]{6,20}$/;
+const U = () => window.musicUser || null;  // player.js(Musike ♥)
+const player = () => window.musicPlayer || null;  // player.js(Musike 플레이어 다리)
+const VID = /^[A-Za-z0-9_-]{6,21}$/;  // 유튜브 11자 · 내 파일 L + 20자
+const THEME0 = new URLSearchParams(location.search).get("theme");  // Musike 가 iframe 주소로 처음 테마를 준다(뒤로는 musiketheme)
 
 // ---------------------------------------------------------------- 변수(축·색·크기 후보)
 const pct = v => `${(v * 100).toFixed(1)}%`;
@@ -564,7 +535,6 @@ const VARS = {
   va: { label: "밝기", group: "점수", get: SC("valence"), step: true, ends: ["어두움", "밝음"] },
   ac: { label: "어쿠스틱", group: "점수", get: SC("acoustic"), step: true, ends: ["전자", "어쿠스틱"] },
   vo: { label: "보컬", group: "점수", get: SC("vocal"), step: true, ends: ["연주곡", "보컬"] },
-  rt: { label: "내 평점", group: "내 기록", get: p => (U() && U().rating(p.id)) || null, step: true, ends: ["1", "5"], dyn: true },
   none: { label: "없음 (평평하게)", short: "", group: "", get: () => 0, raw: true },
 };
 const quant = (s, q) => s[Math.min(s.length - 1, Math.max(0, Math.round(q * (s.length - 1))))];
@@ -584,7 +554,7 @@ function computeVar(key, v) {  // 변수 → 점마다 −1~1(값 없으면 null
   v.key = key;
 }
 for (const [key, v] of Object.entries(VARS)) computeVar(key, v);
-const AXIS_KEYS = ["u1", "u2", "u3", "a1", "a2", "a3", "pc1", "pc2", "pc3", "y", "en", "va", "ac", "vo", "rt", "none"];
+const AXIS_KEYS = ["u1", "u2", "u3", "a1", "a2", "a3", "pc1", "pc2", "pc3", "y", "en", "va", "ac", "vo", "none"];
 
 const PALETTE = ["#4e79a7","#f28e2b","#e15759","#76b7b2","#59a14f","#edc948","#b07aa1","#ff9da7","#9c755f","#bcbd22","#d37295","#8cd17d","#a0cbe8","#ffbe7d"];
 const many = k => Array.from({ length: k }, (_, i) => `hsl(${Math.round(i * 137.508) % 360} 58% ${i % 2 ? 46 : 58}%)`);
@@ -604,13 +574,13 @@ const COLORS = {
   pr: { label: "의사표시", names: ["좋아요", "옛 기록", "AI 추가"], get: p => p.l ? 0 : p.pr === "ai_added" ? 2 : 1, pal: ["#e15759", "#8b93a1", "#4e79a7"] },
   k1: { label: "큰 군집", names: D.coarse.map(c => c.name), get: p => p.k1 },
   k2: { label: "세부 군집", names: D.fine.map(c => c.name), get: p => p.k2, many: true },
-  fav: { label: "즐겨찾기", names: ["♥ 즐겨찾기", "그 외"], get: p => U() && U().fav(p.id) ? 0 : 1, pal: ["#ff5d8f", "#8b93a1"], user: true },
+  fav: { label: "Musike ♥", names: ["♥ 즐겨찾기", "그 외"], get: p => U() && U().fav(p.id) ? 0 : 1, pal: ["#ff5d8f", "#8b93a1"] },
 };
 for (const c of Object.values(COLORS)) c.pal = c.pal || (c.many ? many(c.names.length) : PALETTE);
-const COLOR_NUM = ["en", "va", "ac", "vo", "y", "rt"];
+const COLOR_NUM = ["en", "va", "ac", "vo", "y"];
 const RAMP = ["#3b2c84", "#2c6e9e", "#22a08a", "#8cc63f", "#f5d22c"];
 const rampAt = t => { const x = Math.max(0, Math.min(1, t)) * (RAMP.length - 1), a = Math.floor(x), b = Math.min(a + 1, RAMP.length - 1); return new THREE.Color(RAMP[a]).lerp(new THREE.Color(RAMP[b]), x - a); };
-const SIZE_KEYS = ["none", "l", "fav", "rt", "en"];
+const SIZE_KEYS = ["none", "l", "fav", "en"];
 const GENRES = COLORS.g.names;
 const counted = list => { const c = new Map(); P.forEach(p => list(p).forEach(v => v && c.set(v, (c.get(v) || 0) + 1))); return [...c.entries()].sort((a, b) => b[1] - a[1]); };
 const MOODS = counted(p => p.m || []), SOUNDS = counted(p => p.st || []), PLAYLISTS = counted(p => p.pl || []);
@@ -658,7 +628,7 @@ function saveURL() {
 function parseVideoHash(hash) {
   try {
     const v = new URLSearchParams(String(hash || "").replace(/^#/, "")).get("v");
-    return v && /^[A-Za-z0-9_-]{6,20}$/.test(v) ? v : null;
+    return v && VID.test(v) ? v : null;
   } catch (_) { return null; }
 }
 
@@ -684,7 +654,7 @@ const MULTI = {  // 버블마다 AND: [이름표, 점 → 값 목록, 버블 앞
   st: ["소리 태그", p => p.st || [], "♪ "],
 };
 let chips = [];  // [{k, v}] 더한 순서
-let favSet = new Set(), rateSet = new Set(), qSet = new Set();  // ♥·내 평점(user.js)·검색 결과(search.js)
+let favSet = new Set(), qSet = new Set();  // Musike ♥(player.js)·검색 결과(search.js)
 const visible = new Uint8Array(n).fill(1);  // 곡 점이 조건 안인가
 const rangeText = (k, [lo, hi]) => {
   const r = RANGES[k];
@@ -702,7 +672,6 @@ function chipText(c) {
   if (RANGES[c.k]) return rangeText(c.k, c.v);
   if (ENUMS[c.k]) return (c.k === "c1" ? "◎ " : "") + ENUMS[c.k][1][c.v];
   if (c.k === "fav") return "♥ 즐겨찾기만";
-  if (c.k === "r") return `★ 내 평점 ${c.v}${c.v < 5 ? "+" : ""}`;
   if (c.k === "q") return `🔍 ${c.v}`;
   if (c.k === "nb" || c.k === "na") { const a = nbAnchor(c); return `${c.k === "na" ? "소리 이웃" : "이웃"}: ${a >= 0 ? P[a].t : "?"}`; }
   return c.k;
@@ -715,7 +684,6 @@ function chipTest(c) {  // (점 p, 곡 번호 b) → 조건 안인가
   if (RANGES[c.k]) { const [lo, hi] = c.v, get = RANGES[c.k].get; return p => { const x = get(p); return x != null && x >= lo && x <= hi; }; }
   if (ENUMS[c.k]) { const get = ENUMS[c.k][2]; return p => get(p) === c.v; }
   if (c.k === "fav") return (p, b) => favSet.has(b);
-  if (c.k === "r") return (p, b) => rateSet.has(b);
   if (c.k === "q") return (p, b) => qSet.has(b);
   if (c.k === "nb" || c.k === "na") {
     const a = nbAnchor(c), set = new Set(a >= 0 ? [a, ...nbList(a, c.k).slice(0, S.k)] : []);
@@ -727,7 +695,7 @@ function applyFilters() {
   const tests = chips.map(chipTest), sv = soundView();
   for (let i = 0; i < n; i++) visible[i] = (!sv || P[i].ax) && tests.every(t => t(P[i], i)) ? 1 : 0;
 }
-// URL 해시: #g=재즈|클래식&sg=하드 밥&e=1950년대&m=차분함&st=스윙&pl=jazz2&pr=좋아요&c1=재즈&en=4-5&va=1-2&fav=1&r=4&q=검색어&nb=videoId&na=videoId (순서 = 버블 순서)
+// URL 해시: #g=재즈|클래식&sg=하드 밥&e=1950년대&m=차분함&st=스윙&pl=jazz2&pr=좋아요&c1=재즈&en=4-5&va=1-2&fav=1&q=검색어&nb=videoId&na=videoId (순서 = 버블 순서)
 function chipsToHash() {
   const q = new URLSearchParams();
   for (const c of chips) {
@@ -748,7 +716,6 @@ function chipsFromHash(h) {
     else if (RANGES[k]) { const [lo, hi] = v.split("-").map(Number); if (lo >= 1 && hi >= lo && hi <= RANGES[k].hi) out.push({ k, v: [lo, hi] }); }
     else if (ENUMS[k]) { const x = ENUMS[k][1].indexOf(v); if (x >= 0) out.push({ k, v: x }); }
     else if (k === "fav") out.push({ k, v: 1 });
-    else if (k === "r") out.push({ k, v: Math.max(1, Math.min(5, +v || 1)) });
     else if (k === "q" && v.trim()) out.push({ k, v: v.trim() });
     else if ((k === "nb" || k === "na") && VID.test(v)) out.push({ k, v });
   }
@@ -1245,8 +1212,7 @@ function showPanel(i) {
   panel.innerHTML = `<button class="grab" aria-label="크게/작게"></button><button class="x" title="닫기" aria-label="닫기">×</button>
     ${navBar()}
     <button class="pthumb" type="button" data-play title="${on ? "재생 중" : "재생"}"><img src="${thumbUrl(p.id)}" alt="" loading="lazy">${on ? `<i class="on">♪ 재생 중</i>` : ""}</button>
-    <div class="pbtns"><button class="pp${on ? " on" : ""}" type="button" data-play>${pl}</button><a class="yt" href="${ytUrl(p.id)}" target="_blank" rel="noopener">유튜브 ↗</a></div>
-    <div class="mine"></div>
+    <div class="pbtns"><button class="pp${on ? " on" : ""}" type="button" data-play title="이 곡부터 닮은 곡 라디오(Musike 대기열)">${pl}</button><button class="more" type="button" data-more title="다음에 재생 · 대기열에 추가 · 재생목록에 추가 …" aria-label="곡 메뉴">⋯</button></div>
     <h2>${esc(p.t || "제목 없음")}</h2>
     <div class="au">${esc(p.a) || "아티스트 미상"}${p.y ? ` · ${p.y}` : ""}${p.rg ? ` · ${esc(p.rg)}` : ""}</div>
     <div class="chips"><button type="button" class="chip gb" data-genre="${g}" title="이 장르만 보기(버블)"><i class="dot" style="background:${swatch("g", i)}"></i>${esc(GENRES[g])}</button>${p.sg ? chipBtn("sg", p.sg, esc(p.sg)) : ""}${decadeOf(p) ? chipBtn("e", decadeOf(p), esc(decadeOf(p))) : ""}${chipBtn("c1", p.k1, "◎ " + esc(D.coarse[p.k1].name))}</div>
@@ -1261,7 +1227,6 @@ function showPanel(i) {
   panel.classList.add("open");
   panel.scrollTop = 0;
   setSheet();
-  dispatchEvent(new CustomEvent("songpanel", { detail: i }));  // user.js 가 .mine 을 채운다
 }
 function hidePanel() { panel.classList.remove("open", "full"); setSheet(); }
 function syncPlayUI() {  // 재생 상태가 바뀌면 패널 버튼·카드 ▶ 만 고친다(패널 전체를 다시 그리지 않음)
@@ -1277,8 +1242,13 @@ function syncPlayUI() {  // 재생 상태가 바뀌면 패널 버튼·카드 ▶
 }
 function playOrToggle(i) {
   const pl = player();
-  if (!pl) { window.open(ytUrl(P[i].id), "_blank", "noopener"); return; }
+  if (!pl) return;
   if (pl.current() === i) pl.toggle(); else pl.play(i);
+}
+// 곡 메뉴(Musike): 누른 단추 아래에
+function songMenu(i, el) {
+  const r = el.getBoundingClientRect();
+  if (window.musike && P[i]) window.musike.menu([P[i].id], r.left, r.bottom);
 }
 panel.addEventListener("click", e => {
   const nvb = e.target.closest("[data-nav]");
@@ -1292,6 +1262,8 @@ panel.addEventListener("click", e => {
   if (e.target.closest(".x")) { if (mobile() && selected >= 0) closeDetail(); else select(-1); return; }
   if (e.target.closest(".grab")) { panel.classList.toggle("full"); return; }
   if (e.target.closest("[data-play]")) { if (selected >= 0) playOrToggle(selected); return; }
+  const more = e.target.closest("[data-more]");
+  if (more) { if (selected >= 0) songMenu(selected, more); return; }
   const ck = e.target.closest("[data-ck]");
   if (ck) { addChip({ k: ck.dataset.ck, v: JSON.parse(ck.dataset.cv) }); return; }
   const gb = e.target.closest("[data-genre]");
@@ -1302,7 +1274,7 @@ panel.addEventListener("click", e => {
   if (li) select(+li.dataset.j, true, true);
 });
 
-// 터치: 점을 누르면 아래 작은 카드만(제목·아티스트 · ♥ · ▶ · 상세). '상세' 를 눌러야 정보 패널(시트)이 열린다.
+// 터치: 점을 누르면 아래 작은 카드만(제목·아티스트 · ⋯ · ▶ · 상세). '상세' 를 눌러야 정보 패널(시트)이 열린다.
 const card = $("card");
 function showCard(i) {
   const p = P[i];
@@ -1311,13 +1283,13 @@ function showCard(i) {
   card.classList.add("open");
   setSheet();
   syncPlayUI();
-  dispatchEvent(new CustomEvent("songcard", { detail: i }));  // user.js 가 ♥ 를 붙인다
 }
 function hideCard() { card.classList.remove("open"); setSheet(); }
 function closeDetail() { hidePanel(); showCard(selected); }
 card.querySelector(".bk").addEventListener("click", () => goNav(-1));
 card.querySelector("button.det").addEventListener("click", () => { if (selected >= 0) { hideCard(); showPanel(selected); } });
 card.querySelector("button.play").addEventListener("click", () => { if (selected >= 0) playOrToggle(selected); });
+card.querySelector("button.more").addEventListener("click", e => { if (selected >= 0) songMenu(selected, e.currentTarget); });
 
 // (예전) 정보 패널·검색 목록·하단 카드가 가리지 않는 영역의 가운데로 3D 화면 중심을 옮겼다 — 지금은 지도를 고정한다.
 function shiftView() {
@@ -1342,8 +1314,6 @@ function shiftView() {
   dirty = true;
 }
 function setSheet() {
-  document.body.classList.toggle("cardup", card.classList.contains("open"));
-  document.body.classList.toggle("popen", panel.classList.contains("open"));
   document.body.classList.toggle("sheet", panel.classList.contains("open") || card.classList.contains("open") || (narrow() && $("ctl").classList.contains("open")));
   shiftView();
 }
@@ -1437,8 +1407,7 @@ function select(i, focus = false, detail = false) {
   saveURL();
   dispatchEvent(new CustomEvent("songselect", { detail: i }));
 }
-window.select = select;  // search.js·player.js 가 부른다
-window.musicMapSelect = (i, fly = true) => select(i, fly);  // user.js(최근 들은 곡) 옛 이름
+window.select = select;  // search.js 가 부른다
 
 const ray = new THREE.Raycaster();
 const mouse = new THREE.Vector2();
@@ -1545,14 +1514,13 @@ renderer.domElement.addEventListener("pointermove", e => {
 });
 renderer.domElement.addEventListener("pointerleave", () => { setHoverLbl(null); hideTip(); });
 
-// 내 ♥ 곡·평점(user.js): ♥ 점 번호 목록을 받아 테두리 표시, 내 평점 색·크기·버블을 다시 계산
+// Musike ♥(player.js): ♥ 점 번호 목록을 받아 테두리 표시, ♥ 색·크기·버블을 다시 계산
 addEventListener("songmarks", e => {
   mark.fill(0);
   for (const i of e.detail || []) if (i >= 0 && i < n) mark[i] = 1;
   geo.attributes.mark.needsUpdate = true;
-  computeVar("rt", VARS.rt);
-  if (chips.some(c => c.k === "fav" || c.k === "r")) { refreshSets(); chipsChanged(false); }
-  else if (S.color === "fav" || S.color === "rt" || S.size === "fav" || S.size === "rt") { legend(); paint(); }
+  if (chips.some(c => c.k === "fav")) { refreshSets(); chipsChanged(false); }
+  else if (S.color === "fav" || S.size === "fav") { legend(); paint(); }
   dirty = true;
 });
 
@@ -1586,14 +1554,13 @@ function chipsChanged(save = true) {
   chipsUI(); legend(); updateStatus(); paint();
   if (addEl.classList.contains("open")) addUI();
   if (tagsEl.classList.contains("open")) tagsUI();
-  dispatchEvent(new CustomEvent("chipschange", { detail: chips }));  // user.js(내 음악 '지도에서 보기')·search.js(목록 위치)
+  dispatchEvent(new CustomEvent("chipschange", { detail: chips }));  // search.js(목록 위치)
 }
-function refreshSets() {  // 바깥(user.js)에서 오는 점 집합
-  const u = U(), r = chips.find(c => c.k === "r");
+function refreshSets() {  // 바깥(player.js 의 Musike ♥)에서 오는 점 집합
+  const u = U();
   favSet = new Set(chips.some(c => c.k === "fav") && u ? u.favPoints() : []);
-  rateSet = new Set(r && u ? u.ratedPoints(r.v) : []);
 }
-const SINGLE = new Set(["sg", "e", "pl", "pr", "c1", "en", "va", "fav", "r", "q", "nb", "na"]);
+const SINGLE = new Set(["sg", "e", "pl", "pr", "c1", "en", "va", "fav", "q", "nb", "na"]);
 // 버블 더하기: 분위기·소리 태그는 같은 것이 있으면 무시(AND 로 여럿), 장르는 바꾸기, 나머지 종류는 하나만(새 값으로 바꿈).
 function addChip(c, opts = {}) {
   if (MULTI[c.k]) { if (chips.some(x => x.k === c.k && x.v === c.v)) return; chips.push(c); }
@@ -1657,7 +1624,7 @@ function clearChips() {
   chips = []; refreshSets(); chipsChanged();
   toast(`조건 ${before.length}개를 모두 뺐어요`, before);
 }
-window.chips = {  // search.js·user.js 가 쓴다
+window.chips = {  // search.js 가 쓴다
   setGroup,
   set: c => addChip(c),
   remove: k => { const at = chips.findIndex(x => x.k === k); if (at >= 0) removeChip(at); },  // 내 음악 '지도에서 보기' 끄기 등 명시적 끄기(되돌리기 토스트)
@@ -1700,14 +1667,13 @@ function placeBelow() {
 }
 if (window.ResizeObserver) new ResizeObserver(() => placeBelow()).observe($("ctl"));  // 로그인 버튼이 붙어 줄이 늘어도 결과창이 안 가리게
 
-// 버블 패널(조건 더하기 · 분위기/소리 태그): 한 번에 하나, 내 기록 시트·내 음악 패널과 겹치지 않게
+// 버블 패널(조건 더하기 · 분위기/소리 태그): 한 번에 하나, 조작법 시트와 겹치지 않게
 function setPane(el, open) {
   for (const o of [addEl, tagsEl]) if (o !== el) o.classList.remove("open");
   el.classList.toggle("open", open);
   if (open) {
     if (narrow()) dispatchEvent(new Event("searchfold"));
     if ($("ctl").classList.contains("open")) $("toggle").click();
-    dispatchEvent(new Event("panesopen"));  // user.js: 내 음악 패널 닫기
     (el === addEl ? addUI : tagsUI)();
   }
   $("tagbtn").classList.toggle("on", tagsEl.classList.contains("open"));
@@ -1719,14 +1685,14 @@ function closePanes() {
   return was;
 }
 $("tagbtn").addEventListener("click", () => setPane(tagsEl, !tagsEl.classList.contains("open")));
-addEventListener("click", e => { if (e.target.closest && e.target.closest("#mymusic-btn,#toggle")) { addEl.classList.remove("open"); tagsEl.classList.remove("open"); $("tagbtn").classList.remove("on"); } }, true);
+addEventListener("click", e => { if (e.target.closest && e.target.closest("#toggle")) { addEl.classList.remove("open"); tagsEl.classList.remove("open"); $("tagbtn").classList.remove("on"); } }, true);
 
 function addUI() {
   const cur = k => chips.find(c => c.k === k);
   const on = (k, v) => { const c = cur(k); return c && JSON.stringify(c.v) === JSON.stringify(v) ? " on" : ""; };
   const btn = (k, v, label) => `<button type="button" data-ck="${k}" data-cv='${esc(JSON.stringify(v))}' class="${on(k, v).trim()}">${esc(label)}</button>`;
   const grp = (title, body, hint = "") => `<div class="fgrp"><b>${title}</b><div class="seg">${body}</div>${hint ? `<div class="fhint">${hint}</div>` : ""}</div>`;
-  const g = cur("g"), u = U();
+  const g = cur("g");
   const qnow = window.lastSearch && window.lastSearch.q;
   const has = (k, v) => chips.some(c => c.k === k && c.v === v);
   addEl.innerHTML = `<div class="fh"><b>조건 더하기</b><button class="fx" type="button" data-close aria-label="닫기">×</button></div><div class="fb">`
@@ -1738,7 +1704,7 @@ function addUI() {
     + grp("밝기", btn("va", [1, 2], "어두운 곡") + btn("va", [3, 3], "보통") + btn("va", [4, 5], "밝은 곡"))
     + grp("재생목록", PLAYLISTS.slice(0, 12).map(([nm, c]) => btn("pl", nm, `${nm} ${c}`)).join(""))
     + grp("의사표시", COLORS.pr.names.map((nm, k) => btn("pr", k, nm)).join(""))
-    + grp("내 기록", btn("fav", 1, "♥ 즐겨찾기만") + btn("r", 4, "★ 내 평점 4+") + btn("r", 5, "★ 5"), u ? "" : "내 기록을 불러오는 중")
+    + grp("Musike ♥", btn("fav", 1, "♥ 즐겨찾기만"), "Musike 에서 ♥ 누른 곡")
     + (SOUNDS.length ? grp("소리 태그", SOUNDS.slice(0, 14).map(([nm]) => `<button type="button" data-ck="st" data-cv='${esc(JSON.stringify(nm))}' class="${has("st", nm) ? "on" : ""}">${esc(nm)}</button>`).join(""), `오디오가 있는 ${(D.counts || {}).audio || 0}곡만 태그가 있다`) : "")
     + grp("큰 군집", ENUMS.c1[1].map((nm, k) => btn("c1", k, nm)).join(""), "지도 위 큰 이름표를 눌러도 된다")
     + grp("이웃·검색", `<button type="button" data-nb${selected < 0 ? " disabled" : ""}>고른 곡의 설명 이웃만</button><button type="button" data-na${selected < 0 || !(P[selected].an || []).length ? " disabled" : ""}>소리 이웃만</button><button type="button" data-qpin${qnow ? "" : " disabled"}>${qnow ? `검색 '${esc(qnow)}' 결과만` : "검색 결과만(검색 먼저)"}</button>`)
@@ -1797,7 +1763,7 @@ tagsEl.addEventListener("input", e => { if (e.target.classList.contains("tq")) {
 
 // ---------------------------------------------------------------- 컨트롤(보는 방식 상태 바꾸기). 화면 UI 는 아래 명령 팔레트.
 function setRotate(on) { controls.autoRotate = on; }
-// '내 기록' 시트(#more: 저장 위치·검색 기록). user.js 가 숨은 #toggle 을 눌러 연다.
+// 조작법 시트(#more). 숨은 #toggle 을 눌러 연다(명령 팔레트 '조작법').
 $("toggle").addEventListener("click", () => {
   const open = !$("ctl").classList.contains("open");
   $("ctl").classList.toggle("open", open); $("toggle").classList.toggle("on", open);
@@ -1851,12 +1817,8 @@ function applyTheme(t) {
   playMat.uniforms.uColor.value.set(css("--play"));
   paint();
 }
-function toggleTheme() {
-  const t = css("--bg") !== "#fafaf9" ? "light" : "dark";
-  try { localStorage.setItem("musicmap-theme", t); } catch (_) { /* 저장 불가 */ }
-  applyTheme(t);
-}
 matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => applyTheme(document.documentElement.dataset.theme));
+addEventListener("musiketheme", e => applyTheme(e.detail));  // Musike 테마를 따른다
 
 // ---------------------------------------------------------------- 명령 팔레트(시안 D): Ctrl+K · ⌘ 버튼
 // 글자(초성도: ㅅㄹ)로 찾고 ↑↓ 로 옮기면 보는 방식(배치·색·크기·축)은 지도에 바로 미리 보인다.
@@ -1868,19 +1830,12 @@ const normQ = s => String(s).toLowerCase().replace(/\s+/g, "");
 const COLOR_KEYS = ["g", "sg", "e", "pl", "pr", "k1", "k2", "fav", ...COLOR_NUM];
 const colorLabel = k => (COLORS[k] && COLORS[k].label) || (VARS[k] && VARS[k].label) || k;
 const colorSwatch = k => COLORS[k] ? COLORS[k].pal.slice(0, 4).map(x => `<i style="background:${x}"></i>`).join("") : `<i class="ramp" style="background:linear-gradient(90deg,${RAMP.join(",")})"></i>`;
-const SIZE_LABEL = { none: "균일", l: "좋아요 크게", fav: "즐겨찾기 크게", rt: "내 평점 크게", en: "에너지 클수록 크게" };
+const SIZE_LABEL = { none: "균일", l: "좋아요 크게", fav: "Musike ♥ 크게", en: "에너지 클수록 크게" };
 const sizeLabel = k => SIZE_LABEL[k] || VARS[k].label;
 const PRESET_SUB = { terrain: "설명이 비슷한 곡끼리 모여요", era: "오른쪽이 최근, 위로 갈수록 격렬", sound: `소리가 비슷한 곡끼리 (오디오 ${(D.counts || {}).audio || 0}곡)` };
 const AXES = [["x", "가로"], ["y", "깊이"], ["z", "높이"]];
-const clickU = a => {  // user.js 는 문서 전체에서 [data-u] 클릭을 받는다
-  const b = document.createElement("button");
-  b.type = "button"; b.dataset.u = a; b.hidden = true;
-  document.body.appendChild(b); b.click(); b.remove();
-};
-function openMore(sec) {
+function openMore() {
   if (!$("ctl").classList.contains("open")) $("toggle").click();
-  const el = sec && $(sec);
-  if (el) el.scrollIntoView({ block: "nearest", behavior: "smooth" });
 }
 function palCommands() {
   const C = [], pre = presetOf(), pl = player();
@@ -1889,19 +1844,17 @@ function palCommands() {
   for (const k of SIZE_KEYS) C.push({ g: "점 크기", label: sizeLabel(k), ic: "●", on: S.size === k, pv: true, run: () => setSize(k), kw: "크기 점크기 size" });
   if (pl) {
     const cur = pl.current();
-    if (selected >= 0 && cur !== selected) C.push({ g: "재생", label: `‘${P[selected].t}’ 재생`, ic: "▶", run: () => pl.play(selected), kw: "재생 듣기 play" });
+    if (selected >= 0 && cur !== selected) C.push({ g: "재생", label: `‘${P[selected].t}’ 재생`, sub: "닮은 곡 라디오로 이어서", ic: "▶", run: () => pl.play(selected), kw: "재생 듣기 play 라디오" });
     if (cur >= 0) {
       C.push({ g: "재생", label: pl.playing(cur) ? "일시정지" : "이어 듣기", sub: P[cur].t, ic: pl.playing(cur) ? "⏸" : "▶", run: () => pl.toggle(), kw: "재생 일시정지 멈춤 pause play" });
-      C.push({ g: "재생", label: "다음 곡", sub: "소리 이웃 중 안 들은 곡", ic: "⏭", run: () => pl.next(), kw: "다음 next skip" });
-      C.push({ g: "재생", label: "정지", sub: "미니 플레이어 닫기", ic: "■", run: () => pl.stop(), kw: "정지 멈춤 끄기 stop" });
+      C.push({ g: "재생", label: "다음 곡", sub: "Musike 대기열", ic: "⏭", run: () => pl.next(), kw: "다음 next skip" });
     }
-    C.push({ g: "재생", label: `연속 재생: ${pl.auto() ? "켬" : "끔"}`, sub: "곡이 끝나면 소리 이웃으로", ic: "⟳", on: pl.auto(), run: () => pl.setAuto(!pl.auto()), kw: "연속 자동 재생 autoplay" });
   }
   // 조건(버블): 늘 보이는 몇 개 + 글자를 치면 장르·시대·분위기 등 값이 '조건: …'으로 뜬다
   const has = (k, v) => chips.some(c => c.k === k && JSON.stringify(c.v) === JSON.stringify(v));
   C.push({ g: "조건(버블)", label: "＋ 조건 고르기…", sub: "장르·시대·분위기·재생목록…", ic: "＋", run: () => setPane(addEl, true), kw: "필터 조건 버블 걸러" });
   C.push({ g: "조건(버블)", label: "# 분위기·소리 태그 목록", sub: "태그에서 고르기", ic: "#", run: () => setPane(tagsEl, true), kw: "태그 분위기 소리 필터" });
-  C.push({ g: "조건(버블)", label: "♥ 즐겨찾기만", sub: has("fav", 1) ? "켜짐 · 버블 ✕로 풀기" : "♥ 누른 곡만 남기기", on: has("fav", 1), run: () => addChip({ k: "fav", v: 1 }), kw: "즐겨찾기 하트 좋아하는 필터" });
+  C.push({ g: "조건(버블)", label: "♥ 즐겨찾기만", sub: has("fav", 1) ? "켜짐 · 버블 ✕로 풀기" : "Musike 에서 ♥ 누른 곡만 남기기", on: has("fav", 1), run: () => addChip({ k: "fav", v: 1 }), kw: "즐겨찾기 하트 좋아하는 필터" });
   C.push({ g: "조건(버블)", label: "고른 곡의 이웃만", sub: selected >= 0 ? `‘${P[selected].t}’과 설명이 가까운 ${S.k}곡` : "먼저 지도에서 곡을 고르세요", dis: selected < 0, run: () => addNeighbors(selected, "nb"), kw: "이웃 비슷한 필터" });
   C.push({ g: "조건(버블)", label: "고른 곡의 소리 이웃만", sub: selected >= 0 && (P[selected].an || []).length ? `소리가 가까운 ${S.k}곡` : "오디오가 있는 곡을 먼저 고르세요", dis: selected < 0 || !(P[selected].an || []).length, run: () => addNeighbors(selected, "na"), kw: "소리 이웃 비슷한 필터" });
   const qnow = window.lastSearch && window.lastSearch.q;
@@ -1916,14 +1869,11 @@ function palCommands() {
   [[[1, 2], "잔잔한 곡"], [[3, 3], "에너지 보통"], [[4, 5], "격렬한 곡"]].forEach(([v, nm]) => cond(nm, "에너지", "en", v));
   [[[1, 2], "어두운 곡"], [[3, 3], "밝기 보통"], [[4, 5], "밝은 곡"]].forEach(([v, nm]) => cond(nm, "밝기", "va", v));
   for (const [k, [lab, names]] of Object.entries(ENUMS)) names.forEach((nm, v) => cond(nm, lab, k, v));
-  [3, 4, 5].forEach(v => cond(`★ 내 평점 ${v}${v < 5 ? "+" : ""}`, "내 기록", "r", v));
   C.push({ g: "보기", label: "자동 회전", right: controls.autoRotate ? "켜짐" : "꺼짐", ic: "↻", run: () => setRotate(!controls.autoRotate), kw: "회전 돌리기" });
   C.push({ g: "보기", label: "처음 보기", sub: "카메라를 처음 자리로", ic: "⌂", run: () => resetView(), kw: "리셋 초기화 카메라" });
-  C.push({ g: "보기", label: "밝게/어둡게", sub: "테마", ic: "◐", run: () => toggleTheme(), kw: "테마 다크 라이트 어둡게 밝게" });
   C.push({ g: "보기", label: `깊이감: ${depthOn ? "켬" : "끔"}`, sub: "앞은 선명하게, 뒤는 배경 쪽으로 흐리게", ic: "◍", on: !!depthOn, run: () => setDepth(!depthOn), kw: "깊이 깊이감 원근 안개 대기 fog depth" });
   C.push({ g: "보기", label: "이웃 수…", right: `${S.k}곡`, ic: "⋯", keep: true, run: () => palDrill({ k: "k", lab: "이웃 수" }), kw: "이웃 개수 비슷한" });
-  C.push({ g: "내 것", label: "♥ 내 음악 열기", sub: "즐겨찾기·평점·최근 들은 곡", ic: "♥", run: () => clickU("mymusic"), kw: "내음악 즐겨찾기 하트 평점 최근 들은 기록" });
-  C.push({ g: "내 것", label: "내 기록·저장 위치 보기", sub: "서버/이 브라우저 · 검색 기록", ic: "🗂", run: () => openMore("user-sec"), kw: "기록 저장 설정 계정" });
+  C.push({ g: "보기", label: "조작법", sub: "회전·확대·단축키", ic: "?", run: () => openMore(), kw: "도움말 조작 단축키 사용법 help" });
   for (const [a, lab] of AXES) C.push({ g: "축", label: `${lab} 축 바꾸기…`, right: esc(VARS[S[a]].short ?? VARS[S[a]].label), ic: "⤢", keep: true, run: () => palDrill({ k: a, lab: `${lab} 축` }), kw: "축 고급 직접" });
   return C;
 }
@@ -2144,8 +2094,6 @@ function openFromHash() {
   const i = pointOf.has(id) ? pointOf.get(id) : -1;
   if (i >= 0) select(i, true);
 }
-let savedTheme = null;
-try { savedTheme = localStorage.getItem("musicmap-theme"); } catch (_) { /* 저장 불가 */ }
 chips = chipsFromHash(location.hash);
 refreshSets(); applyFilters(); chipsUI(); legend();
 setRotate(!mobile());
@@ -2154,7 +2102,7 @@ resize();
 { const g = chips.find(c => c.k === "g"); if (g && !soundView()) flyToGenre(g.v[0]); }
 { const g = chips.find(c => c.k === "c1"); if (g && !soundView()) flyToGroup(g.v); }
 { const qc = chips.find(c => c.k === "q"); if (qc && !$("q").value) { $("q").value = qc.v; $("q").dispatchEvent(new Event("input")); } }
-applyTheme(savedTheme === "light" || savedTheme === "dark" ? savedTheme : null);
+applyTheme(THEME0 === "light" || THEME0 === "dark" ? THEME0 : null);
 openFromHash();
 renderer.setAnimationLoop(now => {
   stepAnim(now);
@@ -2178,6 +2126,5 @@ window.dispatchEvent(new Event("mapready"));
 </script>
 <script src="search.js"></script>
 <script src="player.js"></script>
-<script src="user.js"></script>
 </body>
 </html>

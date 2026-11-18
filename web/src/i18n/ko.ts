@@ -716,6 +716,10 @@ export const ko: Messages = {
     showList: "목록 보기",
     notAnalyzed: "아직 분석되지 않은 곡이라 라디오를 만들 수 없어요.",
     openFailed: "열지 못했어요",
+    map: "음악 지도",
+    mapSub: (n) => (n ? `${n.toLocaleString()}곡 3D · 글자·소리로 찾기` : "3D로 둘러보기 · 글자·소리로 찾기"),
+    mapMissing: "아직 음악 지도가 없어요",
+    mapMissingBody: "취향 분석이 매일 아침 곡 상자로 지도를 그려요. 다음 분석 뒤에 다시 열어 주세요.",
   },
 
   works: {

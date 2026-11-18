@@ -1,7 +1,8 @@
 """3D 지도: 글 벡터 UMAP·PCA·이웃, 소리 벡터 UMAP·이웃 → 지도 폴더(map/).
 
-큰 군집 = 큰 갈래, 세부 군집 = 소리 묶음(taste.json 과 같은 것). 다음 단계에서 Musike 가 이 폴더를 보여 준다.
-- index.html (데이터 인라인) + 페이지가 부르는 web 파일
+큰 군집 = 큰 갈래, 세부 군집 = 소리 묶음(taste.json 과 같은 것). Musike 가 이 폴더를 /api/map/ 으로 내주고 「음악 지도」 화면의
+iframe 에 띄운다(재생·메뉴는 Musike 쪽, web/player.js 가 다리).
+- index.html (데이터 인라인) + 페이지가 부르는 web 파일 — render(): `python -m musike_analysis map` 은 이것만 다시 쓴다
 - map_points.json, search_meta.json · vectors_e5.bin (브라우저 의미 검색)
 - api/songs.json · api/neighbors.json · api/status.json
 """
@@ -23,7 +24,7 @@ from .vectors import unit
 SEED = 42
 NEIGHBORS = 30
 WEB_DIR = Path(__file__).with_name("web")
-WEB_FILES = ("search.js", "soundsearch.js", "player.js", "user.js", "user.css")
+WEB_FILES = ("search.js", "soundsearch.js", "player.js")
 
 
 def umap_xyz(vecs: np.ndarray) -> np.ndarray:
@@ -52,6 +53,28 @@ def neighbors(vecs: np.ndarray, k: int = NEIGHBORS) -> tuple[np.ndarray, np.ndar
     part = np.take_along_axis(sims, idx, axis=1)
     order = np.argsort(-part, axis=1)
     return np.take_along_axis(idx, order, axis=1), np.take_along_axis(part, order, axis=1)
+
+
+def render(data: dict) -> None:
+    """지도 페이지: 템플릿에 지점 자료를 넣은 index.html 과 페이지가 부르는 web 파일."""
+    MAP_DIR.mkdir(parents=True, exist_ok=True)
+    body = json.dumps(data, ensure_ascii=False, separators=(",", ":")).replace("</", "<\\/")
+    html = (WEB_DIR / "map3d_template.html").read_text(encoding="utf-8").replace("__DATA__", body)
+    for name in WEB_FILES:
+        shutil.copyfile(WEB_DIR / name, MAP_DIR / name)
+    atomic_write_bytes(MAP_DIR / "index.html", html.encode("utf-8"))
+
+
+def rerender() -> int:
+    """`python -m musike_analysis map`: 계산 없이 지금 map_points.json 으로 지도 페이지만 다시 쓴다."""
+    path = MAP_DIR / "map_points.json"
+    if not path.is_file():
+        log(f"지도 자료가 없습니다(먼저 update): {path}")
+        return 1
+    data = json.loads(path.read_text(encoding="utf-8"))
+    render(data)
+    log(f"지도 페이지 다시 씀: {MAP_DIR / 'index.html'} ({len(data.get('points') or [])}곡)")
+    return 0
 
 
 def build(order: list[str], songs: dict, cards: dict, extra: dict, genre: dict, group: dict, groups: list[dict],
@@ -132,12 +155,8 @@ def build(order: list[str], songs: dict, cards: dict, extra: dict, genre: dict, 
     }
 
     MAP_DIR.mkdir(parents=True, exist_ok=True)
-    body = json.dumps(data, ensure_ascii=False, separators=(",", ":")).replace("</", "<\\/")
-    html = (WEB_DIR / "map3d_template.html").read_text(encoding="utf-8").replace("__DATA__", body).replace("__STATIC__", "false")
-    atomic_write_bytes(MAP_DIR / "index.html", html.encode("utf-8"))
-    for name in WEB_FILES:
-        shutil.copyfile(WEB_DIR / name, MAP_DIR / name)
     atomic_write_json(MAP_DIR / "map_points.json", data)
+    render(data)
 
     rows = [
         {
