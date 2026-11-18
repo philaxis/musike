@@ -19,6 +19,22 @@ export interface Track {
   hidden?: boolean;
   /** Response-only: why this YouTube track can't play here (the song box's last check, see google.ts `unplayable`). */
   blocked?: Unplayable;
+  /** Response-only: the performance this is (or is a movement of), when it is one unit (works.ts). */
+  work?: WorkUnit;
+}
+
+/**
+ * A performance of a multi-movement work, played and listed as one unit. A movement on a work page carries `key` and
+ * `title`; the row standing for the whole performance in Musike's own lists (radio, mixes, sound groups, the map) is
+ * a bundle row (id "W" + its first movement's) that also has `parts`, its movements in order, and `labels`, what its
+ * list calls each ("II. Adagio").
+ */
+export interface WorkUnit {
+  key: string;
+  /** "Dvořák: Symphony No. 7 in D minor, Op. 70" */
+  title: string;
+  parts?: Track[];
+  labels?: string[];
 }
 
 export interface Playlist {

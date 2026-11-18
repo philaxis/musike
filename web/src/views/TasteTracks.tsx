@@ -7,7 +7,7 @@ import { BackButton, EmptyState, PageHeader } from "../components/Page";
 import { TrackList, TrackListSkeleton } from "../components/TrackList";
 import { useRemote } from "../hooks/useRemote";
 import { getT, useT, type Messages } from "../i18n";
-import { shuffled } from "../lib/format";
+import { shuffledWorks, storedTracks } from "../lib/bundles";
 import { paths } from "../lib/routes";
 import { server } from "../lib/server";
 import { groupTitle, mixAbout, mixTitle } from "../lib/taste";
@@ -87,7 +87,9 @@ export default function TasteTracks({ kind }: { kind: Kind }) {
   const label = page.status === "ok" ? page.data.describe(t) : null;
   // The card's own title (a sound group told apart by its artist) until the page has loaded.
   const title = (location.state as { name?: string } | null)?.name ?? label?.title ?? "";
-  const isThisPlaying = tracks.length > 0 && queue.length === tracks.length && queue.every((q, i) => q.id === tracks[i]?.id);
+  // The queue holds exactly these tracks, a performance row as its movements: this list is playing.
+  const flat = storedTracks(tracks);
+  const isThisPlaying = flat.length > 0 && queue.length === flat.length && queue.every((q, i) => q.id === flat[i].id);
   const playing = isThisPlaying && (status === "playing" || status === "loading");
   const fallback = kind === "group" ? paths.tasteGenres : kind === "mix" ? paths.mixes : paths.library;
 
@@ -121,7 +123,7 @@ export default function TasteTracks({ kind }: { kind: Kind }) {
           <PlayDisc label={playing ? t.common.pause : t.album.play(title)} px={56} onClick={() => (isThisPlaying ? toggle() : playList(tracks, 0))}>
             {playing ? <PauseIcon size={24} weight="fill" /> : <PlayIcon size={24} weight="fill" />}
           </PlayDisc>
-          <IconButton label={t.album.shuffle} size="lg" onClick={() => playList(shuffled(tracks), 0)}>
+          <IconButton label={t.album.shuffle} size="lg" onClick={() => playList(shuffledWorks(tracks), 0)}>
             <ShuffleIcon size={24} />
           </IconButton>
           {!isTvMode() && (

@@ -1,9 +1,12 @@
 import { create } from "zustand";
 import { getT } from "../i18n";
 import { api, capabilities } from "../lib/api";
+import { storedTracks } from "../lib/bundles";
 import { server } from "../lib/server";
 import type { Library, Playlist, Track } from "../lib/types";
 import { toast, useUi } from "./ui";
+
+// Tracks going into ♥ or a playlist are stored ones: a performance row of the server goes in as its movements.
 
 interface LibraryState extends Library {
   status: "idle" | "loading" | "ready" | "error";
@@ -85,7 +88,8 @@ export const useLibrary = create<LibraryState>((set, get) => {
       }
     },
 
-    addFavorites: async (tracks) => {
+    addFavorites: async (given) => {
+      const tracks = storedTracks(given);
       const prev = get().favorites;
       const fresh = tracks.filter((t, i) => !prev.some((f) => f.id === t.id) && tracks.findIndex((x) => x.id === t.id) === i);
       if (!fresh.length) return toast(getT().toasts.allAlreadyFavorites);
@@ -119,7 +123,7 @@ export const useLibrary = create<LibraryState>((set, get) => {
 
     createPlaylist: async (name, tracks = []) => {
       try {
-        const p = await api.createPlaylist(name, tracks);
+        const p = await api.createPlaylist(name, storedTracks(tracks));
         set((s) => ({ playlists: [p, ...s.playlists] }));
         toast(getT().toasts.playlistCreated(p.name));
         return p;
@@ -152,9 +156,10 @@ export const useLibrary = create<LibraryState>((set, get) => {
       }
     },
 
-    addToPlaylist: async (id, tracks) => {
+    addToPlaylist: async (id, given) => {
       const t = getT();
       const target = get().playlists.find((p) => p.id === id);
+      const tracks = storedTracks(given);
       if (!target || !tracks.length) return;
       const have = new Set(target.tracks.map((x) => x.id));
       const dupes = tracks.filter((x) => have.has(x.id)).length;

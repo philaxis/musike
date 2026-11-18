@@ -1,15 +1,17 @@
-import { EyeIcon, EyeSlashIcon, PencilSimpleIcon, TrashIcon } from "@phosphor-icons/react";
+import { CheckSquareIcon, EyeIcon, EyeSlashIcon, ListNumbersIcon, PencilSimpleIcon, RadioIcon, TrashIcon } from "@phosphor-icons/react";
 import { getT } from "../i18n";
 import { api } from "../lib/api";
+import { paths } from "../lib/routes";
 import { server, type Mix, type TasteGroupCard, type TrackWorks } from "../lib/server";
 import { groupTitle, mixAbout, mixTitle } from "../lib/taste";
 import type { AlbumCard, LocalAlbum, LocalRoot, Playlist, Track } from "../lib/types";
+import { usePlayer } from "../player/player";
 import { useLibrary } from "../stores/library";
 import { useLocal } from "../stores/local";
 import { toast, useUi, type MenuExtra, type MenuTarget } from "../stores/ui";
 import { isTvMode } from "../tv/tvMode";
 
-// Menus for things that hold tracks (albums, playlists, folders). TV mode only plays: no extras there.
+// Menus for things that hold tracks (albums, playlists, folders). TV mode only plays: no editing extras there.
 
 const extras = (list: MenuExtra[]) => (isTvMode() ? [] : list);
 
@@ -139,5 +141,26 @@ export function performanceMenu(p: { key: string; work: string; performer: strin
     sub: [p.performer || t.works.unknownPerformer, t.common.tracks(p.count)].join(" · "),
     thumb,
     load: async () => tracks ?? (await server.performance(p.key)).tracks,
+  };
+}
+
+/**
+ * A performance row of Musike's own lists (radio, mixes, sound groups, the map): the row itself to play or queue, so it
+ * stays whole, and to a playlist as its movements; its radio and its movement list. `select` starts picking rows.
+ */
+export function workRowMenu(row: Track, open: (path: string) => void, select?: () => void): MenuTarget {
+  const t = getT();
+  const work = row.work!;
+  return {
+    kind: "group",
+    title: row.title,
+    sub: [row.artist, t.works.movements(work.parts?.length ?? 0)].filter(Boolean).join(" · "),
+    thumb: row.thumb,
+    load: async () => [row],
+    extras: [
+      { label: t.trackMenu.startRadio, icon: RadioIcon, run: () => void usePlayer.getState().startRadio(row) },
+      { label: t.works.showMovements, icon: ListNumbersIcon, run: () => open(paths.performance(work.key)) },
+      ...(select ? [{ label: t.basics.select, icon: CheckSquareIcon, run: select }] : []),
+    ],
   };
 }

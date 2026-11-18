@@ -1,6 +1,7 @@
 import { MapTrifoldIcon, WarningCircleIcon } from "@phosphor-icons/react";
 import { useEffect, useRef, useState } from "react";
-import { useLocation } from "react-router";
+import { useLocation, useNavigate } from "react-router";
+import { workRowMenu } from "../components/menus";
 import { openMenu } from "../components/menuTrigger";
 import { BackButton, EmptyState, PageHeader } from "../components/Page";
 import { useRemote } from "../hooks/useRemote";
@@ -30,6 +31,7 @@ const ids = (v: unknown): string[] => (Array.isArray(v) ? v.filter((x): x is str
 export default function MusicMap() {
   const t = useT();
   const location = useLocation();
+  const navigate = useNavigate();
   const status = useRemote("music-map", (signal) => server.musicMap(signal));
   const frame = useRef<HTMLIFrameElement>(null);
   const [drawn, setDrawn] = useState(false);
@@ -50,16 +52,20 @@ export default function MusicMap() {
     const sendTheme = () => post({ type: "theme", theme: useUi.getState().theme });
     const sendFavorites = () => post({ type: "favorites", ids: useLibrary.getState().favorites.map((x) => x.id) });
 
-    // One request for every ID not asked yet; the answer keeps the order of `list`.
+    // One request for every ID not asked yet; the answer keeps the order of `list`. A movement of a performance that
+    // is one unit comes back as its performance's row (once, where its first point is).
     const tracks = async (list: string[]) => {
       const missing = list.filter((id) => !known.current.has(id));
       if (missing.length) {
-        const asked = server.mapTracks(missing).then((found) => new Map(found.map((x) => [x.id, x])));
+        const asked = server
+          .mapTracks(missing)
+          .then((found) => new Map(found.flatMap((x) => [x, ...(x.work?.parts ?? [])].map((p): [string, Track] => [p.id, x]))));
         // A failed request is asked again next time.
         asked.catch(() => missing.forEach((id) => known.current.delete(id)));
         for (const id of missing) known.current.set(id, asked.then((m) => m.get(id) ?? null, () => null));
       }
-      return (await Promise.all(list.map((id) => known.current.get(id)!))).filter((x): x is Track => !!x);
+      const found = (await Promise.all(list.map((id) => known.current.get(id)!))).filter((x): x is Track => !!x);
+      return found.filter((x, n) => found.indexOf(x) === n);
     };
 
     const onMessage = async (e: MessageEvent) => {
@@ -91,7 +97,7 @@ export default function MusicMap() {
           const start = list[Math.max(0, Math.min(list.length - 1, Number(d.start) || 0))];
           const found = await tracks(list);
           if (!found.length) return toast(getT().taste.openFailed, "error");
-          return player.playList(found, Math.max(0, found.findIndex((x) => x.id === start)));
+          return player.playList(found, Math.max(0, found.findIndex((x) => x.id === start || !!x.work?.parts?.some((p) => p.id === start))));
         }
         case "menu": {
           const list = ids(d.ids);
@@ -102,7 +108,7 @@ export default function MusicMap() {
           const y = box.top + (Number(d.y) || 0);
           if (list.length === 1) {
             const [one] = await tracks(list);
-            if (one) openMenu({ kind: "track", track: one }, x, y);
+            if (one) openMenu(one.work?.parts ? workRowMenu(one, (to) => navigate(to)) : { kind: "track", track: one }, x, y);
             else toast(getT().taste.openFailed, "error");
             return;
           }

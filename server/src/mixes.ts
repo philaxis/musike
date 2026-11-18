@@ -41,6 +41,11 @@ export interface MixInput {
   daylikes: string[];
   /** Tracks that can be played now, by ID. */
   known: Map<string, KnownTrack>;
+  /**
+   * Song index → its performance's song indexes, for performances that are one unit (works.ts): such a performance is
+   * one pick, standing as its first movement. Without it every song is its own.
+   */
+  units?: Map<number, number[]>;
 }
 
 interface Listens {
@@ -50,7 +55,8 @@ interface Listens {
   last: Map<string, number>;
 }
 
-function countListens(plays: Play[], now: number): Listens {
+/** Listens per track; `unitId` folds a performance's movements into one, which counts as its most heard movement. */
+function countListens(plays: Play[], now: number, unitId: (id: string) => string): Listens {
   const recent = new Map<string, number>();
   const all = new Map<string, number>();
   const last = new Map<string, number>();
@@ -60,7 +66,13 @@ function countListens(plays: Play[], now: number): Listens {
     last.set(p.id, Math.max(last.get(p.id) ?? 0, p.startedAt));
     if (p.startedAt >= now - RECENT_DAYS * DAY_MS) recent.set(p.id, (recent.get(p.id) ?? 0) + 1);
   }
-  return { recent, all, last };
+  // Hearing a symphony through is one listen of it, not four.
+  const fold = (byTrack: Map<string, number>) => {
+    const out = new Map<string, number>();
+    for (const [id, n] of byTrack) out.set(unitId(id), Math.max(out.get(unitId(id)) ?? 0, n));
+    return out;
+  };
+  return { recent: fold(recent), all: fold(all), last: fold(last) };
 }
 
 /** The first `count` of `list` with at most `per` tracks of one artist. */
@@ -216,11 +228,19 @@ function dailyMixes(input: MixInput, listens: Listens, playable: (i: number) => 
   );
 }
 
-/** Every mix there is enough for: daily mixes, on repeat, new for you, forgotten favourites, upbeat, calm. */
-export function buildMixes(input: MixInput): Mix[] {
-  const { taste, now, day, known } = input;
-  const listens = countListens(input.plays, now);
-  const playable = (i: number) => known.has(taste.songs[i].id);
+/**
+ * Every mix there is enough for: daily mixes, on repeat, new for you, forgotten favourites, upbeat, calm. A performance
+ * that is one unit is picked once, as its first movement (the IDs below are all of those).
+ */
+export function buildMixes(given: MixInput): Mix[] {
+  const { taste, now, day, known, units } = given;
+  const unitId = (id: string) => {
+    const i = taste.index.get(id);
+    return i === undefined ? id : taste.songs[units?.get(i)?.[0] ?? i].id;
+  };
+  const input = { ...given, favorites: given.favorites.map(unitId), daylikes: given.daylikes.map(unitId) };
+  const listens = countListens(input.plays, now, unitId);
+  const playable = (i: number) => known.has(taste.songs[i].id) && (units?.get(i)?.[0] ?? i) === i;
   const artistOf = (i: number) => known.get(taste.songs[i].id)?.artist ?? "";
   const mixes: Mix[] = [];
 
