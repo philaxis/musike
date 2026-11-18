@@ -1,5 +1,6 @@
 import {
   ArrowSquareOutIcon,
+  CaretRightIcon,
   ChartBarIcon,
   CheckSquareIcon,
   CloudArrowDownIcon,
@@ -7,6 +8,7 @@ import {
   EyeIcon,
   EyeSlashIcon,
   HeartIcon,
+  ListNumbersIcon,
   ListPlusIcon,
   MinusCircleIcon,
   PlayIcon,
@@ -18,16 +20,20 @@ import {
   StackIcon,
   TagIcon,
   TrashIcon,
+  UserIcon,
+  VinylRecordIcon,
   XIcon,
 } from "@phosphor-icons/react";
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
+import { useNavigate } from "react-router";
 import { MD, useMediaQuery } from "../hooks/useMediaQuery";
 import { useT, type Messages } from "../i18n";
 import { capabilities } from "../lib/api";
 import { cn, shuffled } from "../lib/format";
-import { isLocal } from "../lib/server";
+import { isLocal, server, type TrackWorks } from "../lib/server";
+import { paths } from "../lib/routes";
 import type { Track } from "../lib/types";
 import { usePlayer } from "../player/player";
 import { useKeep } from "../stores/keep";
@@ -36,6 +42,7 @@ import { useLibrary } from "../stores/library";
 import { toast, useUi, type MenuState, type MenuTarget } from "../stores/ui";
 import { isTvMode } from "../tv/tvMode";
 import { Artwork } from "./Artwork";
+import { performanceMenu, workAlbumMenu } from "./menus";
 
 /** A menu entry; without `onClick` it is a status line (say, "Downloading to the server"). */
 function Item({ icon, children, onClick, danger }: { icon: ReactNode; children: ReactNode; onClick?: () => void; danger?: boolean }) {
@@ -64,6 +71,75 @@ function heading(menu: MenuTarget, t: Messages): { title: string; sub?: string; 
   if (menu.kind === "track") return { title: menu.track.title, sub: menu.track.artist, thumb: menu.track.thumb };
   if (menu.kind === "tracks") return { title: t.basics.selected(menu.tracks.length), thumb: menu.tracks[0]?.thumb };
   return { title: menu.title, sub: menu.sub, thumb: menu.thumb };
+}
+
+/** Where the analysis says a track belongs, asked when its menu opens; null until then or without a server. */
+function useTrackWorks(track: Track): TrackWorks | null {
+  const [works, setWorks] = useState<{ id: string; works: TrackWorks } | null>(null);
+  const enabled = capabilities.serverLibrary && track.kind !== "bundle";
+  useEffect(() => {
+    if (!enabled) return;
+    const ctrl = new AbortController();
+    server.trackWorks(track.id, ctrl.signal).then(
+      (w) => setWorks({ id: track.id, works: w }),
+      () => undefined,
+    );
+    return () => ctrl.abort();
+  }, [track.id, enabled]);
+  return works?.id === track.id ? works.works : null;
+}
+
+/**
+ * To the track's album and composer, and its whole performance or album (a group menu: play, queue, add to a
+ * playlist). Each only when the analysis knows it; the "whole" ones only with more than this track.
+ */
+function WorkItems({ menu, run }: { menu: Extract<MenuState, { kind: "track" }>; run: (fn: () => void) => () => void }) {
+  const t = useT();
+  const navigate = useNavigate();
+  const works = useTrackWorks(menu.track);
+  if (!works) return null;
+  const { album, composer, instance } = works;
+  if (!album && !composer && !instance) return null;
+  const thumb = menu.track.thumb;
+  const openGroup = (target: MenuTarget) => useUi.getState().openMenu({ ...target, x: menu.x, y: menu.y });
+  const more = (label: string) => (
+    <>
+      <span className="min-w-0 flex-1">{label}</span>
+      <CaretRightIcon size={14} className="shrink-0 text-fg-3" />
+    </>
+  );
+  return (
+    <>
+      <Divider />
+      {album && (
+        <Item
+          icon={<VinylRecordIcon size={18} />}
+          onClick={run(() =>
+            album.local
+              ? navigate(paths.localAlbum(album.local.root, album.local.key), { state: { name: album.name } })
+              : navigate(paths.workAlbum(album.key), { state: { name: album.name } }),
+          )}
+        >
+          {t.works.goToAlbum}
+        </Item>
+      )}
+      {composer && (
+        <Item icon={<UserIcon size={18} />} onClick={run(() => navigate(paths.composer(composer)))}>
+          {t.works.goToComposer}
+        </Item>
+      )}
+      {instance && instance.count > 1 && (
+        <Item icon={<ListNumbersIcon size={18} />} onClick={() => openGroup(performanceMenu(instance, thumb))}>
+          {more(t.works.wholeWork)}
+        </Item>
+      )}
+      {album && album.count > 1 && (
+        <Item icon={<VinylRecordIcon size={18} />} onClick={() => openGroup(workAlbumMenu(album, thumb))}>
+          {more(t.works.wholeAlbum)}
+        </Item>
+      )}
+    </>
+  );
 }
 
 /** Entries for one track. */
@@ -124,6 +200,7 @@ function TrackItems({ menu, run }: { menu: Extract<MenuState, { kind: "track" }>
           {t.songBox.skipBundle}
         </Item>
       )}
+      <WorkItems menu={menu} run={run} />
       <Divider />
       <Item
         icon={<HeartIcon size={18} weight={isFavorite ? "fill" : "regular"} className={isFavorite ? "text-accent-text" : ""} />}
@@ -279,13 +356,21 @@ export function TrackMenu() {
   const t = useT();
   const [pos, setPos] = useState({ left: 0, top: 0 });
 
+  // Placed again when its entries change size (a track's album and composer entries arrive after it opens).
   useLayoutEffect(() => {
-    if (!menu || !isMd || !box.current) return;
-    const { width, height } = box.current.getBoundingClientRect();
-    setPos({
-      left: Math.max(12, Math.min(menu.x, window.innerWidth - width - 12)),
-      top: menu.y + height > window.innerHeight - 12 ? Math.max(12, menu.y - height) : menu.y,
-    });
+    const el = box.current;
+    if (!menu || !isMd || !el) return;
+    const place = () => {
+      const { width, height } = el.getBoundingClientRect();
+      setPos({
+        left: Math.max(12, Math.min(menu.x, window.innerWidth - width - 12)),
+        top: menu.y + height > window.innerHeight - 12 ? Math.max(12, menu.y - height) : menu.y,
+      });
+    };
+    place();
+    const watch = new ResizeObserver(place);
+    watch.observe(el);
+    return () => watch.disconnect();
   }, [menu, isMd]);
 
   useEffect(() => {

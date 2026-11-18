@@ -29,8 +29,8 @@ async function lookup(id: string): Promise<Known | null> {
   return track && !track.unavailable ? { track, addedAt: 0 } : null;
 }
 
-/** The analysed tracks that can be played now, by ID. */
-async function catalog(taste: Taste): Promise<Map<string, Known>> {
+/** The analysed tracks that can be played now, by ID (also the albums and works of works.ts). */
+export async function catalog(taste: Taste): Promise<Map<string, Known>> {
   const out = new Map<string, Known>();
   for (const s of taste.songs) {
     const known = await lookup(s.id);

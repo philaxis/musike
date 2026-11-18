@@ -1,6 +1,6 @@
-import { PauseIcon, PlayIcon, PlaylistIcon, ShuffleIcon, WarningCircleIcon } from "@phosphor-icons/react";
+import { PauseIcon, PlayIcon, PlaylistIcon, ShuffleIcon, WarningCircleIcon, YoutubeLogoIcon } from "@phosphor-icons/react";
 import { useState } from "react";
-import { useLocation, useParams } from "react-router";
+import { Link, useLocation, useParams } from "react-router";
 import { Cover } from "../components/Cover";
 import { IconButton, PlayDisc } from "../components/IconButton";
 import { BackButton, EmptyState, PageHeader } from "../components/Page";
@@ -16,15 +16,40 @@ import { usePlayer } from "../player/player";
 import { useUi } from "../stores/ui";
 import { isTvMode } from "../tv/tvMode";
 
-type Kind = "group" | "mix" | "radio";
+type Kind = "group" | "mix" | "radio" | "album" | "performance";
 
 interface Loaded {
   tracks: Track[];
   /** Labels are made when shown, so switching languages changes them. */
   describe: (t: Messages) => { kicker: string; title: string; sub: string };
+  /** An album of my YouTube tracks: what to search YouTube Music's albums for. */
+  youtubeQuery?: string;
+  /** Row titles of an album's or a performance's movements ("II. Adagio"), by track ID. */
+  titles?: Record<string, string>;
 }
 
 async function load(kind: Kind, id: string, signal: AbortSignal): Promise<Loaded> {
+  if (kind === "album") {
+    const { album, tracks, titles } = await server.workAlbum(id, signal);
+    return {
+      tracks,
+      titles,
+      describe: (t) => ({ kicker: t.works.album, title: album.name, sub: album.artists.slice(0, 3).join(", ") }),
+      youtubeQuery: [album.name, album.artists.length === 1 ? album.artists[0] : ""].filter(Boolean).join(" "),
+    };
+  }
+  if (kind === "performance") {
+    const { instance, tracks, titles } = await server.performance(id, signal);
+    return {
+      tracks,
+      titles,
+      describe: (t) => ({
+        kicker: [t.works.performance, instance.composer].filter(Boolean).join(" · "),
+        title: instance.work,
+        sub: [instance.performer || t.works.unknownPerformer, instance.album].filter(Boolean).join(" · "),
+      }),
+    };
+  }
   if (kind === "group") {
     const { group, tracks } = await server.tasteGroup(id, signal);
     return {
@@ -44,14 +69,14 @@ async function load(kind: Kind, id: string, signal: AbortSignal): Promise<Loaded
   };
 }
 
-/** A list made from the taste analysis: a sound group's tracks, an automatic playlist or a track's alike-tracks radio. */
+/** A list made from the taste analysis: a sound group, an automatic playlist, a radio, an album of my tracks or a performance. */
 export default function TasteTracks({ kind }: { kind: Kind }) {
   const { id = "" } = useParams();
   const location = useLocation();
   const t = useT();
-  // Mixes and radios are made again each visit (listening changes them); a group stays for the session.
+  // Mixes and radios are made again each visit (listening changes them); the rest stay for the session.
   const [visit] = useState(Date.now);
-  const page = useRemote(`taste-${kind}:${id}:${kind === "group" ? "" : visit}`, (signal) => load(kind, id, signal));
+  const page = useRemote(`taste-${kind}:${id}:${kind === "mix" || kind === "radio" ? visit : ""}`, (signal) => load(kind, id, signal));
   const playList = usePlayer((s) => s.playList);
   const toggle = usePlayer((s) => s.toggle);
   const queue = usePlayer((s) => s.queue);
@@ -104,6 +129,15 @@ export default function TasteTracks({ kind }: { kind: Kind }) {
               <PlaylistIcon size={24} />
             </IconButton>
           )}
+          {page.status === "ok" && page.data.youtubeQuery && (
+            <Link
+              to={`${paths.search}?${new URLSearchParams({ q: page.data.youtubeQuery, type: "albums", in: "youtube" })}`}
+              className="ml-1 flex h-11 min-w-0 items-center gap-2 rounded-full bg-surface-3 px-4 text-sm font-medium hover:bg-surface-4"
+            >
+              <YoutubeLogoIcon size={18} className="shrink-0" />
+              <span className="truncate">{t.works.findOnYoutube}</span>
+            </Link>
+          )}
         </div>
       )}
 
@@ -122,7 +156,7 @@ export default function TasteTracks({ kind }: { kind: Kind }) {
       )}
       {page.status === "ok" && (
         <div className="px-2 md:px-3">
-          <TrackList tracks={tracks} />
+          <TrackList tracks={tracks} titleOf={page.data.titles && ((x) => page.data.titles?.[x.id] ?? x.title)} />
         </div>
       )}
     </div>

@@ -428,6 +428,13 @@ export function getAlbum(root: string, key: string, show = false) {
   return { album: albumCard(a, show), tracks: albumView(a, show).tracks };
 }
 
+/** The album a local track is in (its shown tracks counted), or null. */
+export function albumOf(id: string): LocalAlbum | null {
+  const e = entries.get(id);
+  const a = e && albums.get(e.root.name)?.find((x) => x.ids.includes(id));
+  return a ? albumCard(a, false) : null;
+}
+
 /** Case-insensitive match on title, artist, album or file name; no query lists everything (of one root). */
 export function searchLocal(q: string, root: string | undefined, limit: number, show = false): Track[] {
   if (root) rootAlbums(root);
