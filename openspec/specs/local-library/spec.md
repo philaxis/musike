@@ -52,3 +52,28 @@ TBD - created by archiving change server-library. Update Purpose after archive.
 #### Scenario: 안드로이드 크롬
 - **WHEN** 안드로이드 크롬에서 로컬 곡 둘이 든 재생목록을 틀고 화면을 끈다
 - **THEN** 1분 뒤에도 재생 중이고, 첫 곡이 끝나면 다음 곡으로 넘어간다
+
+### Requirement: 내 음악에서 곡과 폴더를 숨긴다
+곡(파일) 하나 또는 뿌리 폴더 통째로 숨길 수 있어야 하고, 숨긴 것은 언제든 다시 보이게 할 수 있어야 한다(MUST). 숨긴 목록은 서버 데이터 폴더의 `hidden.json`에 통째로 바꿔 넣어 저장하며(SHALL), 음악 폴더의 파일은 지우거나 옮기거나 쓰지 않는다. 숨긴 것은 「내 음악」 뿌리·앨범·곡 목록과 `/api/local` 찾기, 웹 검색의 「내 음악」 묶음에서 빠지고, `?hidden=1`을 붙인 요청에만 `hidden: true`가 붙어 함께 온다. 앨범은 곡이 모두 숨겨졌을 때 숨긴 앨범이다. 재생목록·즐겨찾기·최근 재생·대기열의 숨긴 곡은 그대로 남고 그대로 재생되어야 한다(MUST).
+
+API: `GET /api/local/hidden` → `{ ids, roots }`, `POST /api/local/hidden` `{ ids?, root? }`(숨기기), `DELETE /api/local/hidden` `{ ids?, root? }`(숨기기 해제).
+
+#### Scenario: 합친 앨범 파일 숨기기
+- **WHEN** 폰에서 「내 음악 › 야마시타 타츠로」의 「RIDE ON TIME」 앨범 카드 메뉴에서 「숨기기」를 누른다
+- **THEN** 그 앨범이 목록과 검색의 「내 음악」 묶음에서 사라지고, 알림의 「되돌리기」를 누르면 다시 보이며, 음악 폴더의 파일은 그대로다
+
+#### Scenario: 숨긴 것 보기
+- **WHEN** 「내 음악」에서 「숨긴 것 보기」를 켠다
+- **THEN** 숨긴 폴더·앨범·곡이 흐리게 「숨김」 표시와 함께 보이고, 그 메뉴의 「숨기기 해제」를 누르면 끈 상태에서도 다시 보인다
+
+#### Scenario: 폴더 통째로 숨기기
+- **WHEN** 헤르메스가 `POST /api/local/hidden {"root":"카시오페아"}`를 보낸다
+- **THEN** `GET /api/local/roots`에 카시오페아가 없고 `?hidden=1`에는 `hidden: true`로 있으며, `DELETE`로 같은 것을 보내면 다시 보인다
+
+#### Scenario: 재생목록의 숨긴 곡
+- **WHEN** 재생목록에 든 로컬 곡을 숨긴 뒤 그 재생목록을 연다
+- **THEN** 그 곡은 재생목록에 그대로 있고 「파일 없음」이 아니며 끝까지 재생된다
+
+#### Scenario: TV에서는 보이지 않는다
+- **WHEN** TV 화면에서 「내 음악」을 연다
+- **THEN** 숨긴 것은 보이지 않고 「숨긴 것 보기」와 숨기기 메뉴도 없다
