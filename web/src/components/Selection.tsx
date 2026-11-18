@@ -1,5 +1,5 @@
 import { CheckIcon, HeartIcon, ListPlusIcon, PlayIcon, PlaylistIcon, QueueIcon, TrashIcon, VideoCameraIcon, XIcon } from "@phosphor-icons/react";
-import { useEffect, useRef, useState, type MouseEvent, type ReactNode } from "react";
+import { useEffect, useRef, useState, type MouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import { useT } from "../i18n";
 import { cn, formatTime } from "../lib/format";
 import type { Track } from "../lib/types";
@@ -42,6 +42,11 @@ export const clearActiveSelection = () => active?.current.clear() ?? false;
 
 export interface ListSelection {
   enabled: boolean;
+  /**
+   * Selection mode: on from a Ctrl/Cmd-click, a Shift-click, a Shift-drag or 「여러 곡 고르기」 until Esc or ✕ —
+   * even with nothing picked. While on, a plain click picks a row instead of playing it.
+   */
+  mode: boolean;
   has: (id: string) => boolean;
   /** The picked tracks, in list order, each once. */
   chosen: Track[];
@@ -49,9 +54,15 @@ export interface ListSelection {
   positions: number[];
   /** Flips row `i`; with `range`, picks every row from the last one flipped to `i`. */
   toggle: (i: number, range?: boolean) => void;
-  /** A click on row `i`: Ctrl/Cmd flips it, Shift picks a range, and once something is picked a plain click flips. True when handled. */
+  /** A click on row `i`: Ctrl/Cmd flips it, Shift picks a range, in selection mode a plain click flips. True when handled. */
   click: (i: number, e: Modifiers) => boolean;
+  /**
+   * Shift + press on row `i` with the mouse: picks every row the pointer passes over until release (rows carry
+   * `data-row={i}`). True when it started, so the caller skips its own press handling (no drag, no menu).
+   */
+  paint: (i: number, e: ReactPointerEvent) => boolean;
   selectAll: () => void;
+  /** Unpicks everything and leaves selection mode. */
   clear: () => void;
   /** Makes this the list Ctrl+A and Esc act on. */
   activate: () => void;
@@ -62,6 +73,7 @@ export interface ListSelection {
 /** Picking several tracks of one list, shared by every track list, the song box and the album pages. */
 export function useListSelection(tracks: Track[], enabled = true): ListSelection {
   const [selected, setSelected] = useState<Set<string>>(() => new Set());
+  const [mode, setMode] = useState(false);
   const anchor = useRef<number | null>(null);
   const handle = useRef<Handle>({ selectAll: () => {}, clear: () => false });
 
@@ -78,6 +90,7 @@ export function useListSelection(tracks: Track[], enabled = true): ListSelection
   const toggle = (i: number, range = false) => {
     const from = anchor.current;
     anchor.current = i;
+    setMode(true);
     setSelected((prev) => {
       const next = new Set(prev);
       if (range && from !== null && from !== i) {
@@ -87,18 +100,52 @@ export function useListSelection(tracks: Track[], enabled = true): ListSelection
     });
   };
 
-  const selectAll = () => setSelected(new Set(tracks.map((t) => t.id)));
+  const selectAll = () => {
+    setMode(true);
+    setSelected(new Set(tracks.map((t) => t.id)));
+  };
   const clear = () => {
     anchor.current = null;
+    setMode(false);
     setSelected(new Set());
   };
   handle.current = {
     selectAll,
     clear: () => {
-      if (!chosen.length) return false;
+      if (!mode && !chosen.length) return false;
       clear();
       return true;
     },
+  };
+
+  const paint = (start: number, e: ReactPointerEvent) => {
+    if (!enabled || !e.shiftKey || e.pointerType !== "mouse" || e.button !== 0) return false;
+    e.preventDefault();
+    e.stopPropagation();
+    const base = new Set(selected);
+    const rowAt = (x: number, y: number) => {
+      const row = document.elementFromPoint(x, y)?.closest<HTMLElement>("[data-row]");
+      return row ? Number(row.dataset.row) : null;
+    };
+    const spread = (to: number) => {
+      const next = new Set(base);
+      for (let k = Math.min(start, to); k <= Math.max(start, to); k++) if (tracks[k]) next.add(tracks[k].id);
+      setSelected(next);
+    };
+    anchor.current = start;
+    setMode(true);
+    spread(start);
+    const move = (ev: PointerEvent) => {
+      const to = rowAt(ev.clientX, ev.clientY);
+      if (to !== null) spread(to);
+    };
+    const up = () => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+    return true;
   };
 
   useEffect(() => {
@@ -119,6 +166,7 @@ export function useListSelection(tracks: Track[], enabled = true): ListSelection
 
   return {
     enabled,
+    mode: enabled && mode,
     has: (id) => enabled && selected.has(id),
     chosen,
     positions,
@@ -127,10 +175,11 @@ export function useListSelection(tracks: Track[], enabled = true): ListSelection
       if (!enabled) return false;
       if (e.ctrlKey || e.metaKey) toggle(i);
       else if (e.shiftKey) toggle(i, true);
-      else if (chosen.length) toggle(i);
+      else if (mode) toggle(i);
       else return false;
       return true;
     },
+    paint,
     selectAll,
     clear,
     activate: () => {
@@ -151,6 +200,7 @@ function Action({
   disabled,
   primary,
   danger,
+  iconOnly,
 }: {
   icon: ReactNode;
   label: string;
@@ -159,6 +209,8 @@ function Action({
   disabled?: boolean;
   primary?: boolean;
   danger?: boolean;
+  /** Never shows the text (it stays as tooltip and accessible name). */
+  iconOnly?: boolean;
 }) {
   return (
     <button
@@ -175,7 +227,11 @@ function Action({
     >
       {icon}
       {/* Phones and narrow windows keep only "Play"; the icons are familiar enough for the rest. */}
-      {primary ? <Short phone={phoneLabel ?? label} wide={label} /> : <span className="hidden @4xl:inline">{label}</span>}
+      {primary ? (
+        <Short phone={phoneLabel ?? label} wide={label} />
+      ) : (
+        !iconOnly && <span className="hidden @4xl:inline">{label}</span>
+      )}
     </button>
   );
 }
@@ -206,6 +262,7 @@ export function SelectionBar({
   allSelected,
   onToggleAll,
   onClear,
+  selecting,
   rows,
   label,
   className,
@@ -214,8 +271,10 @@ export function SelectionBar({
   all: Track[];
   allSelected: boolean;
   onToggleAll: () => void;
-  /** Shows ✕ to empty the selection. */
+  /** Shows ✕ to empty the selection and leave selection mode. */
   onClear?: () => void;
+  /** Selection mode is on (✕ shows even before anything is picked). */
+  selecting?: boolean;
   /** On a playlist page: the picked rows, for 「재생목록에서 빼기」. */
   rows?: { playlistId: string; at: number[] };
   label: ReactNode;
@@ -260,8 +319,13 @@ export function SelectionBar({
         />
         <Action icon={<QueueIcon size={16} />} label={t.trackMenu.playNext} disabled={none} onClick={() => player().playNext(chosen)} />
         <Action icon={<ListPlusIcon size={16} />} label={t.trackMenu.addToQueue} disabled={none} onClick={() => player().addToQueue(chosen)} />
-        <Action icon={<HeartIcon size={16} />} label={t.common.favorite} disabled={none} onClick={() => void addFavorites(chosen)} />
-        {!tv && <Action icon={<PlaylistIcon size={16} />} label={t.common.playlist} disabled={none} onClick={() => openAddToPlaylist(chosen)} />}
+        {/* The queue (what is playing now) and a saved playlist are different places: keep the two adds apart. */}
+        <span aria-hidden className="mx-0.5 hidden h-5 w-px bg-line sm:block" />
+        {!tv && (
+          <Action icon={<PlaylistIcon size={16} />} label={t.trackMenu.addToPlaylist} disabled={none} onClick={() => openAddToPlaylist(chosen)} />
+        )}
+        {/* The heart says it on its own: its room goes to the two "add" labels. */}
+        <Action iconOnly icon={<HeartIcon size={16} />} label={t.common.favorite} disabled={none} onClick={() => void addFavorites(chosen)} />
         {!tv && rows && (
           <Action
             danger
@@ -274,7 +338,7 @@ export function SelectionBar({
             }}
           />
         )}
-        {onClear && !none && (
+        {onClear && (selecting || !none) && (
           <button
             type="button"
             onClick={onClear}
@@ -306,6 +370,8 @@ export function SelectableRow({
   below,
   dim,
   trailing,
+  row,
+  paint,
 }: {
   track: Track;
   selected: boolean;
@@ -324,6 +390,10 @@ export function SelectableRow({
   /** Faded, like a track gone from YouTube. */
   dim?: boolean;
   trailing?: ReactNode;
+  /** This row's index in its list, for Shift-drag picking (`data-row`). */
+  row?: number;
+  /** Shift + press: picks the rows dragged over (see `ListSelection.paint`); true when it took the press. */
+  paint?: (e: ReactPointerEvent) => boolean;
 }) {
   const isCurrent = usePlayer((s) => selectCurrent(s)?.id === track.id);
   const isPlaying = usePlayer((s) => s.status === "playing" || s.status === "loading");
@@ -333,8 +403,10 @@ export function SelectableRow({
 
   return (
     <div
+      data-row={row}
       onContextMenu={trigger.onContextMenu}
       onPointerDown={(e) => {
+        if (paint?.(e)) return;
         trigger.onPointerDown(e);
         startTrackDrag(e, drag);
       }}

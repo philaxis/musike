@@ -178,6 +178,7 @@ export default function SongBox() {
             allSelected={allSelected}
             onToggleAll={allSelected ? sel.clear : sel.selectAll}
             onClear={sel.clear}
+            selecting={sel.mode}
             label={
               chosen.length ? (
                 <SelectedCount n={chosen.length} total={page.total} />
@@ -196,6 +197,8 @@ export default function SongBox() {
                   onPlay={() => playList(tracks, i)}
                   menu={() => menuFor(i)}
                   drag={() => (sel.has(it.track.id) ? chosen : [it.track])}
+                  row={i}
+                  paint={(e) => sel.paint(i, e)}
                   dim={!!it.gone}
                   below={
                     <>

@@ -285,6 +285,8 @@ export const en = {
     all: "All",
     countShort: (n: number, total: number) => `${n} of ${total}`,
     count: (n: number, total: number) => `${n} of ${count(total, "song", "songs")}`,
+    mode: "Selecting · click songs to pick them",
+    modeShort: "Selecting",
   },
 
   genre: {
