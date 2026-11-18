@@ -64,6 +64,7 @@ const en = {
   playlistEmpty: "This playlist has no playable videos.",
   keepYoutubeOnly: "Only YouTube tracks can be kept on the server.",
   keepNotFound: "There is no kept copy of this track.",
+  streamFailed: "Couldn't read the sound of this file.",
   hideNothing: "Send the track IDs (ids) or the folder (root) to hide or show.",
   // Song box, tags, bundles, Google account
   idsRequired: "Send a list of track IDs.",
@@ -144,6 +145,7 @@ const pt: Record<MsgKey, string> = {
   playlistEmpty: "Esta playlist não tem vídeos reproduzíveis.",
   keepYoutubeOnly: "Só faixas do YouTube podem ser guardadas no servidor.",
   keepNotFound: "Não há cópia guardada desta faixa.",
+  streamFailed: "Não foi possível ler o som deste arquivo.",
   hideNothing: "Envie os IDs das faixas (ids) ou a pasta (root) para ocultar ou mostrar.",
   idsRequired: "Envie uma lista de IDs de faixas.",
   tagsRequired: "Envie pelo menos uma etiqueta.",
@@ -221,6 +223,7 @@ const ko: Record<MsgKey, string> = {
   playlistEmpty: "이 재생목록에는 틀 수 있는 영상이 없어요.",
   keepYoutubeOnly: "유튜브 곡만 서버에 받아 둘 수 있어요.",
   keepNotFound: "이 곡은 받아 둔 파일이 없어요.",
+  streamFailed: "이 파일의 소리를 읽지 못했어요.",
   hideNothing: "숨기거나 다시 보일 곡 번호(ids)나 폴더(root)를 보내 주세요.",
   idsRequired: "곡 번호 목록을 보내 주세요.",
   tagsRequired: "꼬리표를 하나 이상 보내 주세요.",

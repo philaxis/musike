@@ -3,6 +3,7 @@ import { promisify } from "node:util";
 import { existsSync } from "node:fs";
 import { mkdir, readdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { Readable } from "node:stream";
 import type { FastifyReply, FastifyRequest } from "fastify";
 import { config } from "./config.js";
 import { msg } from "./i18n.js";
@@ -544,11 +545,66 @@ export function streamLocalVideo(req: FastifyRequest, reply: FastifyReply, id: s
 }
 
 /**
+ * Remuxed sizes by FFmpeg command. With bitexact output FFmpeg writes the same bytes every run, so a remuxed stream
+ * can be measured once and then answer byte ranges like a file. Browsers need that: Firefox closes a paused download
+ * and resumes it with `Range: bytes=N-`, and a stream that restarts from byte 0 makes it give up.
+ */
+const remuxSizes = new Map<string, Promise<number>>();
+const REMUX_SIZES_MAX = 2000;
+
+function remuxSize(ffmpeg: string, args: string[]): Promise<number> {
+  const key = args.join("\u0000");
+  const known = remuxSizes.get(key);
+  if (known) return known;
+  // Promise.withResolvers is not in this project's TypeScript lib target, so the executor form.
+  const promise = new Promise<number>((resolve, reject) => {
+    const child = spawn(ffmpeg, args, { env: tools().env, stdio: ["ignore", "pipe", "ignore"], windowsHide: true });
+    let bytes = 0;
+    child.stdout.on("data", (chunk: Buffer) => {
+      bytes += chunk.length;
+    });
+    child.on("error", reject);
+    child.on("close", (code) => (code === 0 && bytes > 0 ? resolve(bytes) : reject(new HttpError(500, msg("streamFailed")))));
+  });
+  promise.catch(() => remuxSizes.delete(key));
+  if (remuxSizes.size >= REMUX_SIZES_MAX) remuxSizes.delete(remuxSizes.keys().next().value!);
+  remuxSizes.set(key, promise);
+  return promise;
+}
+
+/** Bytes `start` to `start + length - 1` of a stream, then `done()` (which stops FFmpeg). */
+async function* byteSlice(src: AsyncIterable<Buffer>, start: number, length: number, done: () => void) {
+  let skip = start;
+  let left = length;
+  try {
+    for await (const chunk of src) {
+      let part = chunk;
+      if (skip) {
+        if (part.length <= skip) {
+          skip -= part.length;
+          continue;
+        }
+        part = part.subarray(skip);
+        skip = 0;
+      }
+      if (part.length >= left) {
+        yield part.subarray(0, left);
+        return;
+      }
+      left -= part.length;
+      yield part;
+    }
+  } finally {
+    done();
+  }
+}
+
+/**
  * Audio mode. Audio files go out as they are (byte ranges). A file with video, or a song of a split file, gets only
  * its audio stream, remuxed by FFmpeg without re-encoding and without touching the disk, from `?t=` seconds into
- * the track to its end.
+ * the track to its end. That remux also answers byte ranges (see `remuxSize`).
  */
-export function streamLocalAudio(req: FastifyRequest, reply: FastifyReply, id: string) {
+export async function streamLocalAudio(req: FastifyRequest, reply: FastifyReply, id: string) {
   const e = readable(id);
   if (!e.probe.hasVideo && !e.segment) return serveFile(req, reply, e.file, audioMime(e.file));
   const ffmpeg = tools().ffmpeg;
@@ -575,13 +631,35 @@ export function streamLocalAudio(req: FastifyRequest, reply: FastifyReply, id: s
     ...(e.segment ? ["-t", (to - at).toFixed(3)] : []),
     "-map", "0:a:0", "-vn", "-sn", "-dn",
     ...(copy ? ["-c:a", "copy"] : ["-c:a", "aac", "-b:a", "256k"]),
+    // Same bytes on every run, so sizes and byte ranges hold.
+    "-fflags", "+bitexact", "-flags:a", "+bitexact",
     // 1 s fragments: on a pipe, keyframe-only fragmenting of an audio stream makes huge fragments that decode badly.
     ...(webm ? ["-f", "webm"] : ["-f", "mp4", "-movflags", "frag_keyframe+empty_moov+default_base_moof", "-frag_duration", "1000000"]),
     "pipe:1",
   ];
 
+  const size = await remuxSize(ffmpeg, args);
   reply.header("content-type", webm ? "audio/webm" : "audio/mp4");
   reply.header("cache-control", "no-store");
+  reply.header("accept-ranges", "bytes");
+
+  const m = typeof req.headers.range === "string" ? /bytes=(\d*)-(\d*)/.exec(req.headers.range) : null;
+  let start = 0;
+  let end = size - 1;
+  if (m) {
+    if (m[1]) {
+      start = Number(m[1]);
+      if (m[2]) end = Math.min(Number(m[2]), size - 1);
+    } else if (m[2]) {
+      start = Math.max(0, size - Number(m[2]));
+    }
+    if (start > end) {
+      reply.code(416).header("content-range", `bytes */${size}`);
+      return reply.send();
+    }
+    reply.code(206).header("content-range", `bytes ${start}-${end}/${size}`);
+  }
+  reply.header("content-length", end - start + 1);
   if (req.method === "HEAD") return reply.send();
 
   const child = spawn(ffmpeg, args, { env: tools().env, stdio: ["ignore", "pipe", "ignore"], windowsHide: true });
@@ -590,7 +668,7 @@ export function streamLocalAudio(req: FastifyRequest, reply: FastifyReply, id: s
   };
   reply.raw.on("close", stop);
   child.on("error", () => child.stdout.destroy());
-  return reply.send(child.stdout);
+  return reply.send(Readable.from(byteSlice(child.stdout, start, end - start + 1, stop)));
 }
 
 // Covers
