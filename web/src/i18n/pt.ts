@@ -279,6 +279,8 @@ export const pt: Messages = {
     all: "Todas",
     countShort: (n, total) => `${n} de ${total}`,
     count: (n, total) => `${n} de ${count(total, "música", "músicas")}`,
+    mode: "Seleção · clique nas faixas para escolher",
+    modeShort: "Seleção",
   },
 
   genre: {

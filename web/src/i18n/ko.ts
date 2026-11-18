@@ -279,6 +279,8 @@ export const ko: Messages = {
     all: "모두",
     countShort: (n, total) => `${n}/${total}`,
     count: (n, total) => `${total}곡 중 ${n}곡`,
+    mode: "선택 모드 · 곡을 눌러 고르세요",
+    modeShort: "선택 모드",
   },
 
   genre: {

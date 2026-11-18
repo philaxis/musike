@@ -8,7 +8,7 @@ import {
   HeartIcon,
   VideoCameraIcon,
 } from "@phosphor-icons/react";
-import { useState, type CSSProperties, type MouseEvent, type PointerEvent } from "react";
+import { useLayoutEffect, useRef, useState, type CSSProperties, type MouseEvent, type PointerEvent } from "react";
 import { useT } from "../i18n";
 import { cn, formatTime } from "../lib/format";
 import { isLocal } from "../lib/server";
@@ -82,6 +82,7 @@ function TrackRow({
 
   return (
     <li
+      data-row={position}
       onContextMenu={menuTrigger(menu).onContextMenu}
       onPointerDown={onPointerDown}
       style={dragStyle}
@@ -279,6 +280,7 @@ export function TrackList({
   const showAlbum = useAppearance((s) => s.albumColumn) && albumWanted;
   const sel = useListSelection(tracks, selectable && !tv);
   const picking = sel.chosen.length > 0;
+  const selecting = sel.mode;
   const allSelected = picking && sel.chosen.length === new Set(tracks.map((x) => x.id)).size;
   // Dragged onto a sidebar playlist, a picked row carries the whole selection.
   const carried = (i: number) => (sel.has(tracks[i].id) && sel.chosen.length > 1 ? sel.chosen : [tracks[i]]);
@@ -288,10 +290,22 @@ export function TrackList({
     onHold: (i, x, y) => openMenu(menuFor(i), x, y),
     dropTracks: tv ? undefined : carried,
   });
+  // The bar comes and goes with selection mode above the rows; scroll by the same amount so the row under the
+  // pointer stays put (a Shift-drag keeps painting the rows it started on).
+  const root = useRef<HTMLDivElement>(null);
+  const rowsOffset = useRef<number | null>(null);
+  useLayoutEffect(() => {
+    const ul = root.current?.querySelector(":scope > ul");
+    if (!root.current || !ul) return;
+    const offset = ul.getBoundingClientRect().top - root.current.getBoundingClientRect().top;
+    const shift = rowsOffset.current === null ? 0 : offset - rowsOffset.current;
+    if (shift) scrollParent(root.current).scrollBy(0, shift);
+    rowsOffset.current = offset;
+  }, [selecting]);
 
   return (
-    <div onPointerDownCapture={sel.activate}>
-      {sel.enabled && (picking || alwaysBar) && (
+    <div ref={root} onPointerDownCapture={sel.activate}>
+      {sel.enabled && (selecting || alwaysBar) && (
         <SelectionBar
           className={cn("-mx-2 mb-1 md:-mx-3", barClassName)}
           chosen={sel.chosen}
@@ -299,10 +313,13 @@ export function TrackList({
           allSelected={allSelected}
           onToggleAll={allSelected ? sel.clear : sel.selectAll}
           onClear={sel.clear}
+          selecting={selecting}
           rows={playlistId && picking ? { playlistId, at: sel.positions } : undefined}
           label={
             picking ? (
               <SelectedCount n={sel.chosen.length} total={tracks.length} />
+            ) : selecting ? (
+              <Short phone={t.selection.modeShort} wide={t.selection.mode} />
             ) : (
               <Short phone={t.selection.all} wide={t.selection.selectAll} />
             )
@@ -335,7 +352,7 @@ export function TrackList({
             track={track}
             position={i}
             showAlbum={showAlbum}
-            check={!sel.enabled ? "none" : picking ? "always" : alwaysBar ? "phone" : "hover"}
+            check={!sel.enabled ? "none" : selecting ? "always" : alwaysBar ? "phone" : "hover"}
             selected={sel.has(track.id)}
             onCheck={(e) => sel.toggle(i, e.shiftKey)}
             onClick={(e) => {
@@ -345,6 +362,8 @@ export function TrackList({
             menu={() => menuFor(i)}
             reorderable={!!onReorder}
             onPointerDown={(e) => {
+              // Shift + drag paints a range and turns selection mode on; no track drag, no reorder.
+              if (sel.paint(i, e)) return;
               if (onReorder) return reorder.start(i)(e);
               startLongPress(e, () => menuFor(i));
               startTrackDrag(e, () => carried(i));
@@ -355,6 +374,14 @@ export function TrackList({
       </ul>
     </div>
   );
+}
+
+function scrollParent(el: HTMLElement): Element {
+  for (let p = el.parentElement; p; p = p.parentElement) {
+    const { overflowY } = getComputedStyle(p);
+    if ((overflowY === "auto" || overflowY === "scroll") && p.scrollHeight > p.clientHeight) return p;
+  }
+  return document.scrollingElement ?? document.documentElement;
 }
 
 export function TrackListSkeleton({ rows = 8 }: { rows?: number }) {
