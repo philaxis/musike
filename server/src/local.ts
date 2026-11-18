@@ -6,6 +6,7 @@ import path from "node:path";
 import type { FastifyReply, FastifyRequest } from "fastify";
 import { config } from "./config.js";
 import { msg } from "./i18n.js";
+import { HiddenStore, visibleTracks, type HideTarget } from "./hidden.js";
 import { cleanName, localId, mediaFiles, nameTrack, naturalCompare, parseRoots, relInRoot, stripExt, YT_ID_SUFFIX, type Tags } from "./localNames.js";
 import { serveFile } from "./stream.js";
 import { tools } from "./tools.js";
@@ -56,6 +57,8 @@ export interface LocalAlbum {
   cover: string;
   trackCount: number;
   duration: number;
+  /** Only in listings asked to include hidden items: every track of it is hidden. */
+  hidden?: true;
 }
 
 interface Album extends LocalAlbum {
@@ -75,6 +78,8 @@ let timer: NodeJS.Timeout | null = null;
 
 const indexFile = () => path.join(config.dataDir, "local-index.json");
 const coverUrl = (id: string) => `/api/local/${id}/cover`;
+/** Hidden tracks and roots (hidden.ts); loaded by startLocal. */
+let hidden = new HiddenStore(path.join(config.dataDir, "hidden.json"));
 
 /** Configured roots, plus the keep folder as "받아 둔 곡" unless it is already one of them. */
 function configuredRoots(): { name: string; path: string }[] {
@@ -311,6 +316,8 @@ export function rescan(rootName?: string): Promise<void> {
 
 /** Loads the index, then scans in the background now and every 10 minutes. */
 export async function startLocal() {
+  hidden = new HiddenStore(path.join(config.dataDir, "hidden.json"));
+  await hidden.load();
   await loadIndex();
   if (!roots.length) return;
   rescan().catch(() => {});
@@ -345,11 +352,44 @@ export function annotate(t: Track): Track {
   return VIDEO_ID.test(t.id) && keptById.has(t.id) ? { ...t, kept: true } : t;
 }
 
-export function listRoots() {
-  return roots.map((r) => {
-    const list = albums.get(r.name) ?? [];
-    return { name: r.name, path: r.path, online: r.online, albums: list.length, tracks: list.reduce((n, a) => n + a.trackCount, 0) };
-  });
+/** Listings leave hidden tracks out; with `show` they keep them, marked `hidden: true`. */
+function albumView(a: Album, show: boolean) {
+  const tracks = a.ids.map((id) => present(entries.get(id)!));
+  return visibleTracks(tracks, (id) => hidden.isHidden(id, a.root), show);
+}
+
+function albumCard(a: Album, show: boolean): LocalAlbum {
+  const { ids: _ids, ...album } = a;
+  const view = albumView(a, show);
+  return {
+    ...album,
+    cover: view.tracks[0]?.thumb ?? album.cover,
+    trackCount: view.tracks.length,
+    duration: view.tracks.reduce((n, t) => n + t.duration, 0),
+    ...(view.allHidden ? { hidden: true as const } : {}),
+  };
+}
+
+export function listAlbums(root: string, show = false): LocalAlbum[] {
+  return rootAlbums(root)
+    .map((a) => albumCard(a, show))
+    .filter((a) => a.trackCount > 0);
+}
+
+export function listRoots(show = false) {
+  return roots
+    .filter((r) => show || !hidden.isRootHidden(r.name))
+    .map((r) => {
+      const list = listAlbums(r.name, show);
+      return {
+        name: r.name,
+        path: r.path,
+        online: r.online,
+        albums: list.length,
+        tracks: list.reduce((n, a) => n + a.trackCount, 0),
+        ...(hidden.isRootHidden(r.name) ? { hidden: true } : {}),
+      };
+    });
 }
 
 function rootAlbums(name: string): Album[] {
@@ -358,32 +398,41 @@ function rootAlbums(name: string): Album[] {
   return list;
 }
 
-const card = ({ ids: _ids, ...album }: Album): LocalAlbum => album;
-
-export const listAlbums = (root: string) => rootAlbums(root).map(card);
-
-export function getAlbum(root: string, key: string) {
+export function getAlbum(root: string, key: string, show = false) {
   const a = rootAlbums(root).find((x) => x.key === key);
   if (!a) throw new HttpError(404, msg("albumNotFound"));
-  return { album: card(a), tracks: a.ids.map((id) => present(entries.get(id)!)) };
+  return { album: albumCard(a, show), tracks: albumView(a, show).tracks };
 }
 
 /** Case-insensitive match on title, artist, album or file name; no query lists everything (of one root). */
-export function searchLocal(q: string, root: string | undefined, limit: number): Track[] {
+export function searchLocal(q: string, root: string | undefined, limit: number, show = false): Track[] {
   if (root) rootAlbums(root);
   const words = q.toLocaleLowerCase().split(/\s+/).filter(Boolean);
   const out: Track[] = [];
   for (const e of ordered) {
     if (root && e.root.name !== root) continue;
+    const isHidden = hidden.isHidden(e.track.id, e.root.name);
+    if (isHidden && !show) continue;
     if (words.length) {
       const hay = [e.track.title, e.track.artist, e.track.album ?? "", path.posix.basename(e.rel)].join("\n").toLocaleLowerCase();
       if (!words.every((w) => hay.includes(w))) continue;
     }
-    out.push(present(e));
+    out.push(isHidden ? { ...present(e), hidden: true } : present(e));
     if (out.length >= limit) break;
   }
   return out;
 }
+
+// Hiding
+
+export const hiddenItems = () => hidden.list();
+
+export function hide(target: HideTarget) {
+  if (target.root && !roots.some((r) => r.name === target.root)) throw new HttpError(404, msg("localRootNotFound"));
+  return hidden.hide(target);
+}
+
+export const unhide = (target: HideTarget) => hidden.unhide(target);
 
 /** The kept file of a YouTube video, when its folder is readable. */
 export function keptFile(id: string): string | null {

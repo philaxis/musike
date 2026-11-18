@@ -461,6 +461,21 @@ export const pt: Messages = {
     removed: "Arquivo guardado apagado",
   },
 
+  hide: {
+    hide: "Ocultar",
+    hideFolder: "Ocultar a pasta inteira",
+    unhide: "Mostrar de novo",
+    showHidden: "Ver ocultos",
+    hidden: "Oculto em Minhas músicas",
+    folderHidden: "Pasta oculta em Minhas músicas",
+    unhidden: "De volta em Minhas músicas",
+    undo: "Desfazer",
+    menuFor: (name) => `Mais opções de ${name}`,
+    badge: "Oculto",
+    allHidden: "Tudo aqui está oculto",
+    allHiddenBody: 'Ative "Ver ocultos" para ver e mostrar de novo.',
+  },
+
   importList: {
     label: "Playlist do YouTube",
     action: (n) => `Importar como playlist (${count(n, "faixa", "faixas")})`,

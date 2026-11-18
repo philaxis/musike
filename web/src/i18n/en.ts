@@ -467,6 +467,21 @@ export const en = {
     removed: "Kept file deleted",
   },
 
+  hide: {
+    hide: "Hide",
+    hideFolder: "Hide the whole folder",
+    unhide: "Unhide",
+    showHidden: "Show hidden",
+    hidden: "Hidden from My music",
+    folderHidden: "Folder hidden from My music",
+    unhidden: "Back in My music",
+    undo: "Undo",
+    menuFor: (name: string) => `More for ${name}`,
+    badge: "Hidden",
+    allHidden: "Everything here is hidden",
+    allHiddenBody: 'Turn on "Show hidden" to see it and unhide it.',
+  },
+
   importList: {
     label: "YouTube playlist",
     action: (n: number) => `Import as playlist (${count(n, "track", "tracks")})`,

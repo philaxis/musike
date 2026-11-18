@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { useT } from "../i18n";
 import { server } from "../lib/server";
 import type { Track } from "../lib/types";
+import { useLocal } from "../stores/local";
 import { TrackList } from "./TrackList";
 
 const LIMIT = 50;
@@ -13,6 +14,8 @@ export function LocalResults({ q }: { q: string }) {
   const [tracks, setTracks] = useState<Track[]>([]);
   const [expanded, setExpanded] = useState(false);
   const t = useT();
+  // Hiding a track from these results takes it out of them.
+  const generation = useLocal((s) => s.generation);
 
   useEffect(() => {
     setExpanded(false);
@@ -20,7 +23,7 @@ export function LocalResults({ q }: { q: string }) {
     const ctrl = new AbortController();
     server.searchLocal(q, LIMIT, ctrl.signal).then(setTracks, () => setTracks([]));
     return () => ctrl.abort();
-  }, [q]);
+  }, [q, generation]);
 
   if (!tracks.length) return null;
   const shown = expanded ? tracks : tracks.slice(0, PREVIEW);
