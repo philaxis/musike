@@ -88,7 +88,7 @@ export const ko: Messages = {
     save: "저장",
     deletePlaylist: "재생목록 지우기",
     deleteTitle: "재생목록을 지울까요?",
-    deleteBody: (name, tracks) => `「${name}」과 그 안의 ${tracks}곡 목록이 지워져요. 되돌릴 수 없어요.`,
+    deleteBody: (name, tracks) => `「${name}」과 그 안의 ${tracks}곡 목록이 지워져요. 바로 뒤 알림의 「되돌리기」로 살릴 수 있어요.`,
     delete: "지우기",
     reorderFailed: "새 순서를 저장하지 못했어요",
     dragToReorder: "끌어서 순서 바꾸기",

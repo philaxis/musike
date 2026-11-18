@@ -88,7 +88,7 @@ export const pt: Messages = {
     save: "Salvar",
     deletePlaylist: "Excluir playlist",
     deleteTitle: "Excluir playlist?",
-    deleteBody: (name, tracks) => `"${name}" e a lista de ${count(tracks, "faixa", "faixas")} serão apagadas. Isso não pode ser desfeito.`,
+    deleteBody: (name, tracks) => `"${name}" e a lista de ${count(tracks, "faixa", "faixas")} serão apagadas. O "Desfazer" do aviso logo depois traz de volta.`,
     delete: "Excluir",
     reorderFailed: "Não foi possível salvar a nova ordem",
     dragToReorder: "Arraste para reordenar",

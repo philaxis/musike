@@ -94,7 +94,7 @@ export const en = {
     deletePlaylist: "Delete playlist",
     deleteTitle: "Delete playlist?",
     deleteBody: (name: string, tracks: number) =>
-      `"${name}" and its list of ${count(tracks, "track", "tracks")} will be deleted. This can't be undone.`,
+      `"${name}" and its list of ${count(tracks, "track", "tracks")} will be deleted. Undo in the notice right after brings it back.`,
     delete: "Delete",
     reorderFailed: "Couldn't save the new order",
     dragToReorder: "Drag to reorder",
