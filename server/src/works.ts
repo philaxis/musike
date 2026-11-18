@@ -122,12 +122,73 @@ export function trackWorks(works: Works, id: string): TrackWorks {
 
 const tracksOf = (works: Works, ids: number[]) => ids.map((i) => works.known.get(works.taste.songs[i].id)!);
 
-export function albumTracks(works: Works, key: string): Track[] {
-  return tracksOf(works, works.albums.get(key) ?? []);
+const ROMAN: [number, string][] = [
+  [1000, "M"],
+  [900, "CM"],
+  [500, "D"],
+  [400, "CD"],
+  [100, "C"],
+  [90, "XC"],
+  [50, "L"],
+  [40, "XL"],
+  [10, "X"],
+  [9, "IX"],
+  [5, "V"],
+  [4, "IV"],
+  [1, "I"],
+];
+
+function roman(n: number): string {
+  if (!Number.isInteger(n) || n < 1 || n >= 4000) return String(n);
+  let out = "";
+  for (const [value, letters] of ROMAN) for (; n >= value; n -= value) out += letters;
+  return out;
 }
 
-export function instanceTracks(works: Works, key: string): Track[] {
-  return tracksOf(works, works.instances.get(key) ?? []);
+/**
+ * What a list row calls a movement: "II. Adagio" (the number in Roman numerals). Without the movement's own name,
+ * the track title with the work's part taken off ("Brahms: Violin Sonata No. 3 …: II. Adagio" → "Adagio"). Null
+ * for a track the analysis gives no movement.
+ */
+export function movementTitle(works: Pick<Works, "taste" | "known">, i: number): string | null {
+  const s = song(works.taste, i);
+  if (!s.movement) return null;
+  let name = text(s.movement.title);
+  if (!name) {
+    const title = works.known.get(s.id)?.title ?? "";
+    const work = text(s.work);
+    const at = work ? title.toLocaleLowerCase().indexOf(work.toLocaleLowerCase()) : -1;
+    const rest = at >= 0 ? title.slice(at + work!.length) : title.includes(": ") ? title.slice(title.lastIndexOf(": ") + 2) : "";
+    name = text(rest.replace(/^[\s:,–-]+/, "").replace(/^([IVXLC]+|\d+)[.:)]\s*/i, ""));
+  }
+  const n = movementNo(s);
+  if (n === null) return name;
+  return name ? `${roman(n)}. ${name}` : null;
+}
+
+/**
+ * Row titles of the tracks with a movement, by track ID; `withWork` adds the work after it (an album of several works,
+ * where "II. Adagio" alone wouldn't say which).
+ */
+function titlesOf(works: Works, ids: number[], withWork = false): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const i of ids) {
+    const label = movementTitle(works, i);
+    const work = text(song(works.taste, i).work);
+    if (label) out[works.taste.songs[i].id] = withWork && work ? `${label} · ${work}` : label;
+  }
+  return out;
+}
+
+export function albumTracks(works: Works, key: string) {
+  const ids = works.albums.get(key) ?? [];
+  const several = new Set(ids.map((i) => text(song(works.taste, i).work)).filter(Boolean)).size > 1;
+  return { tracks: tracksOf(works, ids), titles: titlesOf(works, ids, several) };
+}
+
+export function instanceTracks(works: Works, key: string) {
+  const ids = works.instances.get(key) ?? [];
+  return { tracks: tracksOf(works, ids), titles: titlesOf(works, ids) };
 }
 
 /** Composers of my tracks (of one genre, if given), most tracks first, with how many works and four tracks for a cover. */
@@ -168,15 +229,17 @@ export function composerWorks(works: Works, name: string) {
     byWork.set(work, perfs);
   });
   if (!count) return null;
+  const titles: Record<string, string> = {};
   const list = [...byWork].map(([work, perfs]) => {
     const instances = [...perfs]
       .sort((a, b) => b[1].length - a[1].length || a[0].localeCompare(b[0]))
       .map(([key, ids]) => {
         const p = parseInstance(key);
+        Object.assign(titles, titlesOf(works, ids));
         return { key, performer: p.performer, album: p.album, tracks: tracksOf(works, ids) };
       });
     return { work, count: instances.reduce((n, p) => n + p.tracks.length, 0), instances };
   });
   list.sort((a, b) => b.count - a.count || a.work.localeCompare(b.work));
-  return { composer: name, count, works: list, others: tracksOf(works, others) };
+  return { composer: name, count, works: list, others: tracksOf(works, others), titles };
 }

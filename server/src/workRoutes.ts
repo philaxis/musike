@@ -32,19 +32,20 @@ export function registerWorkRoutes(app: FastifyInstance) {
   });
 
   // Keys and names come in the query: they can run past the router's 100-character limit for a path segment.
+  // `titles`: row titles of the tracks with a movement ("II. Adagio"), by track ID; tracks keep their own title.
   app.get("/api/works/album", async (req) => {
     const { key = "" } = req.query as { key?: string };
-    const tracks = albumTracks(await currentWorks(), key);
+    const { tracks, titles } = albumTracks(await currentWorks(), key);
     if (!tracks.length) throw new HttpError(404, msg("workAlbumNotFound"));
     const artists = [...new Set(tracks.map((t) => t.artist).filter(Boolean))];
-    return { album: { key, name: albumName(key), artists }, tracks };
+    return { album: { key, name: albumName(key), artists }, tracks, titles };
   });
 
   app.get("/api/works/instance", async (req) => {
     const { key = "" } = req.query as { key?: string };
-    const tracks = instanceTracks(await currentWorks(), key);
+    const { tracks, titles } = instanceTracks(await currentWorks(), key);
     if (!tracks.length) throw new HttpError(404, msg("instanceNotFound"));
-    return { instance: { key, ...parseInstance(key) }, tracks };
+    return { instance: { key, ...parseInstance(key) }, tracks, titles };
   });
 
   /** Composers of my tracks, most tracks first; `genre` keeps to one genre of the analysis. */

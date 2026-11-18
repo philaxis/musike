@@ -24,21 +24,25 @@ interface Loaded {
   describe: (t: Messages) => { kicker: string; title: string; sub: string };
   /** An album of my YouTube tracks: what to search YouTube Music's albums for. */
   youtubeQuery?: string;
+  /** Row titles of an album's or a performance's movements ("II. Adagio"), by track ID. */
+  titles?: Record<string, string>;
 }
 
 async function load(kind: Kind, id: string, signal: AbortSignal): Promise<Loaded> {
   if (kind === "album") {
-    const { album, tracks } = await server.workAlbum(id, signal);
+    const { album, tracks, titles } = await server.workAlbum(id, signal);
     return {
       tracks,
+      titles,
       describe: (t) => ({ kicker: t.works.album, title: album.name, sub: album.artists.slice(0, 3).join(", ") }),
       youtubeQuery: [album.name, album.artists.length === 1 ? album.artists[0] : ""].filter(Boolean).join(" "),
     };
   }
   if (kind === "performance") {
-    const { instance, tracks } = await server.performance(id, signal);
+    const { instance, tracks, titles } = await server.performance(id, signal);
     return {
       tracks,
+      titles,
       describe: (t) => ({
         kicker: [t.works.performance, instance.composer].filter(Boolean).join(" · "),
         title: instance.work,
@@ -152,7 +156,7 @@ export default function TasteTracks({ kind }: { kind: Kind }) {
       )}
       {page.status === "ok" && (
         <div className="px-2 md:px-3">
-          <TrackList tracks={tracks} />
+          <TrackList tracks={tracks} titleOf={page.data.titles && ((x) => page.data.titles?.[x.id] ?? x.title)} />
         </div>
       )}
     </div>

@@ -28,6 +28,8 @@ import { startTrackDrag } from "./TrackDrag";
 
 interface RowProps {
   track: Track;
+  /** What the row calls the track (a movement's own name); `track.title` unless the list says otherwise. */
+  title: string;
   position: number;
   /** A click on the row: plays it, or picks it (Ctrl/Shift, or while picking). */
   onClick: (e: MouseEvent) => void;
@@ -50,6 +52,7 @@ interface RowProps {
 
 function TrackRow({
   track,
+  title,
   position,
   onClick,
   onPlayPart,
@@ -150,7 +153,7 @@ function TrackRow({
 
       <div className="pointer-events-none min-w-0">
         <p className={cn("truncate text-[15px] leading-tight font-medium", isCurrent ? "text-accent-text" : "text-fg")}>
-          {track.title}
+          {title}
         </p>
         <p className="mt-0.5 flex items-center gap-1.5 truncate text-[13px] text-fg-2">
           {track.kind === "video" && <VideoCameraIcon size={13} className="shrink-0 text-fg-3" aria-label={t.common.video} />}
@@ -260,6 +263,8 @@ interface ListProps {
   alwaysBar?: boolean;
   /** Where the sticky selection bar sticks on pages without a desktop header (`md:top-0`). */
   barClassName?: string;
+  /** What a row calls its track, when not its own title (a movement: "II. Adagio"); played and queued tracks keep theirs. */
+  titleOf?: (track: Track, i: number) => string;
 }
 
 export function TrackList({
@@ -272,6 +277,7 @@ export function TrackList({
   selectable = true,
   alwaysBar = false,
   barClassName,
+  titleOf,
 }: ListProps) {
   const playList = usePlayer((s) => s.playList);
   const t = useT();
@@ -351,6 +357,7 @@ export function TrackList({
             key={`${track.id}-${i}`}
             track={track}
             position={i}
+            title={titleOf?.(track, i) ?? track.title}
             showAlbum={showAlbum}
             check={!sel.enabled ? "none" : selecting ? "always" : alwaysBar ? "phone" : "hover"}
             selected={sel.has(track.id)}

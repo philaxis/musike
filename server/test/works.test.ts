@@ -58,15 +58,15 @@ describe("works: performances", () => {
   it("orders movements by number, unnumbered ones after by title", () => {
     const works = sample([sonata(2, "Adagio"), sonata(null, "Coda"), sonata(4, "Presto agitato"), sonata(null, "Bonus"), sonata(1, "Allegro")]);
     assert.deepEqual(
-      instanceTracks(works, BRAHMS).map((t) => t.title),
+      instanceTracks(works, BRAHMS).tracks.map((t) => t.title),
       ["Allegro", "Adagio", "Presto agitato", "Bonus", "Coda"],
     );
   });
 
   it("never mixes two performances of one work", () => {
     const works = sample([sonata(1, "Allegro"), sonata(1, "Allegro (Mutter)", OTHER), sonata(2, "Adagio"), sonata(2, "Adagio (Mutter)", OTHER)]);
-    assert.deepEqual(instanceTracks(works, BRAHMS).map((t) => t.id), [vid(0), vid(2)]);
-    assert.deepEqual(instanceTracks(works, OTHER).map((t) => t.id), [vid(1), vid(3)]);
+    assert.deepEqual(instanceTracks(works, BRAHMS).tracks.map((t) => t.id), [vid(0), vid(2)]);
+    assert.deepEqual(instanceTracks(works, OTHER).tracks.map((t) => t.id), [vid(1), vid(3)]);
     const page = composerWorks(works, "Johannes Brahms")!;
     assert.equal(page.works.length, 1);
     assert.deepEqual(
@@ -81,7 +81,7 @@ describe("works: performances", () => {
   it("keeps a performance of an unknown composer together, without a composer", () => {
     const row = (n: number): Row => ({ title: `Part ${n}`, work: "Suite for Piano and Orchestra", movement: { n }, instance: UNKNOWN });
     const works = sample([row(2), row(1)]);
-    assert.deepEqual(instanceTracks(works, UNKNOWN).map((t) => t.title), ["Part 1", "Part 2"]);
+    assert.deepEqual(instanceTracks(works, UNKNOWN).tracks.map((t) => t.title), ["Part 1", "Part 2"]);
     assert.deepEqual(trackWorks(works, vid(0)).instance, { key: UNKNOWN, work: "Suite for Piano and Orchestra", performer: "Dmitry Masleev", count: 2 });
     assert.equal(trackWorks(works, vid(0)).composer, null);
   });
@@ -93,6 +93,19 @@ describe("works: performances", () => {
       performer: "Arthur Rubinstein",
       album: "",
     });
+  });
+
+  it("names a movement by its Roman number, else by the title without the work", () => {
+    const works = sample([
+      { ...sonata(2, "Adagio"), title: "Brahms: Violin Sonata No. 3 in D Minor, Op. 108: II. Adagio" },
+      { ...sonata(4, "x"), movement: { n: 4 }, title: "Brahms: Violin Sonata No. 3 in D Minor, Op. 108: IV. Presto agitato" },
+      { ...sonata(null, "Coda"), movement: { title: "Coda" } },
+      sonata(null, "Bonus"),
+    ]);
+    const { tracks, titles } = instanceTracks(works, BRAHMS);
+    assert.deepEqual(titles, { [vid(0)]: "II. Adagio", [vid(1)]: "IV. Presto agitato", [vid(2)]: "Coda" });
+    // The tracks themselves keep their own titles (they go to the queue and playlists as they are).
+    assert.equal(tracks[0].title, "Brahms: Violin Sonata No. 3 in D Minor, Op. 108: II. Adagio");
   });
 });
 
@@ -126,12 +139,21 @@ describe("works: albums and composers", () => {
     assert.equal(trackWorks(works, vid(0)).album?.count, 1);
     assert.equal(trackWorks(works, vid(0)).album?.name, "Greatest Hits");
     assert.notEqual(trackWorks(works, vid(0)).album?.key, trackWorks(works, vid(1)).album?.key);
-    assert.deepEqual(albumTracks(works, "Landscapes").map((t) => t.title), ["Rhapsody", "Prelude", "Concerto"]);
+    assert.deepEqual(albumTracks(works, "Landscapes").tracks.map((t) => t.title), ["Rhapsody", "Prelude", "Concerto"]);
   });
 
   it("keeps an album's performances together in movement order", () => {
     const works = sample([sonata(2, "Adagio"), { title: "Encore", album: "Brahms: The Violin Sonatas", artist: "Pinchas Zukerman" }, sonata(1, "Allegro")]);
-    assert.deepEqual(albumTracks(works, "Brahms: The Violin Sonatas").map((t) => t.title), ["Allegro", "Adagio", "Encore"]);
+    assert.deepEqual(albumTracks(works, "Brahms: The Violin Sonatas").tracks.map((t) => t.title), ["Allegro", "Adagio", "Encore"]);
+  });
+
+  it("adds the work to a movement's row title on an album of several works", () => {
+    const first = "Johannes Brahms | Violin Sonata No. 1, Op. 78 | Pinchas Zukerman | Brahms: The Violin Sonatas";
+    const works = sample([sonata(1, "Allegro"), { ...sonata(1, "Vivace"), work: "Violin Sonata No. 1, Op. 78", instance: first }]);
+    assert.deepEqual(albumTracks(works, "Brahms: The Violin Sonatas").titles, {
+      [vid(1)]: "I. Vivace · Violin Sonata No. 1, Op. 78",
+      [vid(0)]: "I. Allegro · Violin Sonata No. 3 in D minor, Op. 108",
+    });
   });
 
   it("lists composers by track count, of one genre if asked", () => {

@@ -221,6 +221,8 @@ export interface ComposerPage {
   works: { work: string; count: number; instances: { key: string; performer: string; album: string; tracks: Track[] }[] }[];
   /** The composer's tracks without a work. */
   others: Track[];
+  /** Row titles of the tracks with a movement ("II. Adagio"), by track ID. */
+  titles: Record<string, string>;
 }
 
 const q = (params: Record<string, string | number | undefined>) => {
@@ -309,8 +311,12 @@ export const server = {
   mix: (id: string, signal?: AbortSignal) => request<Mix>(`/api/taste/mixes/${encodeURIComponent(id)}`, { signal }),
   trackWorks: (id: string, signal?: AbortSignal) => request<TrackWorks>(`/api/works/track/${id}`, { signal }),
   workAlbum: (key: string, signal?: AbortSignal) =>
-    request<{ album: { key: string; name: string; artists: string[] }; tracks: Track[] }>(`/api/works/album${q({ key })}`, { signal }),
-  performance: (key: string, signal?: AbortSignal) => request<{ instance: Performance; tracks: Track[] }>(`/api/works/instance${q({ key })}`, { signal }),
+    request<{ album: { key: string; name: string; artists: string[] }; tracks: Track[]; titles: Record<string, string> }>(
+      `/api/works/album${q({ key })}`,
+      { signal },
+    ),
+  performance: (key: string, signal?: AbortSignal) =>
+    request<{ instance: Performance; tracks: Track[]; titles: Record<string, string> }>(`/api/works/instance${q({ key })}`, { signal }),
   composers: (genre: string | undefined, signal?: AbortSignal) =>
     request<{ ready: boolean; composers: ComposerCard[] }>(`/api/works/composers${q({ genre })}`, { signal }),
   composer: (name: string, signal?: AbortSignal) => request<ComposerPage>(`/api/works/composer${q({ name })}`, { signal }),

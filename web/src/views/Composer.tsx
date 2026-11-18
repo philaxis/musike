@@ -17,7 +17,7 @@ import { server, type ComposerPage } from "../lib/server";
 type Performance = ComposerPage["works"][number]["instances"][number];
 
 /** One performance of a work: performer, album and track count; opens to its movements, ⋯ plays or queues it whole. */
-function PerformanceRow({ work, p }: { work: string; p: Performance }) {
+function PerformanceRow({ work, p, titles }: { work: string; p: Performance; titles: Record<string, string> }) {
   const t = useT();
   const [open, setOpen] = useState(false);
   const performer = p.performer || t.works.unknownPerformer;
@@ -45,7 +45,7 @@ function PerformanceRow({ work, p }: { work: string; p: Performance }) {
       </div>
       {open && (
         <div className="pb-2 md:pl-12">
-          <TrackList tracks={p.tracks} showAlbum={false} header={false} selectable={false} />
+          <TrackList tracks={p.tracks} showAlbum={false} header={false} selectable={false} titleOf={(x) => titles[x.id] ?? x.title} />
         </div>
       )}
     </li>
@@ -105,7 +105,7 @@ export default function Composer() {
               </div>
               <ul className="flex flex-col">
                 {w.instances.map((p) => (
-                  <PerformanceRow key={p.key} work={w.work} p={p} />
+                  <PerformanceRow key={p.key} work={w.work} p={p} titles={data.titles} />
                 ))}
               </ul>
             </section>
