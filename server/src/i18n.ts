@@ -65,6 +65,20 @@ const en = {
   keepYoutubeOnly: "Only YouTube tracks can be kept on the server.",
   keepNotFound: "There is no kept copy of this track.",
   hideNothing: "Send the track IDs (ids) or the folder (root) to hide or show.",
+  // Song box, tags, bundles, Google account
+  idsRequired: "Send a list of track IDs.",
+  tagsRequired: "Send at least one tag.",
+  invalidSource: "Unknown source.",
+  trackNotFound: "Track {id} isn't in the song box, the music folders or the library.",
+  bundleNotFound: "Bundle not found.",
+  bundleTitleRequired: "Give the bundle a title.",
+  bundlePartsRequired: "A bundle needs 1 to 200 tracks (no bundles inside).",
+  bundleNotPlayable: "A bundle plays through its parts.",
+  googleNoClient: "The Google sign-in settings file is missing on the server.",
+  googleNotConnected: "No YouTube account is connected.",
+  googleReconnect: "The YouTube connection has ended. Connect again in Settings.",
+  googleFailed: "YouTube didn't answer as expected ({detail}).",
+  likedVideos: "Liked videos",
 };
 
 export type MsgKey = keyof typeof en;
@@ -128,6 +142,19 @@ const pt: Record<MsgKey, string> = {
   keepYoutubeOnly: "Só faixas do YouTube podem ser guardadas no servidor.",
   keepNotFound: "Não há cópia guardada desta faixa.",
   hideNothing: "Envie os IDs das faixas (ids) ou a pasta (root) para ocultar ou mostrar.",
+  idsRequired: "Envie uma lista de IDs de faixas.",
+  tagsRequired: "Envie pelo menos uma etiqueta.",
+  invalidSource: "Origem desconhecida.",
+  trackNotFound: "A faixa {id} não está na caixa, nas pastas de música nem na biblioteca.",
+  bundleNotFound: "Pacote não encontrado.",
+  bundleTitleRequired: "Dê um título ao pacote.",
+  bundlePartsRequired: "Um pacote precisa de 1 a 200 faixas (sem pacotes dentro).",
+  bundleNotPlayable: "Um pacote toca pelas suas partes.",
+  googleNoClient: "Falta no servidor o arquivo de configuração do login do Google.",
+  googleNotConnected: "Nenhuma conta do YouTube conectada.",
+  googleReconnect: "A conexão com o YouTube terminou. Conecte de novo nas Configurações.",
+  googleFailed: "O YouTube não respondeu como esperado ({detail}).",
+  likedVideos: "Vídeos curtidos",
 };
 
 const ko: Record<MsgKey, string> = {
@@ -189,6 +216,19 @@ const ko: Record<MsgKey, string> = {
   keepYoutubeOnly: "유튜브 곡만 서버에 받아 둘 수 있어요.",
   keepNotFound: "이 곡은 받아 둔 파일이 없어요.",
   hideNothing: "숨기거나 다시 보일 곡 번호(ids)나 폴더(root)를 보내 주세요.",
+  idsRequired: "곡 번호 목록을 보내 주세요.",
+  tagsRequired: "꼬리표를 하나 이상 보내 주세요.",
+  invalidSource: "모르는 출처예요.",
+  trackNotFound: "{id} 곡이 곡 상자, 음악 폴더, 보관함 어디에도 없어요.",
+  bundleNotFound: "묶음을 찾을 수 없어요.",
+  bundleTitleRequired: "묶음 이름을 정해 주세요.",
+  bundlePartsRequired: "묶음에는 곡이 1개부터 200개까지 들어가요(묶음 안에 묶음은 안 돼요).",
+  bundleNotPlayable: "묶음은 그 안의 곡들로 재생해요.",
+  googleNoClient: "서버에 구글 로그인 설정 파일이 없어요.",
+  googleNotConnected: "연결된 유튜브 계정이 없어요.",
+  googleReconnect: "유튜브 연결이 끊겼어요. 설정에서 다시 연결해 주세요.",
+  googleFailed: "유튜브가 예상과 다르게 답했어요({detail}).",
+  likedVideos: "좋아요 표시한 동영상",
 };
 
 const CATALOG: Record<Lang, Record<MsgKey, string>> = { en, "pt-BR": pt, ko };

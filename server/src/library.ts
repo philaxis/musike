@@ -1,5 +1,5 @@
 import { msg } from "./i18n.js";
-import { HttpError, isLocalId, TRACK_ID, type Library, type Playlist, type Track } from "./types.js";
+import { BUNDLE_ID, HttpError, isBundleId, isLocalId, TRACK_ID, type Bundle, type Library, type Playlist, type Track } from "./types.js";
 
 // No Node-only imports here: the Android app runs this same module, with its own storage.
 
@@ -58,7 +58,8 @@ export function sanitizeTrack(input: unknown): Track {
     duration: typeof t.duration === "number" && Number.isFinite(t.duration) ? Math.max(0, Math.round(t.duration)) : 0,
     thumb: url(t.thumb),
     art: url(t.art),
-    kind: t.kind === "video" ? "video" : "song",
+    // A bundle row in a playlist is a reference: its parts live in the library's `bundles`.
+    kind: isBundleId(id) ? "bundle" : t.kind === "video" ? "video" : "song",
     ...(isLocalId(id) ? { source: "local" as const } : {}),
     ...(year ? { year } : {}),
   };
@@ -212,7 +213,15 @@ function cleanLibrary(input: unknown): Library {
     const id = str(p.id, 64);
     return [{ id: /^[\w-]{8,64}$/.test(id) ? id : randomUUID(), name, createdAt: num(p.createdAt), updatedAt: num(p.updatedAt), tracks: cleanTracks(p.tracks) }];
   });
-  return { favorites: cleanTracks(lib.favorites), playlists, history: cleanTracks(lib.history, HISTORY_LIMIT) };
+  const bundles = (Array.isArray(lib.bundles) ? lib.bundles : []).slice(0, MAX_PLAYLISTS).flatMap((raw): Bundle[] => {
+    const b = (raw ?? {}) as Record<string, unknown>;
+    const id = str(b.id, 21);
+    const title = str(b.title, 200).trim();
+    const parts = cleanTracks(b.parts, MAX_PARTS).filter((t) => t.kind !== "bundle");
+    if (!BUNDLE_ID.test(id) || !title || !parts.length) return [];
+    return [{ id, title, ...(str(b.artist, 300).trim() ? { artist: str(b.artist, 300).trim() } : {}), parts, tags: cleanTags(b.tags) }];
+  });
+  return { favorites: cleanTracks(lib.favorites), playlists, history: cleanTracks(lib.history, HISTORY_LIMIT), bundles };
 }
 
 export interface ImportResult {
@@ -269,6 +278,136 @@ export async function importLibrary(input: unknown, mode: "merge" | "replace"): 
   }
 
   lib.history = union(lib.history, incoming.history).list.slice(0, HISTORY_LIMIT);
+  const bundles = (lib.bundles ??= []);
+  for (const b of incoming.bundles ?? []) if (!bundles.some((x) => x.id === b.id)) bundles.push(b);
   await persist();
   return result;
+}
+
+// Tags: short free-form labels ("작품:Asayake", "편곡:브라스") on tracks and bundles. What they mean is up to the agent.
+
+const MAX_TAGS = 30;
+
+/** Trimmed, single-spaced, at most 80 characters each, no duplicates. */
+export function cleanTags(input: unknown): string[] {
+  if (!Array.isArray(input)) return [];
+  const out: string[] = [];
+  for (const raw of input) {
+    const tag = typeof raw === "string" ? raw.replace(/\s+/g, " ").trim().slice(0, 80) : "";
+    if (tag && !out.includes(tag)) out.push(tag);
+    if (out.length >= MAX_TAGS) break;
+  }
+  return out;
+}
+
+// Bundles: several tracks played in order as one row. Playlists, favorites and history hold a reference track
+// (kind "bundle", the bundle's id); the parts are here.
+
+const MAX_PARTS = 200;
+const BASE64URL = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
+
+export function newBundleId(): string {
+  const bytes = globalThis.crypto.getRandomValues(new Uint8Array(20));
+  return "B" + Array.from(bytes, (b) => BASE64URL[b & 63]).join("");
+}
+
+/** The row that stands for a bundle in lists: its title, the parts' total length and the first part's cover. */
+export function bundleTrack(b: Bundle): Track {
+  const first = b.parts[0];
+  return {
+    id: b.id,
+    title: b.title,
+    artist: b.artist ?? first?.artist ?? "",
+    duration: b.parts.reduce((n, t) => n + t.duration, 0),
+    thumb: first?.thumb ?? "",
+    art: first?.art ?? "",
+    kind: "bundle",
+  };
+}
+
+function findBundle(lib: Library, id: string): Bundle {
+  const b = lib.bundles?.find((x) => x.id === id);
+  if (!b) throw new HttpError(404, msg("bundleNotFound"));
+  return b;
+}
+
+export async function getBundle(id: string): Promise<Bundle> {
+  return findBundle(await load(), id);
+}
+
+export interface BundleInput {
+  title?: string;
+  artist?: string;
+  parts?: Track[];
+  tags?: string[];
+}
+
+function checkParts(parts: Track[]): Track[] {
+  if (!parts.length || parts.length > MAX_PARTS || parts.some((t) => t.kind === "bundle")) throw new HttpError(400, msg("bundlePartsRequired"));
+  return parts;
+}
+
+export async function createBundle(input: BundleInput): Promise<Bundle> {
+  const lib = await load();
+  const title = (input.title ?? "").trim().slice(0, 200);
+  if (!title) throw new HttpError(400, msg("bundleTitleRequired"));
+  const artist = input.artist?.trim().slice(0, 300);
+  const bundle: Bundle = { id: newBundleId(), title, ...(artist ? { artist } : {}), parts: checkParts(input.parts ?? []), tags: cleanTags(input.tags) };
+  (lib.bundles ??= []).unshift(bundle);
+  await persist();
+  return bundle;
+}
+
+/** Rows that stand for a bundle elsewhere follow its new title, artist and cover. */
+function refreshRefs(lib: Library, b: Bundle) {
+  const row = bundleTrack(b);
+  const swap = (list: Track[]) => list.map((t) => (t.id === b.id ? row : t));
+  lib.favorites = swap(lib.favorites);
+  lib.history = swap(lib.history);
+  for (const p of lib.playlists) p.tracks = swap(p.tracks);
+}
+
+/** Changes the given fields; `artist: ""` removes the artist. */
+export async function updateBundle(id: string, input: BundleInput): Promise<Bundle> {
+  const lib = await load();
+  const b = findBundle(lib, id);
+  if (input.title !== undefined) {
+    const title = input.title.trim().slice(0, 200);
+    if (!title) throw new HttpError(400, msg("bundleTitleRequired"));
+    b.title = title;
+  }
+  if (input.artist !== undefined) {
+    const artist = input.artist.trim().slice(0, 300);
+    if (artist) b.artist = artist;
+    else delete b.artist;
+  }
+  if (input.parts) b.parts = checkParts(input.parts);
+  if (input.tags) b.tags = cleanTags(input.tags);
+  refreshRefs(lib, b);
+  await persist();
+  return b;
+}
+
+/** Deletes a bundle and its rows in playlists, favorites and history (the parts themselves stay where they are). */
+export async function deleteBundle(id: string): Promise<void> {
+  const lib = await load();
+  findBundle(lib, id);
+  lib.bundles = lib.bundles!.filter((b) => b.id !== id);
+  lib.favorites = lib.favorites.filter((t) => t.id !== id);
+  lib.history = lib.history.filter((t) => t.id !== id);
+  for (const p of lib.playlists) p.tracks = p.tracks.filter((t) => t.id !== id);
+  await persist();
+}
+
+/** Applies `change` to the tags of the bundles among `ids`; returns the ids that were bundles. */
+export async function editBundleTags(ids: string[], change: (tags: string[]) => string[]): Promise<string[]> {
+  const lib = await load();
+  const done: string[] = [];
+  for (const b of lib.bundles ?? []) {
+    if (!ids.includes(b.id)) continue;
+    b.tags = cleanTags(change(b.tags));
+    done.push(b.id);
+  }
+  if (done.length) await persist();
+  return done;
 }

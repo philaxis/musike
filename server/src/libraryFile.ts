@@ -5,9 +5,9 @@ import { config } from "./config.js";
 import type { LibraryStorage } from "./library.js";
 import { backupDaily } from "./libraryBackup.js";
 
-/** The library as data/library.json, replaced atomically (write a temp file, then rename over). */
-export function fileStorage(dir = config.dataDir): LibraryStorage {
-  const file = path.join(dir, "library.json");
+/** A JSON file in the data folder (library.json, box.json), replaced atomically (write a temp file, then rename over). */
+export function fileStorage(dir = config.dataDir, name = "library.json"): LibraryStorage {
+  const file = path.join(dir, name);
   return {
     read: async () => (existsSync(file) ? readFile(file, "utf8") : null),
     write: async (json) => {

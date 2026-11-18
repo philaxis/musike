@@ -4,7 +4,8 @@ import { langOf, msg } from "./i18n.js";
 import { keep, keepItems, unkeep } from "./keep.js";
 import * as local from "./local.js";
 import { importPlaylist, previewPlaylist } from "./playlistImport.js";
-import { HttpError, isLocalId, LOCAL_ID, TRACK_ID, type Track } from "./types.js";
+import * as library from "./library.js";
+import { HttpError, isBundleId, isLocalId, LOCAL_ID, TRACK_ID, type Track } from "./types.js";
 import { resolveStreams } from "./ytdlp.js";
 
 // Routes of the server edition: "내 음악" (local folders), YouTube playlist import, keep on server, track lookup.
@@ -15,8 +16,16 @@ export function trackId(params: unknown): string {
   return id;
 }
 
+/** A track ID that has media of its own: a bundle plays through its parts, each streamed by its own ID. */
+export function mediaId(params: unknown): string {
+  const id = trackId(params);
+  if (isBundleId(id)) throw new HttpError(400, msg("bundleNotPlayable"));
+  return id;
+}
+
 /** A track by ID for links like /play/<id>: local ones from the index, YouTube ones resolved by yt-dlp. */
 async function anyTrack(id: string): Promise<Track> {
+  if (isBundleId(id)) return library.bundleTrack(await library.getBundle(id));
   if (isLocalId(id)) {
     const t = local.localTrack(id);
     if (!t) throw new HttpError(404, msg("localNotFound"));

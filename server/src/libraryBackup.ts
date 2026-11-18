@@ -2,12 +2,12 @@ import { existsSync } from "node:fs";
 import { copyFile, mkdir, readdir, rm } from "node:fs/promises";
 import path from "node:path";
 
-// Before the first change of each day, library.json is copied to backups/library-YYYY-MM-DD.json (the last 14 kept),
-// so a playlist deleted by mistake (by hand or by an agent) can be brought back.
+// Before the first change of each day, library.json (and box.json) is copied to backups/<name>-YYYY-MM-DD.json
+// (the last 14 of each kept), so a playlist deleted by mistake (by hand or by an agent) can be brought back.
 
 const KEEP_DAYS = 14;
-const BACKUP_NAME = /^library-\d{4}-\d{2}-\d{2}\.json$/;
-let doneFor = "";
+/** File → the day its backup was made. */
+const doneFor = new Map<string, string>();
 
 /** Today's date on the server's clock, as YYYY-MM-DD. */
 export function today(now = new Date()): string {
@@ -18,14 +18,16 @@ export function today(now = new Date()): string {
 /** Copies `file` into `<its folder>/backups` once per day, before it is overwritten. */
 export async function backupDaily(file: string): Promise<void> {
   const day = today();
-  if (doneFor === day || !existsSync(file)) return;
+  if (doneFor.get(file) === day || !existsSync(file)) return;
   const dir = path.join(path.dirname(file), "backups");
-  const target = path.join(dir, `library-${day}.json`);
+  const base = path.basename(file, ".json");
+  const target = path.join(dir, `${base}-${day}.json`);
   if (!existsSync(target)) {
     await mkdir(dir, { recursive: true });
     await copyFile(file, target);
-    const old = (await readdir(dir)).filter((n) => BACKUP_NAME.test(n)).sort().slice(0, -KEEP_DAYS);
+    const mine = new RegExp(`^${base}-\\d{4}-\\d{2}-\\d{2}\\.json$`);
+    const old = (await readdir(dir)).filter((n) => mine.test(n)).sort().slice(0, -KEEP_DAYS);
     await Promise.all(old.map((n) => rm(path.join(dir, n), { force: true })));
   }
-  doneFor = day;
+  doneFor.set(file, day);
 }
