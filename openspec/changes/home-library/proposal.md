@@ -21,7 +21,7 @@
 - `music-map`: 「음악 지도」 들어가는 길이 보관함 맨 아래 작은 링크로
 
 ## Impact
-- 서버: `server/src/shelves.ts`(새, 순수 계산), `server/src/homeRoutes.ts`(새), `stats.ts`(☀ 읽기·보여 주기 함수 내보냄), `workRoutes.ts`(`currentWorks` 내보냄), `app.ts`, `i18n.ts`(`invalidMonth`), 시험 `server/test/home.test.ts`
+- 서버: `server/src/shelves.ts`(새, 순수 계산), `server/src/homeRoutes.ts`(새, 앨범은 `loadWorks()`로), `stats.ts`(☀ 읽기·보여 주기 함수 내보냄), `app.ts`, `i18n.ts`(`invalidMonth`), 시험 `server/test/home.test.ts`
 - 웹: `views/{Home,Library,SongBox}.tsx`, 새 `views/{AlbumShelf,Sun}.tsx`, `components/{AlbumTiles,TasteCards,Page,GoogleSection,CustomizeSection}.tsx`, `lib/{server,routes,format}.ts`, `App.tsx`(경로 두 줄), `i18n/{ko,en,pt}.ts`
 - 문서: `AGENTS.md` API·웹 경로 표, 헤르메스 기술 문서(사용자가 따로)
 - 데이터: 바뀌지 않음(읽기만)
