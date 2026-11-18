@@ -79,6 +79,9 @@ const en = {
   googleReconnect: "The YouTube connection has ended. Connect again in Settings.",
   googleFailed: "YouTube didn't answer as expected ({detail}).",
   likedVideos: "Liked videos",
+  // Album files split into songs
+  invalidSegments: "Invalid song list ({detail}).",
+  segmentNoVideo: "A song cut out of an album file plays as sound only.",
 };
 
 export type MsgKey = keyof typeof en;
@@ -155,6 +158,9 @@ const pt: Record<MsgKey, string> = {
   googleReconnect: "A conexão com o YouTube terminou. Conecte de novo nas Configurações.",
   googleFailed: "O YouTube não respondeu como esperado ({detail}).",
   likedVideos: "Vídeos curtidos",
+  // Album files split into songs
+  invalidSegments: "Lista de músicas inválida ({detail}).",
+  segmentNoVideo: "Uma música recortada de um arquivo de álbum toca só como áudio.",
 };
 
 const ko: Record<MsgKey, string> = {
@@ -229,6 +235,9 @@ const ko: Record<MsgKey, string> = {
   googleReconnect: "유튜브 연결이 끊겼어요. 설정에서 다시 연결해 주세요.",
   googleFailed: "유튜브가 예상과 다르게 답했어요({detail}).",
   likedVideos: "좋아요 표시한 동영상",
+  // Album files split into songs
+  invalidSegments: "곡 나눔 목록이 잘못됐어요({detail}).",
+  segmentNoVideo: "앨범 파일에서 잘라 낸 곡은 소리로만 재생해요.",
 };
 
 const CATALOG: Record<Lang, Record<MsgKey, string>> = { en, "pt-BR": pt, ko };

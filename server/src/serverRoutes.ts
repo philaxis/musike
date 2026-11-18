@@ -93,6 +93,18 @@ export function registerServerRoutes(app: FastifyInstance) {
 
   app.delete("/api/local/hidden", (req) => local.unhide(parseTarget(req.body)));
 
+  // Album files split into songs (data/segments.json): `path` is the file's path inside the root.
+
+  app.get("/api/local/segments", (req) => {
+    const { root, path } = req.query as { root?: string; path?: string };
+    return local.getSegments(root ?? "", path || undefined);
+  });
+
+  app.put("/api/local/segments", (req) => {
+    const { root, path } = req.query as { root?: string; path?: string };
+    return local.setSegments(root ?? "", path ?? "", (req.body as { segments?: unknown } | null)?.segments);
+  });
+
   app.get("/api/local/lookup", async (req) => {
     const { path } = req.query as { path?: string };
     return { track: await local.lookupPath(path ?? "") };

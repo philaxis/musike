@@ -8,6 +8,7 @@ import { config } from "./config.js";
 import { msg } from "./i18n.js";
 import { HiddenStore, visibleTracks, type HideTarget } from "./hidden.js";
 import { albumFolderName, localId, mediaFiles, nameTrack, naturalCompare, parseRoots, relInRoot, stripExt, YT_ID_SUFFIX, type Tags } from "./localNames.js";
+import { parseSegments, segmentId, segmentTracks, SegmentStore } from "./segments.js";
 import { serveFile } from "./stream.js";
 import { tools } from "./tools.js";
 import { HttpError, isLocalId, VIDEO_ID, type Track } from "./types.js";
@@ -47,6 +48,8 @@ interface Entry {
   file: string;
   probe: Probe;
   track: Track;
+  /** A song of a split album file (segments.ts): this range of the file, whose own track is `fileId`. */
+  segment?: { start: number; end: number; fileId: string };
 }
 
 export interface LocalAlbum {
@@ -80,6 +83,8 @@ const indexFile = () => path.join(config.dataDir, "local-index.json");
 const coverUrl = (id: string) => `/api/local/${id}/cover`;
 /** Hidden tracks and roots (hidden.ts); loaded by startLocal. */
 let hidden = new HiddenStore(path.join(config.dataDir, "hidden.json"));
+/** Album files split into songs (segments.ts); loaded by startLocal. */
+let segments = new SegmentStore(path.join(config.dataDir, "segments.json"));
 
 /** Configured roots, plus the keep folder as "받아 둔 곡" unless it is already one of them. */
 function configuredRoots(): { name: string; path: string }[] {
@@ -170,21 +175,32 @@ function derive() {
       });
       const years = albumEntries.map((e) => e.track.year).filter((y): y is number => !!y);
       const year = folder ? (folder.year ?? (years.length ? Math.min(...years) : undefined)) : albumEntries[0].track.year;
+      // A split file stays a track (playlists keep it), but the album lists its songs in its place.
+      const ids: string[] = [];
+      for (const e of albumEntries) {
+        nextEntries.set(e.track.id, e);
+        const kept = root === keep ? YT_ID_SUFFIX.exec(stripExt(path.posix.basename(e.rel))) : null;
+        if (kept) nextKept.set(kept[1], e);
+        const songs = segments.get(root.name, e.rel);
+        if (!songs) {
+          ids.push(e.track.id);
+          continue;
+        }
+        segmentTracks(e.track, root.name, e.rel, songs).forEach((track, i) => {
+          nextEntries.set(track.id, { ...e, track, segment: { start: songs[i].start, end: songs[i].end, fileId: e.track.id } });
+          ids.push(track.id);
+        });
+      }
       rootAlbums.push({
         root: root.name,
         key,
         name: folder ? folder.title : albumEntries[0].track.title,
         ...(year ? { year } : {}),
         cover: albumEntries[0].track.thumb,
-        trackCount: albumEntries.length,
-        duration: albumEntries.reduce((n, e) => n + e.track.duration, 0),
-        ids: albumEntries.map((e) => e.track.id),
+        trackCount: ids.length,
+        duration: ids.reduce((n, id) => n + nextEntries.get(id)!.track.duration, 0),
+        ids,
       });
-      for (const e of albumEntries) {
-        nextEntries.set(e.track.id, e);
-        const kept = root === keep ? YT_ID_SUFFIX.exec(stripExt(path.posix.basename(e.rel))) : null;
-        if (kept) nextKept.set(kept[1], e);
-      }
     }
 
     rootAlbums.sort((a, b) => (a.year ?? 9999) - (b.year ?? 9999) || naturalCompare(a.name, b.name));
@@ -298,11 +314,12 @@ async function scanRoot(root: Root): Promise<boolean> {
   return changed;
 }
 
-/** Scans every root (or one), one scan at a time. */
+/** Scans every root (or one), one scan at a time; segments.json is read again too (an edited or installed file). */
 export function rescan(rootName?: string): Promise<void> {
   const run = async () => {
     let changed = false;
     for (const r of roots) if (!rootName || r.name === rootName) changed = (await scanRoot(r)) || changed;
+    await segments.load();
     derive();
     if (changed || !ready) await saveIndex().catch(() => {});
     ready = true;
@@ -318,6 +335,8 @@ export function rescan(rootName?: string): Promise<void> {
 export async function startLocal() {
   hidden = new HiddenStore(path.join(config.dataDir, "hidden.json"));
   await hidden.load();
+  segments = new SegmentStore(path.join(config.dataDir, "segments.json"));
+  await segments.load();
   await loadIndex();
   if (!roots.length) return;
   rescan().catch(() => {});
@@ -352,10 +371,14 @@ export function annotate(t: Track): Track {
   return VIDEO_ID.test(t.id) && keptById.has(t.id) ? { ...t, kept: true } : t;
 }
 
+/** A song of a split file is hidden on its own or with its file (an album hidden before it was split). */
+const isHiddenEntry = (e: Entry) =>
+  hidden.isHidden(e.track.id, e.root.name) || (!!e.segment && hidden.isHidden(e.segment.fileId, e.root.name));
+
 /** Listings leave hidden tracks out; with `show` they keep them, marked `hidden: true`. */
 function albumView(a: Album, show: boolean) {
   const tracks = a.ids.map((id) => present(entries.get(id)!));
-  return visibleTracks(tracks, (id) => hidden.isHidden(id, a.root), show);
+  return visibleTracks(tracks, (id) => isHiddenEntry(entries.get(id)!), show);
 }
 
 function albumCard(a: Album, show: boolean): LocalAlbum {
@@ -411,7 +434,7 @@ export function searchLocal(q: string, root: string | undefined, limit: number, 
   const out: Track[] = [];
   for (const e of ordered) {
     if (root && e.root.name !== root) continue;
-    const isHidden = hidden.isHidden(e.track.id, e.root.name);
+    const isHidden = isHiddenEntry(e);
     if (isHidden && !show) continue;
     if (words.length) {
       const hay = [e.track.title, e.track.artist, e.track.album ?? "", path.posix.basename(e.rel)].join("\n").toLocaleLowerCase();
@@ -485,7 +508,8 @@ function readable(id: string): Entry {
 export function localInfo(id: string) {
   const e = entries.get(id);
   if (!e) throw new HttpError(404, msg("localNotFound"));
-  return { track: present(e), hasVideo: !!e.probe.hasVideo };
+  // A song of a split file has no video mode: the file's video would run on past the song.
+  return { track: present(e), hasVideo: !!e.probe.hasVideo && !e.segment };
 }
 
 // Playback
@@ -506,42 +530,49 @@ const extOf = (file: string) => path.extname(file).slice(1).toLowerCase();
 
 export const audioMime = (file: string) => AUDIO_MIME[extOf(file)] ?? "application/octet-stream";
 
-/** "offset": audio is cut out of a video file on the fly and only restarts at `?t=`; "range": a plain file. */
+/** "offset": audio is cut out of a file on the fly and only restarts at `?t=`; "range": a plain file. */
 export function audioMode(id: string): "range" | "offset" {
-  return entries.get(id)?.probe.hasVideo ? "offset" : "range";
+  const e = entries.get(id);
+  return e?.probe.hasVideo || e?.segment ? "offset" : "range";
 }
 
 /** Video mode: the file as it is, with byte ranges. */
 export function streamLocalVideo(req: FastifyRequest, reply: FastifyReply, id: string) {
   const e = readable(id);
+  if (e.segment) throw new HttpError(400, msg("segmentNoVideo"));
   return serveFile(req, reply, e.file, VIDEO_MIME[extOf(e.file)] ?? audioMime(e.file));
 }
 
 /**
- * Audio mode. Audio files go out as they are (byte ranges). A file with video gets only its audio stream, remuxed
- * by FFmpeg without re-encoding and without touching the disk, starting at `?t=` seconds.
+ * Audio mode. Audio files go out as they are (byte ranges). A file with video, or a song of a split file, gets only
+ * its audio stream, remuxed by FFmpeg without re-encoding and without touching the disk, from `?t=` seconds into
+ * the track to its end.
  */
 export function streamLocalAudio(req: FastifyRequest, reply: FastifyReply, id: string) {
   const e = readable(id);
-  if (!e.probe.hasVideo) return serveFile(req, reply, e.file, audioMime(e.file));
+  if (!e.probe.hasVideo && !e.segment) return serveFile(req, reply, e.file, audioMime(e.file));
   const ffmpeg = tools().ffmpeg;
   if (!ffmpeg) throw new HttpError(503, msg("toolMissing", { tool: "FFmpeg" }), "tool_missing");
 
   const asked = Number((req.query as { t?: string }).t);
-  const duration = e.probe.duration ?? Infinity;
+  const from = e.segment?.start ?? 0;
+  const to = Math.min(e.segment?.end ?? Infinity, e.probe.duration || Infinity);
   // At or past the end, send the last second so the track ends and the queue moves on (never restart from 0).
-  const t = Number.isFinite(asked) && asked > 0 ? Math.max(0, Math.min(asked, duration - 1)) : 0;
+  const t = Number.isFinite(asked) && asked > 0 ? Math.max(0, Math.min(asked, to - from - 1)) : 0;
+  const at = from + t;
   const codec = e.probe.acodec ?? "";
   const webm = codec === "opus" || codec === "vorbis";
   const copy = webm || ["aac", "mp3", "alac"].includes(codec);
   // `-ss` before the input snaps back to the video's previous keyframe (8 s apart with a still cover), so the sound
-  // would start early: jump there a little before `t`, then drop the audio up to `t` exactly (cheap with stream copy).
-  const lead = Math.min(t, 30);
+  // would start early: jump there a little before `at`, then drop the audio up to `at` exactly (cheap with stream copy).
+  const lead = Math.min(at, 30);
   const args = [
     "-hide_banner", "-loglevel", "error", "-nostdin",
-    ...(t > lead ? ["-ss", (t - lead).toFixed(3)] : []),
+    ...(at > lead ? ["-ss", (at - lead).toFixed(3)] : []),
     "-i", e.file,
     ...(lead ? ["-ss", lead.toFixed(3)] : []),
+    // A song of a split file stops where the next one begins.
+    ...(e.segment ? ["-t", (to - at).toFixed(3)] : []),
     "-map", "0:a:0", "-vn", "-sn", "-dn",
     ...(copy ? ["-c:a", "copy"] : ["-c:a", "aac", "-b:a", "256k"]),
     // 1 s fragments: on a pipe, keyframe-only fragmenting of an audio stream makes huge fragments that decode badly.
@@ -601,9 +632,11 @@ function extractCover(e: Entry, out: string): Promise<string> {
 }
 
 /** The cover image of a local track: "<file name>.jpg" next to it, a folder image, else a frame from the video. */
-export async function serveCover(req: FastifyRequest, reply: FastifyReply, id: string) {
+export async function serveCover(req: FastifyRequest, reply: FastifyReply, id: string): Promise<unknown> {
   const e = entries.get(id);
   if (!e) throw new HttpError(404, msg("localNotFound"));
+  // A song of a split file shows its album's cover.
+  if (e.segment) return serveCover(req, reply, e.segment.fileId);
   const cached = path.join(config.cacheDir, "covers", `${id}.jpg`);
   let file: string | null = existsSync(cached) ? cached : null;
   if (!file && e.root.online) {
@@ -619,4 +652,39 @@ export async function serveCover(req: FastifyRequest, reply: FastifyReply, id: s
   }
   if (!file) throw new HttpError(404, msg("noCover"));
   return serveFile(req, reply, file, IMAGE_MIME[extOf(file)] ?? "image/jpeg", "public, max-age=86400");
+}
+
+// Split album files
+
+/** The track of the file `rel` in a root. */
+function fileEntry(root: string, rel: string): Entry {
+  rootAlbums(root);
+  const e = entries.get(localId(root, rel));
+  if (!e) throw new HttpError(404, msg("localNotFound"));
+  return e;
+}
+
+/** A file's songs with their track IDs (an empty list: not split), or without `rel` the split files of a root. */
+export function getSegments(root: string, rel?: string) {
+  if (!rel) {
+    rootAlbums(root);
+    return { root, files: segments.files(root) };
+  }
+  const e = fileEntry(root, rel);
+  const songs = segments.get(root, rel) ?? [];
+  return {
+    root,
+    path: rel,
+    id: e.track.id,
+    duration: e.probe.duration ?? 0,
+    segments: songs.map((s) => ({ ...s, id: segmentId(root, rel, s.no) })),
+  };
+}
+
+/** Replaces a file's songs (an empty list makes it whole again) and lists them at once. */
+export async function setSegments(root: string, rel: string, input: unknown) {
+  const e = fileEntry(root, rel);
+  await segments.set(root, rel, parseSegments(input, e.probe.duration));
+  derive();
+  return getSegments(root, rel);
 }

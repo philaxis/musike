@@ -96,8 +96,9 @@ let outgoing: { el: HTMLMediaElement; end: number; base: number; length: number;
   null;
 
 /**
- * A server file with a video stream plays in Audio mode as its sound alone, cut out on the fly: it takes no byte
- * ranges, so a seek starts it over at `?t=` and positions count from there. Known from `prepare`, else from the track.
+ * A server file with a video stream, or a song cut out of an album file, plays in Audio mode as its sound alone, cut
+ * out on the fly: it takes no byte ranges, so a seek starts it over at `?t=` and positions count from there. Known
+ * from `prepare` (asked before a server file's first load), else from the track.
  */
 const offsetAudio = new Map<string, boolean>();
 const playsFromOffset = (track: Track) =>
@@ -224,6 +225,20 @@ export const usePlayer = create<PlayerState>((set, get) => {
       activeMedia()?.pause();
       setMetadata(track);
       void lookupClip(track).then(() => mine === token && load(index, opts));
+      return;
+    }
+
+    // Whether a server file streams with byte ranges or from an offset comes from `prepare`: ask before its first load.
+    if (capabilities.serverLibrary && isLocal(track) && !offsetAudio.has(track.id)) {
+      const mine = ++token;
+      if (!opts.fade) {
+        set({ index, status: "loading", statusText: null, videoNote: null, position: opts.startAt ?? 0, duration: track.duration, buffered: 0 });
+        activeMedia()?.pause();
+      }
+      void prepare(track.id).then(() => {
+        if (!offsetAudio.has(track.id)) offsetAudio.set(track.id, track.kind === "video");
+        if (mine === token) load(index, opts);
+      });
       return;
     }
 

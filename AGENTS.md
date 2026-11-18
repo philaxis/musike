@@ -24,7 +24,8 @@
 | GET | `/api/local/albums?root=` · `/api/local/album?root=&key=` | 앨범 목록 · 앨범 곡 (숨긴 곡 빠짐, `&hidden=1`이면 같이) |
 | GET | `/api/local?q=&root=&limit=` | 내 음악에서 찾기 (숨긴 곡 빠짐, `&hidden=1`이면 같이) |
 | GET/POST/DELETE | `/api/local/hidden` · `{ids?, root?}` | 숨긴 것 `{ids, roots}` · 곡/뿌리 숨기기 · 숨기기 해제 (`data/hidden.json`, 파일은 그대로, 재생목록 곡은 그대로 재생) |
-| POST | `/api/local/rescan` | 폴더 다시 읽기 |
+| GET/PUT | `/api/local/segments?root=&path=` · `PUT {segments: [{no, start, end, title}]}` | 합친 앨범 파일의 곡 구간(가상 나눔, `data/segments.json`). `path` 없으면 나눈 파일 목록. 곡 번호는 `no`로 정해져 경계·제목을 고쳐도 그대로, 빈 목록이면 통째 파일로. 곡은 소리만, 통째 파일은 재생목록에서 그대로 재생 |
+| POST | `/api/local/rescan` | 폴더 다시 읽기 (`data/segments.json`도) |
 | GET | `/api/local/:id/cover` | 표지 |
 | GET | `/api/track/:id` | 곡 하나(로컬·유튜브) |
 | PUT | `/api/playlists/:pid/tracks` `{ids}` | 순서 통째로 바꾸기(지금 곡 번호의 순열만) |
