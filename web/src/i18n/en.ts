@@ -574,17 +574,18 @@ export const en = {
   /** Tracks that won't play here (blocked in this country, deleted, private, age-restricted): put aside, skipped. */
   aside: {
     /** Short, on a row. */
-    reason: { region: "Blocked here", gone: "Gone from YouTube", private: "Private", age: "Age-restricted" },
+    reason: { region: "Blocked here", gone: "Gone from YouTube", private: "Private", age: "Age-restricted", premium: "YouTube Premium only" },
     /** Why, in plain words, when the track is picked. */
     why: {
       region: "This video is blocked in this country on copyright grounds.",
       gone: "This video was taken down from YouTube.",
       private: "This video is private.",
       age: "This video is age-restricted.",
+      premium: "This video is only for YouTube Music Premium members.",
     },
     chosen: (title: string, why: string) => `「${title}」: ${why}`,
     /** What was skipped, for `skipped`: one kind, or several. */
-    kind: { region: "blocked here", gone: "gone from YouTube", private: "private", age: "age-restricted", any: "won't play" },
+    kind: { region: "blocked here", gone: "gone from YouTube", private: "private", age: "age-restricted", premium: "Premium only", any: "won't play" },
     skipped: (what: string, n: number) => `Skipped ${count(n, "track", "tracks")} (${what})`,
     cantPlay: "Won't play",
     findOther: "Find another version",
@@ -598,10 +599,26 @@ export const en = {
     lengthOff: (seconds: number) => `${seconds > 0 ? "+" : "−"}${Math.abs(seconds)}s`,
     replace: "Use this one",
     replaced: (title: string) => `Replaced with 「${title}」`,
+    /** A track that won't play was replaced by itself as it came up: what plays instead. */
+    switched: (title: string) => `Playing a new version instead: 「${title}」`,
+    /** A candidate that is where YouTube Music moved the track itself. */
+    moved: "moved by YouTube Music",
     chip: "Put aside",
     title: "Tracks put aside",
-    body: "These won't play here, so lists and playback leave them out. Find another version, or wait: one that plays again comes back by itself.",
+    body: "These won't play here and nothing found stands in for them, so lists and playback leave them out. Find another version, or wait: one that plays again comes back by itself.",
     count: (reason: string, n: number) => `${reason} ${n}`,
+  },
+
+  /** Tracks put in place of ones that won't play (by themselves or picked), with 「되돌리기」. */
+  standIns: {
+    chip: "Replaced",
+    body: "These stand in for tracks that won't play here, in the same places in your playlists. Searched ones come first; check them, put the original back, or pick another version.",
+    by: { redirect: "Moved by YouTube Music", alternative: "Found by search", manual: "Picked by you" },
+    was: (title: string) => `was 「${title}」`,
+    restore: "Put back",
+    pickOther: "Pick another",
+    restored: (title: string) => `Put 「${title}」 back (put aside)`,
+    count: (by: string, n: number) => `${by} ${n}`,
   },
 
   openLink: {

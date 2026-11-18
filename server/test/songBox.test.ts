@@ -169,6 +169,8 @@ describe("youtube account", () => {
     assert.equal(reason("Private video. Sign in if you've been granted access to this video"), "private");
     assert.equal(reason("Video unavailable. This video has been removed by the uploader"), "gone");
     assert.equal(reason("Sign in to confirm your age. This video may be inappropriate for some users."), "age");
+    assert.equal(reason("This video is only available to Music Premium members"), "premium");
+    assert.equal(toHttpError("ERROR: [youtube] -HTnszsqDQk: This video is only available to Music Premium members").status, 404);
     assert.equal(toHttpError("ERROR: Sign in to confirm you're not a bot").code, "bot_check");
     assert.equal(toHttpError("ERROR: nsig extraction failed").reason, undefined);
   });
@@ -278,7 +280,7 @@ describe("tracks that won't play", () => {
     const b = await library.createBundle({ title: "Suite", parts: [old, track(vid(3))] });
 
     const fresh = track(vid(9), "Fire Emblem Theme (official)");
-    await box.replaceTrack(vid(1), fresh);
+    await box.replaceTrack(vid(1), fresh, { by: "manual", at: 4 });
     assert.equal(await library.replaceTrack(vid(1), fresh), 3);
 
     assert.equal(await box.boxEntry(vid(1)), null);
@@ -306,7 +308,7 @@ describe("tracks that won't play", () => {
     const entries = box.mergeTracks([], [track(vid(1)), track(vid(2))], src("youtube-playlist", "PLa")).entries;
     entries[0].tags = ["a"];
     entries[1].tags = ["b"];
-    const out = box.replaceEntry(entries, vid(1), track(vid(2)));
+    const out = box.replaceEntry(entries, vid(1), track(vid(2)), { by: "alternative", at: 1 });
     assert.equal(out.length, 1);
     assert.deepEqual(out[0].tags, ["b", "a"]);
   });

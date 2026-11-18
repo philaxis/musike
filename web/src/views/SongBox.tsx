@@ -7,11 +7,12 @@ import { SelectableRow, SelectedCount, SelectionBar, Short, useListSelection } f
 import { TagChips, useSourceText } from "../components/Tags";
 import { TrackListSkeleton } from "../components/TrackList";
 import { useT } from "../i18n";
-import { cn } from "../lib/format";
+import { cn, formatTime } from "../lib/format";
 import { paths } from "../lib/routes";
-import { server, type BoxItem, type BoxSource } from "../lib/server";
+import { server, type BoxItem, type BoxSource, type ReplacedBy } from "../lib/server";
 import type { Track, Unplayable } from "../lib/types";
 import { usePlayer } from "../player/player";
+import { useLibrary } from "../stores/library";
 import { useTagEdits } from "../stores/tags";
 import { VideoChanges } from "../components/VideoChanges";
 import { useUi } from "../stores/ui";
@@ -22,8 +23,9 @@ type SourceCount = Omit<BoxSource, "at"> & { count: number };
 /**
  * Library's 「곡 상자」: every track brought in (and the music folders), newest first, 200 at a time. Filter by
  * unsorted (no tags), source or tag; pick several to play or put in a playlist. Tracks that won't play here are put
- * aside under their own chip, each with 「다른 판 찾기」; 「변경 기록」 lists what changed about the tracks on YouTube.
- * Not in TV mode, which only plays.
+ * aside under their own chip, each with 「다른 판 찾기」; the stand-ins put in their place have a chip too, each
+ * with 「되돌리기」 and 「다른 판 고르기」; 「변경 기록」 lists what changed about the tracks on YouTube. Not in TV
+ * mode, which only plays.
  */
 export default function SongBox() {
   const [params, setParams] = useSearchParams();
@@ -37,6 +39,7 @@ export default function SongBox() {
   const untagged = params.get("filter") === "untagged";
   const aside = params.get("filter") === "blocked";
   const changes = params.get("filter") === "changes";
+  const standIns = params.get("filter") === "replaced";
   const mode =
     source || params.get("by") === "source"
       ? "source"
@@ -46,8 +49,10 @@ export default function SongBox() {
           ? "untagged"
           : aside
             ? "aside"
-            : changes
-              ? "changes"
+            : standIns
+              ? "standIns"
+              : changes
+                ? "changes"
               : "all";
 
   const [page, setPage] = useState<{ items: BoxItem[]; total: number; next: string | null } | null>(null);
@@ -55,10 +60,13 @@ export default function SongBox() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [sources, setSources] = useState<SourceCount[] | null>(null);
   const [asideCounts, setAsideCounts] = useState<Partial<Record<Unplayable, number>>>({});
+  const [standInCounts, setStandInCounts] = useState<Partial<Record<ReplacedBy, number>>>({});
   const [tags, setTags] = useState<{ tag: string; count: number }[] | null>(null);
+  const [restoring, setRestoring] = useState<string | null>(null);
   const replaced = useUi((s) => s.lastReplaced);
 
-  const query = { filter: untagged ? ("untagged" as const) : aside ? ("blocked" as const) : undefined, source: source || undefined, tag: tag || undefined };
+  const filter = untagged ? ("untagged" as const) : aside ? ("blocked" as const) : standIns ? ("replaced" as const) : undefined;
+  const query = { filter, source: source || undefined, tag: tag || undefined };
 
   // A new filter starts a new list: the selection empties with it (rows that left the list leave it).
   useEffect(() => {
@@ -68,19 +76,20 @@ export default function SongBox() {
     setFailed(false);
     server.box(query, ctrl.signal).then(setPage, (e: Error) => e.name !== "AbortError" && setFailed(true));
     return () => ctrl.abort();
-  }, [untagged, aside, source, tag, changes]);
+  }, [untagged, aside, standIns, source, tag, changes]);
 
   const items = page?.items ?? [];
   const tracks: Track[] = useMemo(() => (page?.items ?? []).map((it) => it.track), [page]);
   // Tracks put aside won't play: no picking there, only 「다른 판 찾기」 per row.
   const sel = useListSelection(tracks, !isTvMode() && !aside);
 
-  // Sources and how many tracks are put aside (for the chips), again after a track was replaced.
+  // Sources, how many tracks are put aside and how many stand in for them (for the chips), again after a replacement.
   useEffect(() => {
     server.boxSources().then(
       (r) => {
         setSources(r.sources);
         setAsideCounts(r.aside);
+        setStandInCounts(r.replaced ?? {});
       },
       () => setSources([]),
     );
@@ -96,10 +105,37 @@ export default function SongBox() {
     setPage((p) => {
       if (!p?.items.some((it) => it.track.id === replaced.from)) return p;
       if (aside) return { ...p, items: p.items.filter((it) => it.track.id !== replaced.from), total: p.total - 1 };
-      return { ...p, items: p.items.map((it) => (it.track.id === replaced.from ? { ...it, track: replaced.track, blocked: undefined } : it)) };
+      return {
+        ...p,
+        items: p.items.map((it) =>
+          it.track.id === replaced.from
+            ? { ...it, track: replaced.track, blocked: undefined, replaced: it.replaced && { ...it.replaced, by: "manual" as const } }
+            : it,
+        ),
+      };
     });
   }, [replaced]);
   const asideTotal = Object.values(asideCounts).reduce((n, c) => n + (c ?? 0), 0);
+  const standInTotal = Object.values(standInCounts).reduce((n, c) => n + (c ?? 0), 0);
+
+  /** 「되돌리기」: the original back in place of stand-in `it` (put aside again), everywhere it was. */
+  const restore = async (it: BoxItem) => {
+    setRestoring(it.track.id);
+    try {
+      const r = await server.restoreTrack(it.track.id);
+      usePlayer.getState().replaceTrack(it.track.id, r.track);
+      void useLibrary.getState().load();
+      setPage((p) => p && { ...p, items: p.items.filter((x) => x !== it), total: p.total - 1 });
+      const by = it.replaced?.by;
+      if (by) setStandInCounts((c) => ({ ...c, [by]: Math.max(0, (c[by] ?? 1) - 1) }));
+      if (r.track.blocked) setAsideCounts((c) => ({ ...c, [r.track.blocked!]: (c[r.track.blocked!] ?? 0) + 1 }));
+      useUi.getState().toast(t.standIns.restored(r.track.title));
+    } catch (e) {
+      useUi.getState().toast((e as Error).message, "error");
+    } finally {
+      setRestoring(null);
+    }
+  };
 
   if (isTvMode()) return <Navigate to={paths.library} replace />;
 
@@ -141,6 +177,11 @@ export default function SongBox() {
           {(asideTotal > 0 || aside) && (
             <Chip on={mode === "aside"} onClick={() => setParams({ filter: "blocked" })}>
               {t.aside.chip} <span className="font-mono opacity-70">{asideTotal}</span>
+            </Chip>
+          )}
+          {(standInTotal > 0 || standIns) && (
+            <Chip on={mode === "standIns"} onClick={() => setParams({ filter: "replaced" })}>
+              {t.standIns.chip} <span className="font-mono opacity-70">{standInTotal}</span>
             </Chip>
           )}
           <Chip on={mode === "changes"} onClick={() => setParams({ filter: "changes" })}>
@@ -197,6 +238,17 @@ export default function SongBox() {
             <p className="max-w-[70ch]">{t.aside.body}</p>
           </div>
         )}
+        {mode === "standIns" && (
+          <div className="flex flex-col gap-1 text-sm text-fg-2">
+            <p className="font-medium text-fg">
+              {(Object.entries(standInCounts) as [ReplacedBy, number][])
+                .filter(([, n]) => n > 0)
+                .map(([by, n]) => t.standIns.count(t.standIns.by[by], n))
+                .join(" · ")}
+            </p>
+            <p className="max-w-[70ch]">{t.standIns.body}</p>
+          </div>
+        )}
       </div>
 
       {changes ? (
@@ -249,10 +301,18 @@ export default function SongBox() {
                   dim={!!it.track.blocked}
                   below={
                     <>
-                      <span className="mt-0.5 block truncate text-xs text-fg-3">
-                        {it.track.blocked && <span className="text-danger">{t.aside.reason[it.track.blocked]} · </span>}
-                        {it.sources.map(sourceText).join(", ")}
-                      </span>
+                      {standIns && it.replaced ? (
+                        <span className="mt-0.5 line-clamp-2 text-xs text-fg-3">
+                          <span className="text-accent-text">{t.standIns.by[it.replaced.by]}</span> · {t.standIns.was(it.replaced.was.title)}
+                          {it.replaced.was.artist && ` · ${it.replaced.was.artist}`}
+                          {it.replaced.was.duration > 0 && ` · ${formatTime(it.replaced.was.duration)}`}
+                        </span>
+                      ) : (
+                        <span className="mt-0.5 block truncate text-xs text-fg-3">
+                          {it.track.blocked && <span className="text-danger">{t.aside.reason[it.track.blocked]} · </span>}
+                          {it.sources.map(sourceText).join(", ")}
+                        </span>
+                      )}
                       <TagChips tags={edits[it.track.id] ?? it.tags} className="mt-1" />
                     </>
                   }
@@ -266,6 +326,25 @@ export default function SongBox() {
                         >
                           {t.aside.findOther}
                         </button>
+                      )}
+                      {standIns && it.replaced && (
+                        <>
+                          <button
+                            type="button"
+                            disabled={!!restoring}
+                            onClick={() => void restore(it)}
+                            className="h-8 shrink-0 rounded-full bg-surface-3 px-3 text-xs font-medium whitespace-nowrap hover:bg-surface-4 disabled:opacity-60"
+                          >
+                            {restoring === it.track.id ? "…" : t.standIns.restore}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => useUi.getState().openAlternatives(it.track)}
+                            className="h-8 shrink-0 rounded-full bg-surface-3 px-3 text-xs font-medium whitespace-nowrap hover:bg-surface-4"
+                          >
+                            {t.standIns.pickOther}
+                          </button>
+                        </>
                       )}
                       <button
                         type="button"

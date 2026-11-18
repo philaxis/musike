@@ -565,15 +565,16 @@ export const ko: Messages = {
   },
 
   aside: {
-    reason: { region: "한국에서 막힘", gone: "유튜브에서 사라짐", private: "비공개", age: "나이 제한" },
+    reason: { region: "한국에서 막힘", gone: "유튜브에서 사라짐", private: "비공개", age: "나이 제한", premium: "유튜브 프리미엄 전용" },
     why: {
       region: "저작권 문제로 한국에서 막힌 영상이에요.",
       gone: "유튜브에서 내려간 영상이에요.",
       private: "비공개 영상이에요.",
       age: "나이 제한 영상이라 틀 수 없어요.",
+      premium: "유튜브 뮤직 프리미엄 회원만 들을 수 있는 영상이에요.",
     },
     chosen: (title, why) => `「${title}」: ${why}`,
-    kind: { region: "한국에서 막힌 곡", gone: "유튜브에서 사라진 곡", private: "비공개 곡", age: "나이 제한 곡", any: "못 트는 곡" },
+    kind: { region: "한국에서 막힌 곡", gone: "유튜브에서 사라진 곡", private: "비공개 곡", age: "나이 제한 곡", premium: "프리미엄 전용 곡", any: "못 트는 곡" },
     skipped: (what, n) => `${what} ${n}개를 건너뛰었어요`,
     cantPlay: "못 틀음",
     findOther: "다른 판 찾기",
@@ -587,10 +588,23 @@ export const ko: Messages = {
     lengthOff: (seconds) => `${seconds > 0 ? "+" : "−"}${Math.abs(seconds)}초`,
     replace: "이걸로 바꾸기",
     replaced: (title) => `「${title}」으로 바꿨어요`,
+    switched: (title) => `새 판으로 바꿔 틀었어요 · 「${title}」`,
+    moved: "유튜브 뮤직이 옮긴 판",
     chip: "치워 둔 곡",
     title: "치워 둔 곡",
-    body: "여기서 틀 수 없는 곡이라 목록과 재생에서 빼 두었어요. 「다른 판 찾기」로 바꾸거나, 막힘이 풀리면 저절로 돌아가요.",
+    body: "여기서 틀 수 없고 대신 틀 다른 판도 못 찾은 곡이라 목록과 재생에서 빼 두었어요. 「다른 판 찾기」로 바꾸거나, 막힘이 풀리면 저절로 돌아가요.",
     count: (reason, n) => `${reason} ${n}`,
+  },
+
+  standIns: {
+    chip: "바꿔 넣은 곡",
+    body: "여기서 못 트는 곡 대신 넣은 곡이에요. 재생목록 안 자리는 그대로예요. 검색으로 찾아 넣은 곡이 먼저 나오니 확인해 보고, 아니면 되돌리거나 다른 판을 고르세요.",
+    by: { redirect: "유튜브 뮤직이 옮긴 판", alternative: "검색으로 찾음", manual: "직접 고름" },
+    was: (title) => `원래 「${title}」`,
+    restore: "되돌리기",
+    pickOther: "다른 판 고르기",
+    restored: (title) => `「${title}」을 되돌려 치워 두었어요`,
+    count: (by, n) => `${by} ${n}`,
   },
 
   openLink: {

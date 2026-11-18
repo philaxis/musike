@@ -3,7 +3,7 @@ import { createServer } from "node:net";
 import fastifyStatic from "@fastify/static";
 import Fastify from "fastify";
 import { ALBUM_ID, album, ARTIST_ID, artist, GENRE_ID, genre, genreArtists, genres, searchAlbums } from "./browse.js";
-import { annotator as boxAnnotator, markBlocked, useBoxStorage, youtubeEntries } from "./box.js";
+import { annotator as boxAnnotator, markBlocked, replacementOf, useBoxStorage, youtubeEntries } from "./box.js";
 import { registerBoxRoutes } from "./boxRoutes.js";
 import { checkBoxOnce, registerGoogleRoutes } from "./google.js";
 import { config } from "./config.js";
@@ -19,12 +19,13 @@ import { registerMapRoutes } from "./mapRoutes.js";
 import { findVideoFor, radio, search, suggestions } from "./search.js";
 import { registerStatsRoutes } from "./stats.js";
 import { mediaId, registerServerRoutes, trackId } from "./serverRoutes.js";
+import { fixAside, settledAside, standInFor } from "./standIn.js";
 import { proxyStream, serveFile, warmStream } from "./stream.js";
 import { langOf, msg, tr } from "./i18n.js";
 import { presentJob, startJob, systemInfo, type Channel } from "./system.js";
 import { refreshTools, type Tools } from "./tools.js";
-import { HttpError, isLocalId, VIDEO_ID } from "./types.js";
-import { downloadHd, pruneCache, resolveStreams } from "./ytdlp.js";
+import { HttpError, isLocalId, VIDEO_ID, type Track } from "./types.js";
+import { downloadHd, pruneCache, resolveStreams, unplayableBecause } from "./ytdlp.js";
 
 function videoId(params: unknown): string {
   const id = (params as { id?: string }).id ?? "";
@@ -151,19 +152,25 @@ export async function startServer(opts: StartOptions = {}): Promise<RunningServe
     }
     const kept = local.keptFile(id) && local.keptTrack(id);
     if (kept) return { id, title: kept.title, duration: kept.duration, hasSdVideo: false, audioMode: "range" };
-    const r = await resolveStreams(id).catch(async (e: unknown) => {
+    // A track put in place of this one (a stand-in, see standIn.ts) plays instead; the answer says which (`replaced`).
+    const already = await replacementOf(id);
+    let replaced: Track | null = already && (await boxAnnotator())(already);
+    const aside = !replaced && (await settledAside(id));
+    if (aside) throw unplayableBecause(aside);
+    const r = await resolveStreams(replaced?.id ?? id).catch(async (e: unknown) => {
+      if (!(e instanceof HttpError && e.reason) || replaced) throw e;
       // What yt-dlp says won't play shows in the song box and the video ledger too, without waiting for the next check.
-      if (e instanceof HttpError && e.reason) {
-        await markBlocked(id, e.reason);
-        await ledger.recordPlayFailure(id, e.reason);
-      }
-      throw e;
+      await markBlocked(id, e.reason);
+      await ledger.recordPlayFailure(id, e.reason);
+      replaced = await standInFor(id, e.reason);
+      if (!replaced) throw e;
+      return resolveStreams(replaced.id);
     });
     // It plays: a status only a failed play had set (Premium-only, say) is over.
-    await ledger.recordPlayable(id);
+    await ledger.recordPlayable(r.id);
     // A freshly resolved googlevideo URL refuses for a second or two; wait that out here so playing it starts at once.
     if (r.audio) await warmStream(r.audio);
-    return { id: r.id, title: r.title, duration: r.duration, hasSdVideo: !!r.video, audioMode: "range" };
+    return { id: r.id, title: r.title, duration: r.duration, hasSdVideo: !!r.video, audioMode: "range", ...(replaced ? { replaced } : {}) };
   });
 
   app.get("/api/stream/:id/audio", (req, reply) => {
@@ -298,10 +305,14 @@ export async function startServer(opts: StartOptions = {}): Promise<RunningServe
 
   pruneCache().catch(() => {});
   // The video ledger's first record (once, from the box), then which song-box tracks won't play here: once, when it
-  // was never checked (later with each account sync).
+  // was never checked (later with each account sync). Then stand-ins for the tracks put aside that weren't looked at
+  // in a day.
   youtubeEntries()
     .then(ledger.seed)
     .then(() => checkBoxOnce())
+    .catch((e: unknown) => app.log.warn(e))
+    .then(() => fixAside())
+    .then((standIns) => app.log.info({ standIns }, "stand-ins for tracks put aside"))
     .catch((e: unknown) => app.log.warn(e));
   return {
     port,

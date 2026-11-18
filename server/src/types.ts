@@ -61,9 +61,12 @@ export const isBundleId = (id: string) => BUNDLE_ID.test(id);
 /** Machine-readable reason so the web app can offer the right fix (e.g. "update yt-dlp", "connect Google again"). */
 export type ErrorCode = "tool_missing" | "maybe_outdated" | "bot_check" | "google_login" | "unplayable";
 
-/** Why a YouTube video can't play on this server: blocked in its country, deleted (or rejected), private, age-restricted. */
-export type Unplayable = "region" | "gone" | "private" | "age";
-export const UNPLAYABLE: Unplayable[] = ["region", "gone", "private", "age"];
+/**
+ * Why a YouTube video can't play on this server: blocked in its country, deleted (or rejected), private,
+ * age-restricted, for YouTube Music Premium members only.
+ */
+export type Unplayable = "region" | "gone" | "private" | "age" | "premium";
+export const UNPLAYABLE: Unplayable[] = ["region", "gone", "private", "age", "premium"];
 
 /** An error for the person using the app: its text is translated into each request's language when sent. */
 export class HttpError extends Error {

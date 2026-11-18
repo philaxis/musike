@@ -1,14 +1,12 @@
 import type { FastifyInstance } from "fastify";
 import * as box from "./box.js";
-import { checkVideos } from "./google.js";
 import { langOf, msg } from "./i18n.js";
-import * as ledger from "./ledger.js";
 import * as library from "./library.js";
 import * as local from "./local.js";
 import { parsePlaylistLink, readPlaylist } from "./playlistImport.js";
-import { search } from "./search.js";
 import { trackId } from "./serverRoutes.js";
-import { BUNDLE_ID, HttpError, isBundleId, TRACK_ID, VIDEO_ID, type Bundle, type Track, type Unplayable } from "./types.js";
+import * as standIn from "./standIn.js";
+import { BUNDLE_ID, HttpError, isBundleId, TRACK_ID, VIDEO_ID, type Bundle, type Track } from "./types.js";
 
 // Song box, tags, bundles, and pasted playlist links into the box (see box.ts).
 
@@ -77,28 +75,10 @@ export function registerBoxRoutes(app: FastifyInstance) {
   });
 
   /**
-   * Other versions of a track that won't play here: up to 5 YouTube results with an alike title, each saying why it
-   * is offered (see `pickAlternatives`).
+   * Other versions of a track that won't play here (for a stand-in: of its original): where YouTube Music moved it
+   * first, then up to 5 YouTube results with an alike title, each saying why it is offered (see `standIn.candidates`).
    */
-  app.get("/api/box/:id/alternatives", async (req) => {
-    const id = youtubeId(req.params);
-    const original = await box.findTrack(id);
-    if (!original) throw new HttpError(404, msg("trackNotFound", { id }));
-    // Upload titles carry noise search doesn't match ("13. … 【… OST】 【HQ 1080p】"): search by the title's words,
-    // with the artist, else alone.
-    const title = box.titleWords(original.title).join(" ") || original.title;
-    const lang = langOf(req);
-    const annotate = await box.annotator();
-    for (const q of [`${title} ${original.artist}`.trim(), title]) {
-      const [songs, videos] = await Promise.all([search(q.slice(0, 200), "song", lang).catch(() => []), search(q.slice(0, 200), "video", lang).catch(() => [])]);
-      const found = [...songs, ...videos].filter((t, i, all) => VIDEO_ID.test(t.id) && all.findIndex((x) => x.id === t.id) === i);
-      // The account (when connected) tells which results won't play here either; without it the box's marks do.
-      const checked = await checkVideos(found.map((t) => t.id)).catch(() => new Map<string, Unplayable | null>());
-      const alternatives = box.pickAlternatives(original, found.map(annotate), (t) => !!t.blocked || !!checked.get(t.id));
-      if (alternatives.length) return { alternatives };
-    }
-    return { alternatives: [] };
-  });
+  app.get("/api/box/:id/alternatives", async (req) => ({ alternatives: await standIn.candidates(youtubeId(req.params), langOf(req)) }));
 
   /** `{ track }`: puts it in place of track `id` in the box, playlists, favorites and bundles (see `box.replaceEntry`). */
   app.post("/api/box/:id/replace", async (req) => {
@@ -106,11 +86,11 @@ export function registerBoxRoutes(app: FastifyInstance) {
     const track = library.sanitizeTrack(((req.body ?? {}) as { track?: unknown }).track);
     if (!VIDEO_ID.test(track.id)) throw new HttpError(400, msg("invalidTrack"));
     if (track.id === id) throw new HttpError(400, msg("sameTrack"));
-    await box.replaceTrack(id, track);
-    const rows = await library.replaceTrack(id, track);
-    await ledger.recordReplaced(id, track, "manual");
-    return { track: (await box.annotator())(track), rows };
+    return standIn.replaceEverywhere(id, track, "manual");
   });
+
+  /** 「되돌리기」: the original back in place of stand-in `id`, put aside again (see `standIn.restore`). */
+  app.post("/api/box/:id/restore", (req) => standIn.restore(youtubeId(req.params)));
 
   /** A pasted playlist link: every track into the box under that playlist, no Musike playlist made. */
   app.post("/api/import/youtube/box", async (req) => {

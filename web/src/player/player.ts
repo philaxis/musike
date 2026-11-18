@@ -124,15 +124,19 @@ const playsFromOffset = (track: Track) =>
 /** When each id was last prepared (ms): the window ahead doesn't ask again for AHEAD_FRESH_MS. */
 const preparedAt = new Map<string, number>();
 
-/** Resolves a track's stream ahead of time (and learns how a server file streams). Resolves to why it won't play, if so. */
-function prepare(id: string): Promise<Unplayable | null> {
+/** What preparing a YouTube track found out: why it won't play, or the track the server put in its place. */
+type Prepare = { reason: Unplayable } | { replaced: Track } | null;
+
+/** Resolves a track's stream ahead of time (and learns how a server file streams). Resolves to why it won't play, or its stand-in. */
+function prepare(id: string): Promise<Prepare> {
   return api.prepare(id).then(
     (r) => {
-      if (r.audioMode) offsetAudio.set(id, r.audioMode === "offset");
-      preparedAt.set(id, Date.now());
-      return null;
+      const key = r.replaced?.id ?? id;
+      if (r.audioMode) offsetAudio.set(key, r.audioMode === "offset");
+      preparedAt.set(key, Date.now());
+      return r.replaced ? { replaced: r.replaced } : null;
     },
-    (e: ApiError) => (e.code === "unplayable" && e.reason) || null,
+    (e: ApiError) => (e.code === "unplayable" && e.reason ? { reason: e.reason } : null),
   );
 }
 
@@ -259,7 +263,12 @@ export const usePlayer = create<PlayerState>((set, get, store) => {
 
   /** Why a queued track won't play here: the server's mark, or what this session found out. */
   const blockedReason = (track: Track): Unplayable | undefined => track.blocked ?? get().unplayable[track.id];
-  const skippable = (track: Track) => !!track.unavailable || !!blockedReason(track);
+  /**
+   * A YouTube track the server put aside that this session hasn't asked about yet: preparing it may bring a stand-in
+   * (another version the server puts in its place), so it is asked before it is skipped.
+   */
+  const unasked = (track: Track) => capabilities.serverLibrary && !!track.blocked && !isLocal(track) && !get().unplayable[track.id];
+  const skippable = (track: Track) => !!track.unavailable || (!!blockedReason(track) && !unasked(track));
 
   /** A track picked by hand that won't play: why, in plain words, and (for a YouTube track) other versions to try. */
   function explain(track: Track, reason: Unplayable) {
@@ -286,6 +295,26 @@ export const usePlayer = create<PlayerState>((set, get, store) => {
     if (get().unplayable[id] !== reason) set((s) => ({ unplayable: { ...s.unplayable, [id]: reason } }));
   }
 
+  /** Stand-ins put in this session that haven't started yet: a short note says so when they do. */
+  const switched = new Set<string>();
+
+  /** The server put `track` in place of `oldId` (which won't play here): the queue, open lists and the library follow. */
+  function takeStandIn(oldId: string, track: Track) {
+    switched.add(track.id);
+    get().replaceTrack(oldId, track);
+    useUi.getState().noteReplaced(oldId, track);
+    void useLibrary.getState().load();
+  }
+
+  /** Asks the server about `track` (see `unasked`): its stand-in, or why it won't play. Then `then`. */
+  function ask(track: Track, then: () => void) {
+    void prepare(track.id).then((out) => {
+      if (out && "replaced" in out) takeStandIn(track.id, out.replaced);
+      else markUnplayable(track.id, out?.reason ?? track.blocked!);
+      then();
+    });
+  }
+
   /** The token of the load the user picked by hand (a row, the queue): its failure is explained, not skipped. */
   let chosenToken = -1;
 
@@ -293,6 +322,15 @@ export const usePlayer = create<PlayerState>((set, get, store) => {
     const s = get();
     const track = s.queue[index];
     if (!track) return;
+    if (unasked(track)) {
+      const mine = ++token;
+      if (!opts.fade) {
+        set({ index, status: "loading", statusText: null, videoNote: null, position: 0, duration: track.duration, buffered: 0 });
+        activeMedia()?.pause();
+      }
+      return ask(track, () => mine === token && load(index, opts));
+    }
+    if (switched.delete(track.id)) toast(getT().aside.switched(track.title));
     const reason = blockedReason(track);
     if (opts.chosen && reason) return explain(track, reason);
     clearTimeout(offsetSeek);
@@ -455,7 +493,7 @@ export const usePlayer = create<PlayerState>((set, get, store) => {
       if (mine !== aheadRun) return;
       // It won't play: `markUnplayable` moved the window past it (a new run).
       if (!ok) return;
-      if (i === next) preloadHead(s.queue[i]);
+      if (i === next) preloadHead(get().queue[i]);
     }
     for (const i of neighbors(s.index, AHEAD_PREV, -1)) {
       await warm(s.queue[i]);
@@ -463,12 +501,20 @@ export const usePlayer = create<PlayerState>((set, get, store) => {
     }
   }
 
-  /** Resolves a track's address unless it was lately (in Video mode, its clip's). False when it turned out not to play. */
+  /**
+   * Resolves a track's address unless it was lately (in Video mode, its clip's). False when it turned out not to play;
+   * a stand-in the server put in its place takes its place in the queue.
+   */
   async function warm(track: Track): Promise<boolean> {
     const id = get().preferVideo ? ((await lookupClip(track)) ?? track.id) : track.id;
     if (Date.now() - (preparedAt.get(id) ?? 0) < AHEAD_FRESH_MS) return true;
-    const reason = await prepare(id);
-    if (!reason || id !== track.id) return true;
+    const out = await prepare(id);
+    if (out && "replaced" in out && id === track.id) {
+      takeStandIn(track.id, out.replaced);
+      return true;
+    }
+    const reason = out && "reason" in out && id === track.id ? out.reason : unasked(track) ? track.blocked : undefined;
+    if (!reason) return true;
     markUnplayable(track.id, reason);
     return false;
   }
@@ -614,11 +660,23 @@ export const usePlayer = create<PlayerState>((set, get, store) => {
     const mine = token;
     const track = get().queue[get().index];
     if (code === "unplayable" && reason && track) {
-      markUnplayable(track.id, reason);
-      set({ status: "paused", statusText: null });
-      if (chosenToken === mine) return explain(track, reason);
-      noteSkipped(reason);
-      return get().next();
+      const giveUp = () => {
+        markUnplayable(track.id, reason);
+        set({ status: "paused", statusText: null });
+        if (chosenToken === mine) return explain(track, reason);
+        noteSkipped(reason);
+        get().next();
+      };
+      if (!capabilities.serverLibrary || isLocal(track)) return giveUp();
+      // The server may have a stand-in for it: play that instead.
+      set({ status: "loading", statusText: null });
+      void prepare(track.id).then((out) => {
+        if (mine !== token) return;
+        if (!out || !("replaced" in out)) return giveUp();
+        takeStandIn(track.id, out.replaced);
+        load(get().index, { chosen: chosenToken === mine });
+      });
+      return;
     }
     set({ status: "error", statusText: { error: message } });
     // Tool problems hit every track: offer the fix instead of skipping through the whole queue.
@@ -780,23 +838,23 @@ export const usePlayer = create<PlayerState>((set, get, store) => {
         if (!all.length) return;
         const from = Math.min(part, rows[at].length - 1);
         // Picked by hand and won't play: say why, and leave the queue as it is.
-        const why = chosen && blockedReason(rows[at][from]);
+        const why = chosen && !unasked(rows[at][from]) && blockedReason(rows[at][from]);
         if (why) return explain(rows[at][from], why);
         if (get().shuffle) {
           // Bundles stay whole: rows are shuffled, never the parts inside one.
           const rest = rows.filter((_, i) => i !== at);
           set({ queue: [...rows[at].slice(from), ...shuffled(rest).flat()], original: all });
-          load(0);
+          load(0, { chosen: chosen && unasked(rows[at][from]) });
         } else {
           set({ queue: all, original: null });
-          load(rows.slice(0, at).reduce((n, r) => n + r.length, 0) + from);
+          load(rows.slice(0, at).reduce((n, r) => n + r.length, 0) + from, { chosen: chosen && unasked(rows[at][from]) });
         }
       });
     },
 
     playTrack: (track) => {
       const s = get();
-      const why = blockedReason(track);
+      const why = !unasked(track) && blockedReason(track);
       if (why) return explain(track, why);
       const at = s.queue.findIndex((t) => t.id === track.id || (t.part?.bundle === track.id && t.part.n === 1));
       if (at >= 0) return load(at, { chosen: true });
