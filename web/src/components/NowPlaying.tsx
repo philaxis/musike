@@ -11,6 +11,7 @@ import { AnimatePresence, motion, useDragControls, useReducedMotion } from "moti
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { useT } from "../i18n";
+import { capabilities } from "../lib/api";
 import { trackTitle } from "../lib/bundles";
 import { cn } from "../lib/format";
 import { isLocal } from "../lib/server";
@@ -126,7 +127,8 @@ function PanelBody({ tab, slot }: { tab: PanelTab; slot: number }) {
         <TrackHeading track={track} />
       </div>
       <ModeSwitch />
-      {!isLocal(track) && (
+      {/* On the server the taste analysis makes radios of local files too (player.startRadio). */}
+      {(!isLocal(track) || capabilities.serverLibrary) && (
         <button
           type="button"
           onClick={() => void startRadio(track)}

@@ -5,7 +5,9 @@ import type { Track } from "../lib/types";
 
 export interface ToastAction {
   label: string;
-  run: () => void;
+  run?: () => void;
+  /** An app address to open (the store can't navigate by itself). */
+  to?: string;
 }
 
 export interface Toast {

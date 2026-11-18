@@ -1,5 +1,7 @@
-import { appendFile, mkdir } from "node:fs/promises";
+import { createReadStream } from "node:fs";
+import { appendFile, mkdir, stat } from "node:fs/promises";
 import path from "node:path";
+import { createInterface } from "node:readline";
 import type { FastifyInstance } from "fastify";
 import { config } from "./config.js";
 import { msg } from "./i18n.js";
@@ -77,6 +79,47 @@ export function appendPlays(plays: Play[]): Promise<void> {
     await appendFile(playsFile(), text, "utf8");
   });
   return writing;
+}
+
+/** 「한 번 들음」(the #26 contract, Last.fm's rule): at least 30 s, and half the track or 4 minutes. */
+export const isListen = (p: Pick<Play, "heard" | "duration">) => p.heard >= 30 && (p.heard >= p.duration / 2 || p.heard >= 240);
+
+// Reading the log (stats, automatic playlists): streamed line by line, kept while the file's mtime and size stay the same.
+
+let log: { key: string; plays: Play[] } | null = null;
+let reading: { key: string; done: Promise<{ key: string; plays: Play[] }> } | null = null;
+
+const isPlayLine = (p: Partial<Play> | null): p is Play =>
+  !!p && typeof p.id === "string" && !!p.id && typeof p.startedAt === "number" && typeof p.heard === "number" && typeof p.duration === "number";
+
+async function readLines(file: string): Promise<Play[]> {
+  const plays: Play[] = [];
+  const lines = createInterface({ input: createReadStream(file, "utf8"), crlfDelay: Infinity });
+  for await (const line of lines) {
+    if (!line) continue;
+    try {
+      const p = JSON.parse(line) as Partial<Play> | null;
+      if (isPlayLine(p)) plays.push(p);
+    } catch {
+      // a half-written last line: skip it
+    }
+  }
+  // Devices send late when offline, so file order is not quite time order.
+  return plays.sort((a, b) => a.startedAt - b.startedAt);
+}
+
+/** Every line of the log, oldest first, and a key that changes when the file does. */
+export async function loadPlays(file = playsFile()): Promise<{ key: string; plays: Play[] }> {
+  const st = await stat(file).catch(() => null);
+  if (!st) return { key: "none", plays: [] };
+  const key = `${file}:${st.mtimeMs}:${st.size}`;
+  if (log?.key === key) return log;
+  if (reading?.key !== key) {
+    const done = readLines(file).then((plays) => (log = { key, plays }));
+    reading = { key, done };
+    done.catch(() => {}).finally(() => reading?.done === done && (reading = null));
+  }
+  return reading.done;
 }
 
 export function registerPlayRoutes(app: FastifyInstance) {

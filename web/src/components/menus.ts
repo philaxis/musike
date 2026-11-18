@@ -1,7 +1,8 @@
 import { EyeIcon, EyeSlashIcon, PencilSimpleIcon, TrashIcon } from "@phosphor-icons/react";
 import { getT } from "../i18n";
 import { api } from "../lib/api";
-import { server } from "../lib/server";
+import { server, type Mix, type TasteGroupCard } from "../lib/server";
+import { groupTitle, mixAbout, mixTitle } from "../lib/taste";
 import type { AlbumCard, LocalAlbum, LocalRoot, Playlist } from "../lib/types";
 import { useLibrary } from "../stores/library";
 import { useLocal } from "../stores/local";
@@ -96,4 +97,22 @@ export function youtubeAlbumMenu(a: AlbumCard): MenuTarget {
     thumb: a.thumb,
     load: async () => (await api.album(a.id)).tracks,
   };
+}
+
+/** A sound group of the taste analysis: all of its tracks, most typical first. */
+export function tasteGroupMenu(g: TasteGroupCard): MenuTarget {
+  const t = getT();
+  return {
+    kind: "group",
+    title: groupTitle(g, t),
+    sub: t.taste.groupSub(g.size, g.artists),
+    thumb: g.tracks[0]?.thumb,
+    load: async () => (await server.tasteGroup(g.id)).tracks,
+  };
+}
+
+/** An automatic playlist; its tracks came with the card. */
+export function mixMenu(m: Mix): MenuTarget {
+  const t = getT();
+  return { kind: "group", title: mixTitle(m, t), sub: mixAbout(m, t), thumb: m.tracks[0]?.thumb, load: async () => m.tracks };
 }

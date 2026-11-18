@@ -158,6 +158,39 @@ export interface DayLikes {
   tracks: Track[];
 }
 
+/** A genre of the taste analysis: playable tracks, sound groups and four typical tracks (for the cover). */
+export interface TasteGenre {
+  genre: string;
+  count: number;
+  groups: number;
+  tracks: Track[];
+}
+
+/** A sound group inside a genre; `id` is `none:<genre>` for the tracks without one. */
+export interface TasteGroupCard {
+  id: string;
+  name: string | null;
+  size: number;
+  artists: string[];
+  /** The most typical four. */
+  tracks: Track[];
+  /** Another group of the genre has the same name: an artist that sets this one apart. */
+  tell: string | null;
+}
+
+export type MixKind = "daily" | "onRepeat" | "forgotten" | "newForYou" | "upbeat" | "calm";
+
+/** An automatic playlist of today. */
+export interface Mix {
+  id: string;
+  kind: MixKind;
+  n?: number;
+  /** Daily mixes: the sound group or genre they come from. */
+  name?: string;
+  artists: string[];
+  tracks: Track[];
+}
+
 const q = (params: Record<string, string | number | undefined>) => {
   const p = new URLSearchParams();
   for (const [k, v] of Object.entries(params)) if (v !== undefined && v !== "") p.set(k, String(v));
@@ -228,6 +261,20 @@ export const server = {
   dayLikes: () => request<DayLikes>("/api/daylikes"),
   likeToday: (track: Track) => request<DayLikes>(`/api/daylikes/${track.id}`, { method: "PUT", json: track }),
   unlikeToday: (id: string) => request<DayLikes>(`/api/daylikes/${id}`, { method: "DELETE" }),
+
+  tasteGenres: (signal?: AbortSignal) => request<{ ready: boolean; genres: TasteGenre[] }>("/api/taste/genres", { signal }),
+  tasteGenre: (genre: string, signal?: AbortSignal) =>
+    request<{ genre: string; count: number; groups: TasteGroupCard[] }>(`/api/taste/genres/${encodeURIComponent(genre)}`, { signal }),
+  tasteGroup: (gid: string, signal?: AbortSignal) =>
+    request<{ group: { id: string; name: string | null; genre: string; artists: string[] }; tracks: Track[] }>(
+      `/api/taste/groups/${encodeURIComponent(gid)}`,
+      { signal },
+    ),
+  /** Alike tracks of an analysed track, it first; `analyzed: false` when the analysis doesn't have it. */
+  tasteRadio: (id: string, signal?: AbortSignal) =>
+    request<{ analyzed: boolean; seed: Track | null; tracks: Track[] }>(`/api/taste/radio/${id}`, { signal }),
+  mixes: (signal?: AbortSignal) => request<{ ready: boolean; mixes: Mix[] }>("/api/taste/mixes", { signal }),
+  mix: (id: string, signal?: AbortSignal) => request<Mix>(`/api/taste/mixes/${encodeURIComponent(id)}`, { signal }),
 };
 
 /** A YouTube / YouTube Music playlist link (playlist?list=, watch?v=…&list=, album OLAK5uy_…), or null. */

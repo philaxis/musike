@@ -79,8 +79,10 @@ function TrackItems({ menu, run }: { menu: Extract<MenuState, { kind: "track" }>
     return !!part && (part.bundle === track.id || part.run === track.part?.run);
   });
   const local = isLocal(track);
-  // YouTube-only actions (radio, keep, open on YouTube) aren't for local files nor bundles.
+  // YouTube-only actions (keep, open on YouTube) aren't for local files nor bundles.
   const youtube = !local && track.kind !== "bundle";
+  // Radio: YouTube's, or on the server the taste analysis' alike tracks, which also knows local files.
+  const radio = youtube || (capabilities.serverLibrary && track.kind !== "bundle");
   // TV mode only plays: no playlist editing or keeping there.
   const tv = isTvMode();
   const keepStatus = keepItem?.status ?? (track.kept ? "done" : "none");
@@ -112,7 +114,7 @@ function TrackItems({ menu, run }: { menu: Extract<MenuState, { kind: "track" }>
           {t.basics.removeFromQueue}
         </Item>
       )}
-      {youtube && (
+      {radio && (
         <Item icon={<RadioIcon size={18} />} onClick={run(() => void player().startRadio(track))}>
           {t.trackMenu.startRadio}
         </Item>
