@@ -141,7 +141,6 @@ export const pt: Messages = {
     toHd: "Mudar para HD (720p, baixa antes de tocar)",
     toSd: "Mudar para SD (360p, começa mais rápido quando disponível)",
     nothingPlaying: "Nada tocando. Busque algo para começar.",
-    showNowPlaying: "Mostrar Tocando agora",
     queue: "Fila",
     nowPlayingPanel: "Painel Tocando agora",
     shortcuts: "Atalhos de teclado (?)",
@@ -168,7 +167,6 @@ export const pt: Messages = {
   },
 
   nowPlaying: {
-    title: "Tocando agora",
     coverOf: (title) => `Capa de ${title}`,
     playSomething: "Toque algo para ver aqui.",
     startRadio: "Iniciar rádio desta faixa",
@@ -177,7 +175,6 @@ export const pt: Messages = {
     tabQueue: "Fila",
     panel: "Tocando agora e fila",
     closePanel: "Fechar painel",
-    backToPlayer: "Voltar ao player",
     showQueue: "Ver fila",
   },
 

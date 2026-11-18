@@ -234,7 +234,9 @@ export function QueueList({ compact = false }: { compact?: boolean }) {
         )}
       </section>
 
-      <label className="mx-2 flex cursor-pointer items-center justify-between gap-3 rounded-xl bg-surface-1 px-3 py-2.5 ring-1 ring-line">
+      {/* relative: keeps the visually hidden checkbox inside the scrolling list, or it stretches the page and opening
+          the queue scrolls the whole window. */}
+      <label className="relative mx-2 flex cursor-pointer items-center justify-between gap-3 rounded-xl bg-surface-1 px-3 py-2.5 ring-1 ring-line">
         <span>
           <span className="block text-sm font-medium">{t.queue.autoRadio}</span>
           <span className="block text-xs text-fg-2">{t.queue.autoRadioBody}</span>

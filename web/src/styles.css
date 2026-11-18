@@ -137,9 +137,6 @@
   .overlay-top {
     padding-top: max(env(safe-area-inset-top), env(titlebar-area-height, 0px));
   }
-  .drawer-top {
-    top: calc(env(titlebar-area-height, 0px) + 0.5rem);
-  }
 
   /* Desktop app title bar: draggable, with clicks still reaching buttons inside it. */
   .app-drag {
