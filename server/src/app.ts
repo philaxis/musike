@@ -17,7 +17,7 @@ import { registerMapRoutes } from "./mapRoutes.js";
 import { findVideoFor, radio, search, suggestions } from "./search.js";
 import { registerStatsRoutes } from "./stats.js";
 import { mediaId, registerServerRoutes, trackId } from "./serverRoutes.js";
-import { proxyStream, serveFile } from "./stream.js";
+import { proxyStream, serveFile, warmStream } from "./stream.js";
 import { langOf, msg, tr } from "./i18n.js";
 import { presentJob, startJob, systemInfo, type Channel } from "./system.js";
 import { refreshTools, type Tools } from "./tools.js";
@@ -154,6 +154,8 @@ export async function startServer(opts: StartOptions = {}): Promise<RunningServe
       if (e instanceof HttpError && e.reason) await markBlocked(id, e.reason);
       throw e;
     });
+    // A freshly resolved googlevideo URL refuses for a second or two; wait that out here so playing it starts at once.
+    if (r.audio) await warmStream(r.audio);
     return { id: r.id, title: r.title, duration: r.duration, hasSdVideo: !!r.video, audioMode: "range" };
   });
 

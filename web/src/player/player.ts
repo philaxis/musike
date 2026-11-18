@@ -139,6 +139,9 @@ function prepare(id: string): Promise<Unplayable | null> {
 /** How long after a track starts the window ahead is filled (so it never slows that start), and how long a prepared address counts as fresh. */
 const AHEAD_DELAY_MS = 4000;
 const AHEAD_FRESH_MS = 5 * 60_000;
+/** How many tracks after and before the current one get their address resolved (and warmed) ahead. Only the next one's audio is loaded. */
+const AHEAD_NEXT = 3;
+const AHEAD_PREV = 2;
 
 /** The spare audio deck holding the head of the next track (see `preloadHead`), so it starts at once. */
 let preloaded: { el: HTMLMediaElement; id: string; offset: boolean } | null = null;
@@ -413,8 +416,8 @@ export const usePlayer = create<PlayerState>((set, get, store) => {
     setMetadata(track);
   }
 
-  // The window around the current track (see AHEAD_DELAY_MS): the next two tracks' addresses resolved, the previous
-  // one's kept, and in Audio mode with a spare deck the head of the next one loaded there.
+  // The window around the current track (see AHEAD_DELAY_MS): the next AHEAD_NEXT tracks' and previous AHEAD_PREV
+  // tracks' addresses resolved, and in Audio mode with a spare deck the head of the next one loaded there.
 
   let aheadTimer: number | undefined;
   let aheadRun = 0;
@@ -426,12 +429,14 @@ export const usePlayer = create<PlayerState>((set, get, store) => {
     aheadTimer = window.setTimeout(() => void runAhead(), ms);
   }
 
-  /** Queue positions that play after `index`, the way playback goes (wrapping on repeat-all), skipping those that won't play. */
-  function upcoming(index: number, count: number): number[] {
+  /** Queue positions that play after (dir 1) or before (dir -1) `index`, the way playback goes (wrapping on repeat-all), skipping those that won't play. */
+  function neighbors(index: number, count: number, dir: 1 | -1 = 1): number[] {
     const s = get();
+    const n = s.queue.length;
     const out: number[] = [];
-    for (let k = 1; k < s.queue.length && out.length < count; k++) {
-      const i = index + k < s.queue.length ? index + k : s.repeat === "all" ? index + k - s.queue.length : -1;
+    for (let k = 1; k < n && out.length < count; k++) {
+      const raw = index + dir * k;
+      const i = raw >= 0 && raw < n ? raw : s.repeat === "all" ? (raw + n) % n : -1;
       if (i < 0) break;
       if (!skippable(s.queue[i])) out.push(i);
     }
@@ -443,8 +448,8 @@ export const usePlayer = create<PlayerState>((set, get, store) => {
     if (!loaded || recordedToken !== token) return;
     const mine = ++aheadRun;
     const s = get();
-    const [next, after] = upcoming(s.index, 2);
-    for (const i of [next, after]) {
+    const [next, ...later] = neighbors(s.index, AHEAD_NEXT);
+    for (const i of [next, ...later]) {
       if (i === undefined) continue;
       const ok = await warm(s.queue[i]);
       if (mine !== aheadRun) return;
@@ -452,8 +457,10 @@ export const usePlayer = create<PlayerState>((set, get, store) => {
       if (!ok) return;
       if (i === next) preloadHead(s.queue[i]);
     }
-    const prev = s.queue[s.index - 1];
-    if (prev && !skippable(prev)) await warm(prev);
+    for (const i of neighbors(s.index, AHEAD_PREV, -1)) {
+      await warm(s.queue[i]);
+      if (mine !== aheadRun) return;
+    }
   }
 
   /** Resolves a track's address unless it was lately (in Video mode, its clip's). False when it turned out not to play. */
