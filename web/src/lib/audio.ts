@@ -214,3 +214,13 @@ export function createAudio(): HTMLAudioElement {
   }
   return new NativeAudio(nativeBridge) as unknown as HTMLAudioElement;
 }
+
+/**
+ * Whether two audio elements can be mixed through Web Audio (crossfades). Not on the iOS native player, which is not a
+ * media element, nor in iOS browsers, whose audio graph stops when the screen locks and would take the music with it.
+ */
+export const canMixAudio =
+  !nativeBridge &&
+  typeof AudioContext === "function" &&
+  !/iPad|iPhone|iPod/.test(navigator.userAgent) &&
+  !(navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);

@@ -8,6 +8,7 @@ import type { Track } from "../lib/types";
 import { useLibrary } from "../stores/library";
 import { openSettings } from "../stores/system";
 import { toast } from "../stores/ui";
+import { crossfadeSupported, FADE_DEFAULT, FADE_MAX, mixer, sameAlbum } from "./crossfade";
 
 export type Repeat = "off" | "all" | "one";
 /** A code translated where it is shown (so switching languages updates it), or a server error already in the right language. */
@@ -40,6 +41,8 @@ interface PlayerState {
   preferVideo: boolean;
   quality: Quality;
   autoRadio: boolean;
+  /** Seconds the next track overlaps the end of this one in Audio mode; 0 plays them one after the other. */
+  fade: number;
 
   playList: (tracks: Track[], start?: number) => void;
   playTrack: (track: Track) => void;
@@ -60,11 +63,14 @@ interface PlayerState {
   setPreferVideo: (on: boolean) => void;
   setQuality: (q: Quality) => void;
   setAutoRadio: (on: boolean) => void;
+  setFade: (seconds: number) => void;
 }
 
 // Media elements live outside React so playback survives any re-render or route change.
 // On iOS this is the native player behind the same API (see lib/audio.ts).
-const audio = createAudio();
+// Audio gets two decks where crossfades work: the next track starts on the spare one while this one fades out.
+const decks: HTMLMediaElement[] = crossfadeSupported ? [createAudio(), createAudio()] : [createAudio()];
+let audio = decks[0];
 
 export const videoEl = document.createElement("video");
 videoEl.playsInline = true;
@@ -85,6 +91,9 @@ let base = 0;
 let offsetSeek: number | undefined;
 /** Set while Video mode plays as audio because the page is hidden (screen off, another app). */
 let backgrounded = false;
+/** The deck still playing the previous track under a crossfade: where that track ends, and how long the fade is. */
+let outgoing: { el: HTMLMediaElement; end: number; base: number; length: number; started: boolean; timer?: number } | null =
+  null;
 
 /**
  * A server file with a video stream plays in Audio mode as its sound alone, cut out on the fly: it takes no byte
@@ -115,6 +124,7 @@ interface Saved {
   preferVideo: boolean;
   quality: Quality;
   autoRadio: boolean;
+  fade: number;
 }
 
 function readSaved(): Partial<Saved> {
@@ -172,18 +182,20 @@ export const usePlayer = create<PlayerState>((set, get) => {
   const activeMedia = (): HTMLMediaElement | null => (loaded ? mediaFor(loaded.kind) : null);
 
   function play(media: HTMLMediaElement) {
+    mixer.resume();
     media.play().catch((err: DOMException) => {
       if (err.name === "AbortError") return; // src changed mid-start
       if (err.name === "NotAllowedError") set({ status: "paused" }); // autoplay blocked
     });
   }
 
-  function load(index: number, opts: { autoplay?: boolean; startAt?: number; dir?: 1 | -1 } = {}) {
+  function load(index: number, opts: { autoplay?: boolean; startAt?: number; dir?: 1 | -1; fade?: boolean } = {}) {
     const s = get();
     const track = s.queue[index];
     if (!track) return;
     clearTimeout(offsetSeek);
     offsetSeek = undefined;
+    if (!opts.fade) cutFade();
 
     // A server file that is gone (or whose drive isn't mounted): skip it, the way playback is going.
     if (track.unavailable) {
@@ -241,8 +253,8 @@ export const usePlayer = create<PlayerState>((set, get) => {
       duration: track.duration,
       buffered: 0,
     });
-    media.volume = s.volume;
-    media.muted = s.muted;
+    if (kind === "audio" && s.fade > 0) connectMixer();
+    applyVolume();
     const start = (src: string) => {
       media.src = offset && base > 0 ? `${src}${src.includes("?") ? "&" : "?"}t=${base}` : src;
       if (autoplay) play(media);
@@ -310,6 +322,64 @@ export const usePlayer = create<PlayerState>((set, get) => {
     set({ status: "paused", position: 0 });
   }
 
+  /**
+   * Near the end of a track in Audio mode, starts the next one on the spare deck so the two overlap. Not on repeat-one,
+   * into Video mode, or between tracks of one local album; the end of the queue goes on as before (radio, stop).
+   */
+  function maybeCrossfade(at: number) {
+    const s = get();
+    const left = s.duration - at;
+    if (!(left <= s.fade) || left < 1 || s.status !== "playing" || loaded?.kind !== "audio" || s.repeat === "one") return;
+    if (!mixer.running()) return;
+    const index = s.index < s.queue.length - 1 ? s.index + 1 : s.repeat === "all" ? 0 : -1;
+    const current = s.queue[s.index];
+    const next = s.queue[index];
+    if (!current || !next || index === s.index || next.unavailable || sameAlbum(current, next)) return;
+    if (needsClipLookup(next, s.preferVideo) || kindFor(next) !== "audio") return;
+    startCrossfade(index, left);
+  }
+
+  /** The next track becomes the current one now (bar, lock screen); its deck stays silent until it starts playing. */
+  function startCrossfade(index: number, left: number) {
+    stopOutgoing();
+    const from = audio;
+    const to = decks.find((d) => d !== from);
+    if (!to) return;
+    mixer.set(to, 0);
+    outgoing = { el: from, end: get().duration, base, length: left, started: false };
+    audio = to;
+    load(index, { fade: true });
+  }
+
+  /** The incoming track is audible: ramp both decks over what is left of the outgoing one. */
+  function beginFade() {
+    const o = outgoing;
+    if (!o) return;
+    o.started = true;
+    const seconds = Math.max(0.3, Math.min(o.length, o.end - (o.base + o.el.currentTime)));
+    mixer.fade(audio, o.el, seconds);
+    // Only tidies up: the outgoing deck is silent by then, and it stops by itself when its track ends.
+    o.timer = window.setTimeout(() => outgoing === o && stopOutgoing(), (seconds + 0.5) * 1000);
+  }
+
+  /** Stops the previous track's deck. Before the fade began the new track is still silent: bring it up. */
+  function stopOutgoing() {
+    const o = outgoing;
+    if (!o) return;
+    outgoing = null;
+    clearTimeout(o.timer);
+    o.el.pause();
+    o.el.removeAttribute("src");
+    o.el.load();
+    if (!o.started) mixer.set(audio, 1);
+  }
+
+  /** Ends a crossfade at once (pause, skip, another track): only the current track plays, at full level. */
+  function cutFade() {
+    stopOutgoing();
+    mixer.set(audio, 1);
+  }
+
   /** Shows why a track can't play, then moves on (unless every track would fail the same way). */
   function report(message: string, code?: ErrorCode) {
     const mine = token;
@@ -366,6 +436,7 @@ export const usePlayer = create<PlayerState>((set, get) => {
     });
     media.addEventListener("playing", () => {
       if (!isActive()) return;
+      if (outgoing && !outgoing.started) beginFade();
       set({ status: "playing", statusText: null });
       onStarted();
       syncPlaybackState();
@@ -383,16 +454,20 @@ export const usePlayer = create<PlayerState>((set, get) => {
       const at = base + media.currentTime;
       if (Math.abs(at - get().position) >= 0.2) set({ position: at });
       syncSystemMedia(); // throttled on the other side
+      maybeCrossfade(at);
     });
     media.addEventListener("progress", () => {
       if (!isActive() || !media.buffered.length) return;
       set({ buffered: base + media.buffered.end(media.buffered.length - 1) });
     });
     media.addEventListener("seeked", () => isActive() && syncPositionState());
-    media.addEventListener("ended", () => isActive() && onEnded());
+    media.addEventListener("ended", () => {
+      if (isActive()) onEnded();
+      else if (outgoing?.el === media) stopOutgoing();
+    });
     media.addEventListener("error", () => isActive() && media.getAttribute("src") && onError(media));
   }
-  wire(audio);
+  for (const deck of decks) wire(deck);
   wire(videoEl);
 
   const reloadIfKindChanged = () => {
@@ -439,6 +514,7 @@ export const usePlayer = create<PlayerState>((set, get) => {
     preferVideo: capabilities.video && (saved.preferVideo ?? false),
     quality: saved.quality ?? "sd",
     autoRadio: saved.autoRadio ?? true,
+    fade: saved.fade ?? FADE_DEFAULT,
 
     playList: (tracks, start = 0) => {
       if (!tracks.length) return;
@@ -496,6 +572,7 @@ export const usePlayer = create<PlayerState>((set, get) => {
       set({ queue, original });
       if (queue[i]) load(i, { autoplay: s.status === "playing" });
       else {
+        cutFade();
         activeMedia()?.pause();
         loaded = null;
         set({ index: Math.max(0, queue.length - 1), status: queue.length ? "paused" : "idle", position: 0 });
@@ -534,7 +611,10 @@ export const usePlayer = create<PlayerState>((set, get) => {
       if (stale || s.status === "error") return load(s.index, { startAt: s.position });
       const media = mediaFor(kind);
       if (media.paused) play(media);
-      else media.pause();
+      else {
+        cutFade();
+        media.pause();
+      }
     },
 
     next: () => {
@@ -574,17 +654,15 @@ export const usePlayer = create<PlayerState>((set, get) => {
 
     setVolume: (v) => {
       const volume = Math.max(0, Math.min(1, v));
-      audio.volume = videoEl.volume = volume;
-      const muted = volume === 0 ? true : false;
-      audio.muted = videoEl.muted = muted;
-      set({ volume, muted });
+      set({ volume, muted: volume === 0 });
+      applyVolume();
     },
 
     toggleMute: () => {
       const muted = !get().muted;
-      audio.muted = videoEl.muted = muted;
-      if (!muted && get().volume === 0) get().setVolume(0.6);
-      else set({ muted });
+      if (!muted && get().volume === 0) return get().setVolume(0.6);
+      set({ muted });
+      applyVolume();
     },
 
     toggleShuffle: () => {
@@ -619,11 +697,37 @@ export const usePlayer = create<PlayerState>((set, get) => {
     },
 
     setAutoRadio: (autoRadio) => set({ autoRadio }),
+
+    setFade: (seconds) => {
+      const fade = Math.max(0, Math.min(FADE_MAX, Math.round(seconds)));
+      set({ fade });
+      if (fade > 0 && loaded?.kind === "audio") {
+        connectMixer();
+        applyVolume();
+      }
+    },
   };
 });
 
-audio.volume = videoEl.volume = usePlayer.getState().volume;
-audio.muted = videoEl.muted = usePlayer.getState().muted;
+/** Volume and mute: on the elements, or on the mixer once the audio decks play through it (each deck stays at full). */
+function applyVolume() {
+  const { volume, muted } = usePlayer.getState();
+  const mixed = mixer.connected();
+  videoEl.volume = volume;
+  videoEl.muted = muted;
+  for (const deck of decks) {
+    deck.volume = mixed ? 1 : volume;
+    deck.muted = mixed ? false : muted;
+  }
+  mixer.setVolume(muted ? 0 : volume);
+}
+
+/** Routes the audio decks through the mixer once crossfades are on (see crossfade.ts). */
+function connectMixer() {
+  if (crossfadeSupported && !mixer.connected()) mixer.connect(decks);
+}
+
+applyVolume();
 
 export const selectCurrent = (s: PlayerState): Track | null => s.queue[s.index] ?? null;
 
@@ -645,6 +749,7 @@ function persist() {
     preferVideo: s.preferVideo,
     quality: s.quality,
     autoRadio: s.autoRadio,
+    fade: s.fade,
   };
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
