@@ -2,6 +2,8 @@ import {
   ArrowSquareOutIcon,
   CloudArrowDownIcon,
   CloudCheckIcon,
+  EyeIcon,
+  EyeSlashIcon,
   HeartIcon,
   ListPlusIcon,
   PlayIcon,
@@ -20,6 +22,7 @@ import { cn } from "../lib/format";
 import { isLocal } from "../lib/server";
 import { usePlayer } from "../player/player";
 import { useKeep } from "../stores/keep";
+import { useLocal } from "../stores/local";
 import { useLibrary } from "../stores/library";
 import { useUi } from "../stores/ui";
 import { isTvMode } from "../tv/tvMode";
@@ -123,6 +126,14 @@ export function TrackMenu() {
           onClick={run(() => void useLibrary.getState().removeFromPlaylist(menu.playlistId!, menu.track.id))}
         >
           {t.trackMenu.removeFromPlaylist}
+        </Item>
+      )}
+      {local && capabilities.serverLibrary && !tv && (
+        <Item
+          icon={menu.track.hidden ? <EyeIcon size={18} /> : <EyeSlashIcon size={18} />}
+          onClick={run(() => void useLocal.getState()[menu.track.hidden ? "unhide" : "hide"]({ ids: [menu.track.id] }))}
+        >
+          {menu.track.hidden ? t.hide.unhide : t.hide.hide}
         </Item>
       )}
       {!local && capabilities.serverLibrary && !tv && (

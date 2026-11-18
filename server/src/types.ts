@@ -14,6 +14,8 @@ export interface Track {
   unavailable?: boolean;
   /** Response-only: a YouTube track with a copy kept on the server (see keep.ts). */
   kept?: boolean;
+  /** Response-only: a local track left out of "내 음악" (hidden.ts); only in listings asked to include hidden items. */
+  hidden?: boolean;
 }
 
 export interface Playlist {

@@ -53,7 +53,8 @@ const TrackRow = memo(function TrackRow({ track, position, onPlay, playlistId, s
         onDragStart && "select-none [-webkit-touch-callout:none]",
         dragStyle?.zIndex && "bg-surface-3",
         // A server file that is gone: still listed (and kept in playlists), skipped when playing.
-        track.unavailable && "opacity-45",
+        // A hidden one only shows up while "숨긴 것 보기" is on.
+        (track.unavailable || track.hidden) && "opacity-45",
         showAlbum
           ? "grid-cols-[auto_1fr_auto] md:grid-cols-[28px_auto_1fr_auto_auto] lg:grid-cols-[28px_auto_minmax(0,1.4fr)_minmax(0,1fr)_auto_auto]"
           : "grid-cols-[auto_1fr_auto] md:grid-cols-[28px_auto_1fr_auto_auto]",
@@ -95,6 +96,7 @@ const TrackRow = memo(function TrackRow({ track, position, onPlay, playlistId, s
             )
           )}
           {track.unavailable && <span className="shrink-0 text-danger">{t.local.unavailable} ·</span>}
+          {track.hidden && <span className="shrink-0">{t.hide.badge} ·</span>}
           <span className="truncate">{track.artist || t.common.youtube}</span>
         </p>
       </div>

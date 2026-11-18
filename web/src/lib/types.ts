@@ -14,6 +14,8 @@ export interface Track {
   unavailable?: boolean;
   /** From the server, never stored: this YouTube track has a copy kept on the server. */
   kept?: boolean;
+  /** From the server, never stored: a "내 음악" track the user hid, listed only while hidden items are shown. */
+  hidden?: boolean;
 }
 
 /** One of the server's music folders. `online` is false while it can't be read (say, the drive isn't mounted). */
@@ -23,6 +25,8 @@ export interface LocalRoot {
   online: boolean;
   albums: number;
   tracks: number;
+  /** Hidden as a whole; listed only while hidden items are shown. */
+  hidden?: boolean;
 }
 
 /** A folder of a music root, or a file directly in the root (an album of its own). */
@@ -34,6 +38,8 @@ export interface LocalAlbum {
   cover: string;
   trackCount: number;
   duration: number;
+  /** Every track of it is hidden; listed only while hidden items are shown. */
+  hidden?: boolean;
 }
 
 export interface Playlist {

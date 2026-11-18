@@ -1,4 +1,5 @@
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyRequest } from "fastify";
+import { parseTarget } from "./hidden.js";
 import { langOf, msg } from "./i18n.js";
 import { keep, keepItems, unkeep } from "./keep.js";
 import * as local from "./local.js";
@@ -43,12 +44,15 @@ async function anyTrack(id: string): Promise<Track> {
   }
 }
 
+/** `?hidden=1`: "내 음악" listings include hidden items, marked `hidden: true`. */
+const showHidden = (req: FastifyRequest) => (req.query as { hidden?: string }).hidden === "1";
+
 export function registerServerRoutes(app: FastifyInstance) {
   app.get("/api/track/:id", async (req) => ({ track: await anyTrack(trackId(req.params)) }));
 
   // Local folders
 
-  app.get("/api/local/roots", () => ({ roots: local.listRoots() }));
+  app.get("/api/local/roots", (req) => ({ roots: local.listRoots(showHidden(req)) }));
 
   app.post("/api/local/rescan", async () => {
     await local.rescan();
@@ -57,20 +61,28 @@ export function registerServerRoutes(app: FastifyInstance) {
 
   app.get("/api/local/albums", (req) => {
     const { root } = req.query as { root?: string };
-    return { albums: local.listAlbums(root ?? "") };
+    return { albums: local.listAlbums(root ?? "", showHidden(req)) };
   });
 
   app.get("/api/local/album", (req) => {
     const { root, key } = req.query as { root?: string; key?: string };
-    return local.getAlbum(root ?? "", key ?? "");
+    return local.getAlbum(root ?? "", key ?? "", showHidden(req));
   });
 
   app.get("/api/local", (req) => {
     const { q, root, limit } = req.query as { q?: string; root?: string; limit?: string };
     const n = Number(limit);
     const max = Number.isInteger(n) && n > 0 ? Math.min(n, 5000) : 500;
-    return { tracks: local.searchLocal((q ?? "").slice(0, 200), root || undefined, max) };
+    return { tracks: local.searchLocal((q ?? "").slice(0, 200), root || undefined, max, showHidden(req)) };
   });
+
+  // Hidden tracks and roots: left out of the listings above, never deleted.
+
+  app.get("/api/local/hidden", () => local.hiddenItems());
+
+  app.post("/api/local/hidden", (req) => local.hide(parseTarget(req.body)));
+
+  app.delete("/api/local/hidden", (req) => local.unhide(parseTarget(req.body)));
 
   app.get("/api/local/lookup", async (req) => {
     const { path } = req.query as { path?: string };

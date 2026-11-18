@@ -34,6 +34,12 @@ export interface KeepItem {
   progress?: number;
 }
 
+/** What to hide or show again: local tracks, a whole music folder, or both. */
+export interface HideTarget {
+  ids?: string[];
+  root?: string;
+}
+
 const q = (params: Record<string, string | number | undefined>) => {
   const p = new URLSearchParams();
   for (const [k, v] of Object.entries(params)) if (v !== undefined && v !== "") p.set(k, String(v));
@@ -41,15 +47,22 @@ const q = (params: Record<string, string | number | undefined>) => {
   return s ? `?${s}` : "";
 };
 
+/** `hidden=1`: "내 음악" listings include hidden items, marked `hidden`. */
+const shown = (showHidden: boolean) => (showHidden ? 1 : undefined);
+
 export const server = {
-  roots: () => request<{ roots: LocalRoot[] }>("/api/local/roots").then((r) => r.roots),
+  roots: (showHidden = false) =>
+    request<{ roots: LocalRoot[] }>(`/api/local/roots${q({ hidden: shown(showHidden) })}`).then((r) => r.roots),
   rescan: () => request<{ roots: LocalRoot[] }>("/api/local/rescan", { method: "POST" }).then((r) => r.roots),
-  albums: (root: string, signal?: AbortSignal) =>
-    request<{ albums: LocalAlbum[] }>(`/api/local/albums${q({ root })}`, { signal }).then((r) => r.albums),
-  album: (root: string, key: string, signal?: AbortSignal) =>
-    request<{ album: LocalAlbum; tracks: Track[] }>(`/api/local/album${q({ root, key })}`, { signal }),
+  albums: (root: string, showHidden: boolean, signal?: AbortSignal) =>
+    request<{ albums: LocalAlbum[] }>(`/api/local/albums${q({ root, hidden: shown(showHidden) })}`, { signal }).then((r) => r.albums),
+  album: (root: string, key: string, showHidden: boolean, signal?: AbortSignal) =>
+    request<{ album: LocalAlbum; tracks: Track[] }>(`/api/local/album${q({ root, key, hidden: shown(showHidden) })}`, { signal }),
   searchLocal: (text: string, limit: number, signal?: AbortSignal) =>
     request<{ tracks: Track[] }>(`/api/local${q({ q: text, limit })}`, { signal }).then((r) => r.tracks),
+  hiddenItems: () => request<{ ids: string[]; roots: string[] }>("/api/local/hidden"),
+  hide: (target: HideTarget) => request<unknown>("/api/local/hidden", { method: "POST", json: target }),
+  unhide: (target: HideTarget) => request<unknown>("/api/local/hidden", { method: "DELETE", json: target }),
 
   /** Any track by id, local or YouTube: what a /play/<id> link opens. */
   track: (id: string, signal?: AbortSignal) =>

@@ -20,9 +20,10 @@
 ## API (서버판에서 더한 것)
 | 메서드 | 경로 | 하는 일 |
 |---|---|---|
-| GET | `/api/local/roots` | 내 음악 뿌리와 곡 수, 읽을 수 있는지 |
-| GET | `/api/local/albums?root=` · `/api/local/album?root=&key=` | 앨범 목록 · 앨범 곡 |
-| GET | `/api/local?q=&root=&limit=` | 내 음악에서 찾기 |
+| GET | `/api/local/roots` | 내 음악 뿌리와 곡 수, 읽을 수 있는지 (숨긴 뿌리 빠짐, `?hidden=1`이면 `hidden: true`로 같이) |
+| GET | `/api/local/albums?root=` · `/api/local/album?root=&key=` | 앨범 목록 · 앨범 곡 (숨긴 곡 빠짐, `&hidden=1`이면 같이) |
+| GET | `/api/local?q=&root=&limit=` | 내 음악에서 찾기 (숨긴 곡 빠짐, `&hidden=1`이면 같이) |
+| GET/POST/DELETE | `/api/local/hidden` · `{ids?, root?}` | 숨긴 것 `{ids, roots}` · 곡/뿌리 숨기기 · 숨기기 해제 (`data/hidden.json`, 파일은 그대로, 재생목록 곡은 그대로 재생) |
 | POST | `/api/local/rescan` | 폴더 다시 읽기 |
 | GET | `/api/local/:id/cover` | 표지 |
 | GET | `/api/track/:id` | 곡 하나(로컬·유튜브) |

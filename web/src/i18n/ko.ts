@@ -460,6 +460,21 @@ export const ko: Messages = {
     removed: "받아 둔 파일을 지웠어요",
   },
 
+  hide: {
+    hide: "숨기기",
+    hideFolder: "폴더 통째로 숨기기",
+    unhide: "숨기기 해제",
+    showHidden: "숨긴 것 보기",
+    hidden: "내 음악에서 숨겼어요",
+    folderHidden: "폴더를 통째로 숨겼어요",
+    unhidden: "다시 보이게 했어요",
+    undo: "되돌리기",
+    menuFor: (name) => `「${name}」 메뉴`,
+    badge: "숨김",
+    allHidden: "여기 있는 것은 모두 숨겨 뒀어요",
+    allHiddenBody: "「숨긴 것 보기」를 켜면 보이고, 숨기기를 해제할 수 있어요.",
+  },
+
   importList: {
     label: "YouTube 재생목록",
     action: (n) => `재생목록으로 가져오기 (${n}곡)`,

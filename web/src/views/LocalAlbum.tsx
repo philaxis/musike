@@ -23,8 +23,9 @@ export default function LocalAlbum() {
   const location = useLocation();
   const t = useT();
   const generation = useLocal((s) => s.generation);
-  const page = useRemote<{ album: Album; tracks: Track[] }>(`local-album:${generation}:${root}:${key}`, (signal) =>
-    server.album(root, key, signal),
+  const showHidden = useLocal((s) => s.showHidden);
+  const page = useRemote<{ album: Album; tracks: Track[] }>(`local-album:${generation}:${showHidden}:${root}:${key}`, (signal) =>
+    server.album(root, key, showHidden, signal),
   );
   const playList = usePlayer((s) => s.playList);
   const toggle = usePlayer((s) => s.toggle);
@@ -107,7 +108,8 @@ export default function LocalAlbum() {
             <TrackList tracks={tracks} showAlbum={false} />
           </div>
         ) : (
-          <EmptyState icon={<MusicNotesIcon size={28} />} title={t.local.noAlbums} body={t.local.noAlbumsBody} />
+          // An album always has a track: none listed means all of them are hidden.
+          <EmptyState icon={<MusicNotesIcon size={28} />} title={t.hide.allHidden} body={t.hide.allHiddenBody} />
         ))}
     </div>
   );
