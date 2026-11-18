@@ -1,15 +1,13 @@
-import { createReadStream } from "node:fs";
-import { mkdir, readFile, rename, stat, writeFile } from "node:fs/promises";
-import { homedir } from "node:os";
+import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { createInterface } from "node:readline";
 import type { FastifyInstance } from "fastify";
 import { findTrack } from "./box.js";
 import { config } from "./config.js";
 import { msg } from "./i18n.js";
 import * as library from "./library.js";
 import * as local from "./local.js";
-import { playsFile, type Play } from "./plays.js";
+import { isListen, loadPlays, type Play } from "./plays.js";
+import { loadTaste, type Taste } from "./taste.js";
 import { HttpError, isBundleId, isLocalId, TRACK_ID, type Track } from "./types.js";
 
 // 「내 기록」: listening stats read out of plays.jsonl (see plays.ts), and 「오늘 좋음 ☀」, the tracks liked on a given
@@ -27,7 +25,6 @@ const hourOf = (ms: number) => new Date(ms + TZ_OFFSET).getUTCHours();
 /** When a Seoul date starts (ms). */
 const dayStart = (date: string) => Date.parse(`${date}T00:00:00Z`) - TZ_OFFSET;
 
-export const isListen = (p: Pick<Play, "heard" | "duration">) => p.heard >= 30 && (p.heard >= p.duration / 2 || p.heard >= 240);
 export const isSkip = (p: Pick<Play, "heard" | "end">) => p.end === "skipped" && p.heard < 30;
 
 export type Period = "4w" | "6m" | "all";
@@ -208,76 +205,27 @@ export function trackRecord(plays: Play[], ids: Set<string>) {
   return { listens, skips, lines, seconds, first, last };
 }
 
-// Reading the log: streamed line by line, kept while the file's mtime and size stay the same.
-
-let log: { key: string; plays: Play[] } | null = null;
-let reading: { key: string; done: Promise<{ key: string; plays: Play[] }> } | null = null;
-
-const isPlayLine = (p: Partial<Play> | null): p is Play =>
-  !!p && typeof p.id === "string" && !!p.id && typeof p.startedAt === "number" && typeof p.heard === "number" && typeof p.duration === "number";
-
-async function readPlays(file: string): Promise<Play[]> {
-  const plays: Play[] = [];
-  const lines = createInterface({ input: createReadStream(file, "utf8"), crlfDelay: Infinity });
-  for await (const line of lines) {
-    if (!line) continue;
-    try {
-      const p = JSON.parse(line) as Partial<Play> | null;
-      if (isPlayLine(p)) plays.push(p);
-    } catch {
-      // a half-written last line: skip it
-    }
-  }
-  // Devices send late when offline, so file order is not quite time order.
-  return plays.sort((a, b) => a.startedAt - b.startedAt);
-}
-
-export async function loadPlays(file = playsFile()): Promise<{ key: string; plays: Play[] }> {
-  const st = await stat(file).catch(() => null);
-  if (!st) return { key: "none", plays: [] };
-  const key = `${st.mtimeMs}:${st.size}`;
-  if (log?.key === key) return log;
-  if (reading?.key !== key) {
-    const done = readPlays(file).then((plays) => (log = { key, plays }));
-    reading = { key, done };
-    done.catch(() => {}).finally(() => reading?.done === done && (reading = null));
-  }
-  return reading.done;
-}
-
-// The analysis results (musike-analysis): only the genre of each track is read here.
-
-const analysisDir = () => process.env.MUSIKE_ANALYSIS_DIR || path.join(homedir(), ".local", "share", "musike", "analysis");
-let taste: { mtime: number; genres: Map<string, string> } | null = null;
-
-/** Genre by track ID from taste.json, or null without it. A broken file counts as none. */
-async function tasteGenres(): Promise<{ key: string; genres: Map<string, string> | null }> {
-  const file = path.join(analysisDir(), "taste.json");
-  const st = await stat(file).catch(() => null);
-  if (!st) return { key: "none", genres: null };
-  if (taste?.mtime !== st.mtimeMs) {
-    const genres = new Map<string, string>();
-    try {
-      const data = JSON.parse(await readFile(file, "utf8")) as { songs?: { id?: unknown; genre?: unknown }[] };
-      for (const s of Array.isArray(data.songs) ? data.songs : []) {
-        if (typeof s?.id === "string" && typeof s.genre === "string" && s.genre) genres.set(s.id, s.genre);
-      }
-    } catch {
-      // being rewritten or broken: no genres until it changes again
-    }
-    taste = { mtime: st.mtimeMs, genres };
-  }
-  return { key: String(taste.mtime), genres: taste.genres.size ? taste.genres : null };
-}
-
 const computed = new Map<string, Stats>();
+/** The analysis the memo was made with; a new one (another file) empties it. */
+let computedWith: Taste | null = null;
 
 export async function getStats(period: Period, now = Date.now()): Promise<Stats> {
-  const [{ key, plays }, genres] = await Promise.all([loadPlays(), tasteGenres()]);
-  const memoKey = `${key}|${genres.key}|${period}|${dayOf(now)}`;
+  const [{ key, plays }, taste] = await Promise.all([loadPlays(), loadTaste()]);
+  if (computedWith !== taste) {
+    computed.clear();
+    computedWith = taste;
+  }
+  const memoKey = `${key}|${period}|${dayOf(now)}`;
   const hit = computed.get(memoKey);
   if (hit) return hit;
-  const stats = computeStats(plays, period, now, genres.genres ? (id) => genres.genres!.get(id) : undefined);
+  // Genres come from the analysis (taste.ts); without one the genre list is left out.
+  const genreOf = taste.songs.length
+    ? (id: string) => {
+        const i = taste.index.get(id);
+        return i === undefined ? undefined : taste.songs[i].genre || undefined;
+      }
+    : undefined;
+  const stats = computeStats(plays, period, now, genreOf);
   if (computed.size >= 12) computed.clear();
   computed.set(memoKey, stats);
   return stats;
@@ -331,6 +279,15 @@ async function loadLikes(): Promise<Record<string, DayLike[]>> {
     // none yet, or unreadable: start empty
   }
   return (likes ??= out);
+}
+
+/** Every track ever marked 「오늘 좋음」, newest day first (automatic playlists start from them). */
+export async function dayLikeIds(): Promise<string[]> {
+  const days = await loadLikes();
+  return Object.keys(days)
+    .sort()
+    .reverse()
+    .flatMap((d) => days[d].map((t) => t.id));
 }
 
 async function saveLikes(): Promise<void> {

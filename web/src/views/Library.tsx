@@ -1,4 +1,4 @@
-import { ChartBarIcon, DatabaseIcon, PlusIcon, TrayIcon, YoutubeLogoIcon } from "@phosphor-icons/react";
+import { ChartBarIcon, DatabaseIcon, PlusIcon, SparkleIcon, SquaresFourIcon, TrayIcon, YoutubeLogoIcon } from "@phosphor-icons/react";
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router";
 import { Cover, type CoverKind } from "../components/Cover";
@@ -18,6 +18,8 @@ import { useUi, type MenuTarget } from "../stores/ui";
 import { isTvMode } from "../tv/tvMode";
 
 const COVER = "size-16 shrink-0 rounded-[12px] md:aspect-square md:size-auto md:w-full md:rounded-[14px] md:shadow-[0_12px_32px_rgb(0_0_0/0.3)]";
+/** Tiles that are a place rather than a list of tracks: an icon instead of a cover. */
+const ICONS = { box: TrayIcon, stats: ChartBarIcon, genres: SquaresFourIcon, mixes: SparkleIcon };
 
 function Entry({
   to,
@@ -29,12 +31,13 @@ function Entry({
 }: {
   to: string;
   name: string;
-  kind: CoverKind | "box" | "stats";
+  kind: CoverKind | keyof typeof ICONS;
   tracks: Track[];
   sub: string;
   /** Right-click and long press: play, queue or edit it whole. */
   menu?: () => MenuTarget;
 }) {
+  const Icon = kind in ICONS ? ICONS[kind as keyof typeof ICONS] : null;
   return (
     <li>
       <Link
@@ -43,14 +46,12 @@ function Entry({
         draggable={false}
         className={`group flex items-center gap-3 rounded-[16px] p-2 transition-colors hover:bg-surface-2 md:flex-col md:items-stretch md:gap-3 md:p-3 ${NO_CALLOUT}`}
       >
-        {kind === "box" || kind === "stats" ? (
-          <span
-            className={`${COVER} grid place-items-center ${kind === "box" ? "bg-accent-soft text-accent-text" : "bg-surface-4 text-fg"}`}
-          >
-            {kind === "box" ? <TrayIcon size={26} /> : <ChartBarIcon size={26} />}
+        {Icon ? (
+          <span className={`${COVER} grid place-items-center ${kind === "stats" ? "bg-surface-4 text-fg" : "bg-accent-soft text-accent-text"}`}>
+            <Icon size={26} />
           </span>
         ) : (
-          <Cover kind={kind} tracks={tracks} iconSize={26} className={COVER} />
+          <Cover kind={kind as CoverKind} tracks={tracks} iconSize={26} className={COVER} />
         )}
         <span className="min-w-0">
           <span className="block truncate font-medium">{name}</span>
@@ -102,6 +103,15 @@ export default function Library() {
   const showBox = capabilities.serverLibrary && !isTvMode();
   const [sources, setSources] = useState<SourceCount[] | null>(null);
   const [boxTotal, setBoxTotal] = useState(0);
+  // Genres show once the taste analysis is there; automatic playlists work from listening alone.
+  const [genres, setGenres] = useState(0);
+  useEffect(() => {
+    if (!capabilities.serverLibrary) return;
+    server.tasteGenres().then(
+      (r) => setGenres(r.genres.length),
+      () => setGenres(0),
+    );
+  }, []);
   useEffect(() => {
     if (!showBox) return;
     server.boxSources().then(
@@ -166,6 +176,10 @@ export default function Library() {
         )}
         {/* Stats too: TV mode only plays. */}
         {showBox && <Entry to={paths.stats} name={t.stats.title} kind="stats" tracks={[]} sub={t.stats.tileSub} />}
+        {genres > 0 && <Entry to={paths.tasteGenres} name={t.taste.genres} kind="genres" tracks={[]} sub={t.taste.genresSub(genres)} />}
+        {capabilities.serverLibrary && (
+          <Entry to={paths.mixes} name={t.taste.mixes} kind="mixes" tracks={[]} sub={t.taste.mixesSub} />
+        )}
         {playlists.map((p) => (
           <Entry
             key={p.id}

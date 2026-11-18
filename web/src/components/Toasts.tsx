@@ -1,5 +1,6 @@
 import { CheckCircleIcon, WarningCircleIcon } from "@phosphor-icons/react";
 import { AnimatePresence, motion } from "motion/react";
+import { useNavigate } from "react-router";
 import { useT } from "../i18n";
 import { useUi } from "../stores/ui";
 
@@ -7,6 +8,7 @@ export function Toasts() {
   const toasts = useUi((s) => s.toasts);
   const dismiss = useUi((s) => s.dismissToast);
   const t = useT();
+  const navigate = useNavigate();
 
   return (
     <div
@@ -36,7 +38,8 @@ export function Toasts() {
               <button
                 type="button"
                 onClick={() => {
-                  toast.action!.run();
+                  toast.action!.run?.();
+                  if (toast.action!.to) navigate(toast.action!.to);
                   dismiss(toast.id);
                 }}
                 className="h-8 shrink-0 rounded-full bg-accent px-3.5 text-[13px] font-semibold text-accent-ink transition-transform active:scale-95"

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import type { Play } from "../src/plays.ts";
-import { computeStats, dayOf, dayPlays, isListen, isSkip, periodStart, trackRecord } from "../src/stats.ts";
+import { isListen, type Play } from "../src/plays.ts";
+import { computeStats, dayOf, dayPlays, isSkip, periodStart, trackRecord } from "../src/stats.ts";
 
 // 21:00 in Seoul, 2026-11-18.
 const now = Date.UTC(2026, 10, 18, 12);

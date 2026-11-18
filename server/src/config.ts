@@ -24,6 +24,8 @@ export const config = {
   binDir: process.env.MUSIKE_BIN_DIR || null,
   /** Server music folders shown as "내 음악": `name=path;name=path` (see local.ts). Read-only. */
   localDirs: process.env.MUSIKE_LOCAL_DIRS ?? "",
+  /** Taste analysis output (taste.json, audio.f32, text.f32), written by the analysis worker; read-only here. */
+  analysisDir: process.env.MUSIKE_ANALYSIS_DIR || path.join(homedir(), ".local", "share", "musike", "analysis"),
   /** Where "keep on server" puts YouTube audio; also indexed as the root "받아 둔 곡". */
   keepDir: process.env.MUSIKE_KEEP_DIR || "/mnt/backup8t/orca-data/musike/keep",
   /** Google OAuth web client (`client_id`, `client_secret`) and the account's tokens: secrets, outside the repo and data. */

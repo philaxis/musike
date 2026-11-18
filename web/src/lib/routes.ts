@@ -27,6 +27,13 @@ export const paths = {
   listLink: (id: string) => `/list/${id}`,
   /** A file on the server by its absolute path (download notifications). */
   openFile: "/open",
+  /** The taste analysis: genres, one genre's sound groups, one group's tracks; automatic playlists; a track's alike-tracks radio. */
+  tasteGenres: "/library/genres",
+  tasteGenre: (genre: string) => `/library/genres/${encodeURIComponent(genre)}`,
+  tasteGroup: (gid: string) => `/library/groups/${encodeURIComponent(gid)}`,
+  mixes: "/library/mixes",
+  mix: (id: string) => `/library/mixes/${encodeURIComponent(id)}`,
+  tasteRadio: (id: string) => `/library/radio/${id}`,
 };
 
 /** Hash that opens the full-screen Now Playing sheet on phones (so Back closes it). */

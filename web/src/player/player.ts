@@ -4,6 +4,7 @@ import { api, capabilities, explainStreamError, streamSource, systemMedia, type 
 import { createAudio } from "../lib/audio";
 import { bundleParts, bundleRow, queueRows, trackTitle } from "../lib/bundles";
 import { shuffled } from "../lib/format";
+import { paths } from "../lib/routes";
 import { isLocal, server } from "../lib/server";
 import type { Bundle, Track } from "../lib/types";
 import { useLibrary } from "../stores/library";
@@ -118,6 +119,19 @@ function prepare(id: string) {
     (r) => r.audioMode && offsetAudio.set(id, r.audioMode === "offset"),
     () => {},
   );
+}
+
+/**
+ * A radio from `track`, without it: alike tracks from the server's taste analysis when it knows the track (box or
+ * music folder), else YouTube's radio. `alike` tells which. Local tracks and bundles have no YouTube radio.
+ */
+async function radioFor(track: Track): Promise<{ tracks: Track[]; alike: boolean }> {
+  if (capabilities.serverLibrary && track.kind !== "bundle") {
+    const r = await server.tasteRadio(track.id).catch(() => null);
+    if (r?.analyzed && r.tracks.length > 1) return { tracks: r.tracks.filter((t) => t.id !== track.id), alike: true };
+  }
+  if (isLocal(track) || track.kind === "bundle") throw new Error(getT().taste.notAnalyzed);
+  return { tracks: await api.radio(track.id), alike: false };
 }
 
 const STORAGE_KEY = "musike:player";
@@ -322,7 +336,7 @@ export const usePlayer = create<PlayerState>((set, get) => {
     set({ status: "loading", statusText: "fetchingRadio" });
     try {
       const known = new Set(get().queue.map((t) => t.id));
-      const more = (await api.radio(last.id)).filter((t) => !known.has(t.id)).slice(0, 25);
+      const more = (await radioFor(last)).tracks.filter((t) => !known.has(t.id)).slice(0, 25);
       if (!more.length) throw new Error("empty");
       set((st) => ({
         queue: [...st.queue, ...more],
@@ -715,8 +729,10 @@ export const usePlayer = create<PlayerState>((set, get) => {
     startRadio: async (track) => {
       toast(getT().player.startingRadio(track.title));
       try {
-        const related = await api.radio(track.id);
-        get().playList([track, ...related.filter((t) => t.id !== track.id)], 0);
+        const { tracks, alike } = await radioFor(track);
+        get().playList([track, ...tracks.filter((t) => t.id !== track.id)], 0);
+        // The alike-tracks radio is a list of its own too: open it to save it as a playlist.
+        if (alike) toast(getT().taste.radioReady(track.title), "info", { label: getT().taste.showList, to: paths.tasteRadio(track.id) });
       } catch (e) {
         toast((e as Error).message, "error");
       }

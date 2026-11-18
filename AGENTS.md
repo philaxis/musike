@@ -41,6 +41,9 @@
 | GET/PUT/POST | `/api/google/playlists` · `PUT /api/google/excluded {ids}` · `POST /api/google/sync` | 내 유튜브 재생목록(체크 끈 것 `excluded`) · 들여오지 않을 목록 · 새 곡을 곡 상자로(409 `google_login`이면 다시 연결) |
 | GET | `/api/stats?period=4w\|6m\|all` · `/api/stats/day/:date` · `/api/stats/track/:id` | 내 기록(들은 시간·「한 번 들음」·새로 알게 된 곡·건너뜀 비율, 날짜별, 시간대, 많이 들은 곡·아티스트·장르, 요즘 반복, 잊고 있던 애창곡) · 그날 들은 곡과 그날 ☀ · 곡 하나의 기록. `plays.jsonl`에서 계산, 날짜는 서울. 장르는 분석 결과 `taste.json`이 있을 때만 |
 | GET/PUT/DELETE | `/api/daylikes?date=` · `PUT /api/daylikes/:id {곡}` · `DELETE /api/daylikes/:id?date=` | 「오늘 좋음 ☀」(♥와 따로, `data/daylikes.json` 날짜별). 넣기는 늘 오늘(서울) |
+| GET | `/api/taste/genres` · `/api/taste/genres/:genre` · `/api/taste/groups/:gid` | 취향 분석(`MUSIKE_ANALYSIS_DIR`, 기본 `~/.local/share/musike/analysis`)의 장르(곡 수·묶음 수) · 장르 안 소리 묶음(이름 같은 묶음은 `tell` 아티스트로 구분, 분석 없는 곡은 `none:<장르>`) · 묶음 곡(대표적인 곡부터). 분석이 없으면 `ready: false` |
+| GET | `/api/taste/radio/:id` | 닮은 곡 라디오 25곡(그 곡 먼저, 소리·설명 반반 닮음 + MMR, 아티스트 2곡까지). 분석에 없는 곡은 `analyzed: false` |
+| GET | `/api/taste/mixes` · `/api/taste/mixes/:mid` | 오늘의 자동 재생목록(`daily-1`~`daily-5`, `on-repeat`, `new-for-you`, `forgotten`, `upbeat`, `calm`; 서울 날짜로 하루 동안 같음) |
 
 원작 API(검색, 재생목록 만들기·넣기·빼기, 즐겨찾기, 스트림)는 README의 API 표.
-웹 경로: `/play/:id`(곡·묶음 바로 재생), `/list/:pid`(재생목록 처음부터), `/library/box`(곡 상자, `?filter=untagged`·`?source=kind:ref`·`?tag=`), `/library/stats`(내 기록, `?period=4w|6m|all`·`&day=YYYY-MM-DD`), `/settings`(설정 열기, 구글 로그인 뒤 `?google=connected|error`로 돌아오는 곳).
+웹 경로: `/play/:id`(곡·묶음 바로 재생), `/list/:pid`(재생목록 처음부터), `/library/box`(곡 상자, `?filter=untagged`·`?source=kind:ref`·`?tag=`), `/library/stats`(내 기록, `?period=4w|6m|all`·`&day=YYYY-MM-DD`), `/library/genres`(장르 → 소리 묶음), `/library/mixes`(자동 재생목록), `/library/radio/:id`(닮은 곡 라디오 목록), `/settings`(설정 열기, 구글 로그인 뒤 `?google=connected|error`로 돌아오는 곳).

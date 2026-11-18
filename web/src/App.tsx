@@ -38,6 +38,10 @@ import OpenLink from "./views/OpenLink";
 import Search from "./views/Search";
 import SongBox from "./views/SongBox";
 import Stats from "./views/Stats";
+import Mixes from "./views/Mixes";
+import TasteGenre from "./views/TasteGenre";
+import TasteGenres from "./views/TasteGenres";
+import TasteTracks from "./views/TasteTracks";
 
 const SHEET_HASH = `#${NOW_PLAYING_HASH}`;
 
@@ -166,6 +170,12 @@ export default function App() {
               <Route path={paths.openFile} element={<OpenLink key="file" kind="file" />} />
               <Route path="/library/box" element={<SongBox />} />
               <Route path={paths.stats} element={<Stats />} />
+              <Route path={paths.tasteGenres} element={<TasteGenres />} />
+              <Route path="/library/genres/:genre" element={<TasteGenre />} />
+              <Route path="/library/groups/:id" element={<TasteTracks key="group" kind="group" />} />
+              <Route path={paths.mixes} element={<Mixes />} />
+              <Route path="/library/mixes/:id" element={<TasteTracks key="mix" kind="mix" />} />
+              <Route path="/library/radio/:id" element={<TasteTracks key="radio" kind="radio" />} />
               <Route path="*" element={<Home />} />
             </Routes>
           )}
