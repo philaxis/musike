@@ -1,5 +1,6 @@
 import {
   ArrowSquareOutIcon,
+  ChartBarIcon,
   CheckSquareIcon,
   CloudArrowDownIcon,
   CloudCheckIcon,
@@ -156,6 +157,9 @@ function TrackItems({ menu, run }: { menu: Extract<MenuState, { kind: "track" }>
           )}
           <Item icon={<StackIcon size={18} />} onClick={() => useUi.getState().openVersions(track)}>
             {t.songBox.versions}
+          </Item>
+          <Item icon={<ChartBarIcon size={18} />} onClick={() => useUi.getState().openRecord(track)}>
+            {t.stats.trackRecord}
           </Item>
         </>
       )}

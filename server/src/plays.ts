@@ -65,7 +65,7 @@ export function parsePlay(raw: unknown, now = Date.now()): Play | null {
   };
 }
 
-const file = () => path.join(config.dataDir, "plays.jsonl");
+export const playsFile = () => path.join(config.dataDir, "plays.jsonl");
 let writing: Promise<void> = Promise.resolve();
 
 /** Appends the events (in order; one write at a time, so lines never interleave). */
@@ -74,7 +74,7 @@ export function appendPlays(plays: Play[]): Promise<void> {
   const text = plays.map((p) => JSON.stringify(p)).join("\n") + "\n";
   writing = writing.then(async () => {
     await mkdir(config.dataDir, { recursive: true });
-    await appendFile(file(), text, "utf8");
+    await appendFile(playsFile(), text, "utf8");
   });
   return writing;
 }

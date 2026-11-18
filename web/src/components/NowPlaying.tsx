@@ -18,7 +18,7 @@ import type { Track } from "../lib/types";
 import { selectCurrent, usePlayer, useStatusText } from "../player/player";
 import { useUi, type PanelTab } from "../stores/ui";
 import { Artwork } from "./Artwork";
-import { FavoriteButton, ModeSwitch, Scrubber, Transport } from "./Controls";
+import { DayLikeButton, FavoriteButton, ModeSwitch, Scrubber, Transport } from "./Controls";
 import { IconButton } from "./IconButton";
 import { QueueList } from "./Queue";
 import { SLOT, VideoSlot } from "./Video";
@@ -99,7 +99,10 @@ function TrackHeading({ track, large = false }: { track: Track; large?: boolean 
           </button>
         )}
       </div>
-      <FavoriteButton track={track} size={large ? "lg" : "md"} />
+      <div className="flex shrink-0 items-center">
+        <FavoriteButton track={track} size={large ? "lg" : "md"} />
+        <DayLikeButton track={track} size={large ? "lg" : "md"} />
+      </div>
     </div>
   );
 }

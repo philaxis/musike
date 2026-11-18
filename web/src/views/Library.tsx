@@ -1,4 +1,4 @@
-import { DatabaseIcon, PlusIcon, TrayIcon, YoutubeLogoIcon } from "@phosphor-icons/react";
+import { ChartBarIcon, DatabaseIcon, PlusIcon, TrayIcon, YoutubeLogoIcon } from "@phosphor-icons/react";
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router";
 import { Cover, type CoverKind } from "../components/Cover";
@@ -29,7 +29,7 @@ function Entry({
 }: {
   to: string;
   name: string;
-  kind: CoverKind | "box";
+  kind: CoverKind | "box" | "stats";
   tracks: Track[];
   sub: string;
   /** Right-click and long press: play, queue or edit it whole. */
@@ -43,9 +43,11 @@ function Entry({
         draggable={false}
         className={`group flex items-center gap-3 rounded-[16px] p-2 transition-colors hover:bg-surface-2 md:flex-col md:items-stretch md:gap-3 md:p-3 ${NO_CALLOUT}`}
       >
-        {kind === "box" ? (
-          <span className={`${COVER} grid place-items-center bg-accent-soft text-accent-text`}>
-            <TrayIcon size={26} />
+        {kind === "box" || kind === "stats" ? (
+          <span
+            className={`${COVER} grid place-items-center ${kind === "box" ? "bg-accent-soft text-accent-text" : "bg-surface-4 text-fg"}`}
+          >
+            {kind === "box" ? <TrayIcon size={26} /> : <ChartBarIcon size={26} />}
           </span>
         ) : (
           <Cover kind={kind} tracks={tracks} iconSize={26} className={COVER} />
@@ -162,6 +164,8 @@ export default function Library() {
             sub={boxTotal ? `${t.songBox.count(boxTotal)} · ${t.songBox.tileSub}` : t.songBox.tileSub}
           />
         )}
+        {/* Stats too: TV mode only plays. */}
+        {showBox && <Entry to={paths.stats} name={t.stats.title} kind="stats" tracks={[]} sub={t.stats.tileSub} />}
         {playlists.map((p) => (
           <Entry
             key={p.id}

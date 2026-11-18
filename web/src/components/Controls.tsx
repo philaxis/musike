@@ -11,6 +11,7 @@ import {
   SpeakerHighIcon,
   SpeakerLowIcon,
   SpeakerXIcon,
+  SunIcon,
   VideoCameraIcon,
 } from "@phosphor-icons/react";
 import { useState } from "react";
@@ -20,6 +21,7 @@ import { capabilities } from "../lib/api";
 import { cn, formatTime } from "../lib/format";
 import type { Track } from "../lib/types";
 import { usePlayer } from "../player/player";
+import { useDayLikes } from "../stores/dayLikes";
 import { useLibrary } from "../stores/library";
 import { IconButton, PlayDisc } from "./IconButton";
 import { Slider } from "./Slider";
@@ -155,6 +157,26 @@ export function FavoriteButton({ track, size = "md" }: { track: Track | null; si
       onClick={() => track && void toggle(track)}
     >
       <HeartIcon size={size === "lg" ? 24 : 19} weight={isFavorite ? "fill" : "regular"} />
+    </IconButton>
+  );
+}
+
+/** 「오늘 좋음 ☀」 beside the heart, only where the current track is shown: today's likes, apart from favorites. */
+export function DayLikeButton({ track, size = "md" }: { track: Track | null; size?: "sm" | "md" | "lg" }) {
+  const on = useDayLikes((s) => !!track && !!s.ids[track.id]);
+  const toggle = useDayLikes((s) => s.toggle);
+  const t = useT();
+  if (!capabilities.serverLibrary) return null;
+  return (
+    <IconButton
+      label={on ? t.stats.unlikeToday : t.stats.likeToday}
+      active={on}
+      size={size}
+      disabled={!track}
+      aria-pressed={on}
+      onClick={() => track && void toggle(track)}
+    >
+      <SunIcon size={size === "lg" ? 24 : 19} weight={on ? "fill" : "regular"} />
     </IconButton>
   );
 }
