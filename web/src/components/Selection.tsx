@@ -6,6 +6,7 @@ import type { Track } from "../lib/types";
 import { selectCurrent, usePlayer } from "../player/player";
 import { useLibrary } from "../stores/library";
 import { useUi } from "../stores/ui";
+import { isTvMode } from "../tv/tvMode";
 import { Artwork } from "./Artwork";
 import { Equalizer } from "./Brand";
 
@@ -126,7 +127,9 @@ export function SelectionBar({
           onClick={() => playList(toPlay, 0)}
         />
         <Action icon={<HeartIcon size={16} />} label={t.common.favorite} disabled={!chosen.length} onClick={() => void addFavorites(chosen)} />
-        <Action icon={<PlaylistIcon size={16} />} label={t.common.playlist} disabled={!chosen.length} onClick={() => openAddToPlaylist(chosen)} />
+        {!isTvMode() && (
+          <Action icon={<PlaylistIcon size={16} />} label={t.common.playlist} disabled={!chosen.length} onClick={() => openAddToPlaylist(chosen)} />
+        )}
       </div>
     </div>
   );

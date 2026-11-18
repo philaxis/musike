@@ -11,6 +11,7 @@ import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { useT } from "../i18n";
 import { cn } from "../lib/format";
+import { isLocal } from "../lib/server";
 import type { Track } from "../lib/types";
 import { selectCurrent, usePlayer, useStatusText } from "../player/player";
 import { useUi, type PanelTab } from "../stores/ui";
@@ -104,13 +105,15 @@ function PanelBody({ tab, slot }: { tab: PanelTab; slot: number }) {
       <Stage track={track} slot={slot} />
       <TrackHeading track={track} />
       <ModeSwitch />
-      <button
-        type="button"
-        onClick={() => void startRadio(track)}
-        className="flex h-11 items-center justify-center gap-2 rounded-full bg-surface-1 text-sm font-medium ring-1 ring-line transition-colors hover:bg-surface-3 active:scale-[0.98]"
-      >
-        <RadioIcon size={18} /> {t.nowPlaying.startRadio}
-      </button>
+      {!isLocal(track) && (
+        <button
+          type="button"
+          onClick={() => void startRadio(track)}
+          className="flex h-11 items-center justify-center gap-2 rounded-full bg-surface-1 text-sm font-medium ring-1 ring-line transition-colors hover:bg-surface-3 active:scale-[0.98]"
+        >
+          <RadioIcon size={18} /> {t.nowPlaying.startRadio}
+        </button>
+      )}
       {nextUp && (
         <div className="rounded-[14px] bg-surface-1 p-3 ring-1 ring-line">
           <p className="pb-2 text-xs font-medium text-fg-3">{t.nowPlaying.upNext}</p>

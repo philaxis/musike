@@ -1,5 +1,7 @@
 import {
   ArrowSquareOutIcon,
+  CloudArrowDownIcon,
+  CloudCheckIcon,
   HeartIcon,
   ListPlusIcon,
   PlayIcon,
@@ -13,21 +15,27 @@ import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "re
 import { createPortal } from "react-dom";
 import { MD, useMediaQuery } from "../hooks/useMediaQuery";
 import { useT } from "../i18n";
+import { capabilities } from "../lib/api";
 import { cn } from "../lib/format";
+import { isLocal } from "../lib/server";
 import { usePlayer } from "../player/player";
+import { useKeep } from "../stores/keep";
 import { useLibrary } from "../stores/library";
 import { useUi } from "../stores/ui";
+import { isTvMode } from "../tv/tvMode";
 import { Artwork } from "./Artwork";
 
-function Item({ icon, children, onClick, danger }: { icon: ReactNode; children: ReactNode; onClick: () => void; danger?: boolean }) {
+/** A menu entry; without `onClick` it is a status line (say, "Downloading to the server"). */
+function Item({ icon, children, onClick, danger }: { icon: ReactNode; children: ReactNode; onClick?: () => void; danger?: boolean }) {
   return (
     <button
       type="button"
       role="menuitem"
       onClick={onClick}
+      disabled={!onClick}
       className={cn(
         "flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-[15px] transition-colors md:py-2 md:text-sm",
-        "hover:bg-surface-3 focus-visible:bg-surface-3",
+        "hover:bg-surface-3 focus-visible:bg-surface-3 disabled:pointer-events-none",
         danger ? "text-danger" : "text-fg",
       )}
     >
@@ -42,6 +50,7 @@ export function TrackMenu() {
   const close = useUi((s) => s.closeMenu);
   const openAddToPlaylist = useUi((s) => s.openAddToPlaylist);
   const isFavorite = useLibrary((s) => (menu ? s.favorites.some((t) => t.id === menu.track.id) : false));
+  const keepItem = useKeep((s) => (menu ? s.items[menu.track.id] : undefined));
   const isMd = useMediaQuery(MD);
   const box = useRef<HTMLDivElement>(null);
   const t = useT();
@@ -72,6 +81,13 @@ export function TrackMenu() {
     close();
   };
 
+  const local = menu ? isLocal(menu.track) : false;
+  // TV mode only plays: no playlist editing or keeping there.
+  const tv = isTvMode();
+  const keepStatus = keepItem?.status ?? (menu?.track.kept ? "done" : "none");
+  const progress = keepItem?.progress;
+  const percent = progress === undefined ? null : Math.round(progress <= 1 ? progress * 100 : progress);
+
   const content = menu && (
     <div role="menu" aria-label={t.trackMenu.actionsFor(menu.track.title)} data-escape-closes className="flex flex-col">
       <Item icon={<PlayIcon size={18} />} onClick={run(() => usePlayer.getState().playTrack(menu.track))}>
@@ -83,9 +99,11 @@ export function TrackMenu() {
       <Item icon={<ListPlusIcon size={18} />} onClick={run(() => usePlayer.getState().addToQueue(menu.track))}>
         {t.trackMenu.addToQueue}
       </Item>
-      <Item icon={<RadioIcon size={18} />} onClick={run(() => void usePlayer.getState().startRadio(menu.track))}>
-        {t.trackMenu.startRadio}
-      </Item>
+      {!local && (
+        <Item icon={<RadioIcon size={18} />} onClick={run(() => void usePlayer.getState().startRadio(menu.track))}>
+          {t.trackMenu.startRadio}
+        </Item>
+      )}
       <div className="mx-3 my-1 h-px bg-line" />
       <Item
         icon={<HeartIcon size={18} weight={isFavorite ? "fill" : "regular"} className={isFavorite ? "text-accent-text" : ""} />}
@@ -93,10 +111,12 @@ export function TrackMenu() {
       >
         {isFavorite ? t.common.removeFromFavorites : t.common.addToFavorites}
       </Item>
-      <Item icon={<PlaylistIcon size={18} />} onClick={() => openAddToPlaylist([menu.track])}>
-        {t.trackMenu.addToPlaylist}
-      </Item>
-      {menu.playlistId && (
+      {!tv && (
+        <Item icon={<PlaylistIcon size={18} />} onClick={() => openAddToPlaylist([menu.track])}>
+          {t.trackMenu.addToPlaylist}
+        </Item>
+      )}
+      {menu.playlistId && !tv && (
         <Item
           danger
           icon={<TrashIcon size={18} />}
@@ -105,13 +125,38 @@ export function TrackMenu() {
           {t.trackMenu.removeFromPlaylist}
         </Item>
       )}
-      <div className="mx-3 my-1 h-px bg-line" />
-      <Item
-        icon={<ArrowSquareOutIcon size={18} />}
-        onClick={run(() => window.open(`https://www.youtube.com/watch?v=${menu.track.id}`, "_blank", "noopener"))}
-      >
-        {t.trackMenu.openYoutube}
-      </Item>
+      {!local && capabilities.serverLibrary && !tv && (
+        <>
+          <div className="mx-3 my-1 h-px bg-line" />
+          {keepStatus === "downloading" ? (
+            <Item icon={<CloudArrowDownIcon size={18} className="animate-pulse" />}>
+              {percent === null ? t.keep.downloading : t.keep.progress(percent)}
+            </Item>
+          ) : keepStatus === "done" ? (
+            <>
+              <Item icon={<CloudCheckIcon size={18} className="text-accent-text" />}>{t.keep.kept}</Item>
+              <Item danger icon={<TrashIcon size={18} />} onClick={run(() => void useKeep.getState().remove(menu.track))}>
+                {t.keep.remove}
+              </Item>
+            </>
+          ) : (
+            <Item icon={<CloudArrowDownIcon size={18} />} onClick={run(() => void useKeep.getState().keep(menu.track))}>
+              {t.keep.keep}
+            </Item>
+          )}
+        </>
+      )}
+      {!local && (
+        <>
+          <div className="mx-3 my-1 h-px bg-line" />
+          <Item
+            icon={<ArrowSquareOutIcon size={18} />}
+            onClick={run(() => window.open(`https://www.youtube.com/watch?v=${menu.track.id}`, "_blank", "noopener"))}
+          >
+            {t.trackMenu.openYoutube}
+          </Item>
+        </>
+      )}
     </div>
   );
 

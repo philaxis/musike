@@ -3,13 +3,16 @@ import { useState } from "react";
 import { Link, useNavigate } from "react-router";
 import { Cover, type CoverKind } from "../components/Cover";
 import { NamePlaylistDialog } from "../components/Dialogs";
+import { LocalRoots } from "../components/LocalRoots";
 import { PageHeader } from "../components/Page";
 import { useT } from "../i18n";
+import { capabilities } from "../lib/api";
 import { paths } from "../lib/routes";
 import type { Track } from "../lib/types";
 import { IconButton } from "../components/IconButton";
 import { useLibrary } from "../stores/library";
 import { useUi } from "../stores/ui";
+import { isTvMode } from "../tv/tvMode";
 
 function Entry({ to, name, kind, tracks, sub }: { to: string; name: string; kind: CoverKind; tracks: Track[]; sub: string }) {
   return (
@@ -44,20 +47,23 @@ export default function Library() {
     <div className="pb-8">
       <PageHeader
         title={t.nav.library}
+        // TV mode only plays: no making playlists or importing backups there.
         actions={
-          <>
-          <IconButton label={t.library.backup} onClick={() => setSettingsOpen(true)}>
-            <DatabaseIcon size={20} />
-          </IconButton>
-          <button
-            type="button"
-            onClick={() => setCreating(true)}
-            className="flex h-10 items-center gap-1.5 rounded-full bg-accent pr-4 pl-3 text-sm font-semibold text-accent-ink transition-transform active:scale-[0.97]"
-          >
-            <PlusIcon size={18} weight="bold" /> <span className="hidden sm:inline">{t.nav.newPlaylist}</span>
-            <span className="sm:hidden">{t.library.newShort}</span>
-          </button>
-          </>
+          !isTvMode() && (
+            <>
+            <IconButton label={t.library.backup} onClick={() => setSettingsOpen(true)}>
+              <DatabaseIcon size={20} />
+            </IconButton>
+            <button
+              type="button"
+              onClick={() => setCreating(true)}
+              className="flex h-10 items-center gap-1.5 rounded-full bg-accent pr-4 pl-3 text-sm font-semibold text-accent-ink transition-transform active:scale-[0.97]"
+            >
+              <PlusIcon size={18} weight="bold" /> <span className="hidden sm:inline">{t.nav.newPlaylist}</span>
+              <span className="sm:hidden">{t.library.newShort}</span>
+            </button>
+            </>
+          )
         }
       />
 
@@ -81,6 +87,8 @@ export default function Library() {
           {t.library.noPlaylists}
         </p>
       )}
+
+      {capabilities.serverLibrary && <LocalRoots />}
 
       <NamePlaylistDialog
         open={creating}

@@ -91,6 +91,8 @@ export const pt: Messages = {
     deleteTitle: "Excluir playlist?",
     deleteBody: (name, tracks) => `"${name}" e a lista de ${count(tracks, "faixa", "faixas")} serão apagadas. Isso não pode ser desfeito.`,
     delete: "Excluir",
+    reorderFailed: "Não foi possível salvar a nova ordem",
+    dragToReorder: "Arraste para reordenar",
   },
 
   dialogs: {
@@ -161,6 +163,7 @@ export const pt: Messages = {
     streamFailed: "O YouTube parou de entregar esta faixa. Tente de novo daqui a pouco.",
     offline: "Você está sem internet. Conecte-se para ouvir música.",
     httpError: (status) => `Erro ${status}`,
+    unavailable: (title) => `"${title}" não pode tocar agora: o arquivo não está no servidor.`,
   },
 
   nowPlaying: {
@@ -242,6 +245,9 @@ export const pt: Messages = {
       "Busque por música, artista ou álbum. Para clipes e ao vivo, use a aba Vídeos. Também dá para colar um link do YouTube.",
     exploreGenres: "Explorar por gênero",
     albums: "Álbuns",
+    myMusic: "Minhas músicas",
+    showAll: (n) => `Ver todas as ${n}`,
+    showLess: "Ver menos",
   },
 
   batch: {
@@ -422,5 +428,57 @@ export const pt: Messages = {
     allAlreadyIn: (name) => `Já estavam todas em "${name}"`,
     ytdlpMissing: "O yt-dlp não foi encontrado. Sem ele nenhuma música toca.",
     ytdlpUpdate: (version) => `Nova versão do yt-dlp disponível (${version})`,
+  },
+
+  local: {
+    title: "Minhas músicas",
+    rescan: "Ler as pastas de novo",
+    rescanned: "Pastas lidas de novo",
+    offline: "Não dá para ler agora",
+    offlineBody: "O disco com esta pasta não está conectado. As faixas continuam nas suas playlists e voltam a tocar quando ele voltar.",
+    rootSub: (albums, tracks) => `${count(albums, "álbum", "álbuns")} · ${count(tracks, "faixa", "faixas")}`,
+    noRoots: "Nenhuma pasta de músicas configurada no servidor.",
+    folder: "Pasta",
+    album: "Álbum",
+    openFailed: "Não foi possível abrir esta pasta",
+    albumFailed: "Não foi possível abrir este álbum",
+    noAlbums: "Nada aqui ainda",
+    noAlbumsBody: "Esta pasta não tem arquivos de áudio ou vídeo.",
+    addToPlaylist: "Adicionar o álbum a uma playlist",
+    badge: "No servidor",
+    unavailable: "Arquivo indisponível",
+  },
+
+  keep: {
+    keep: "Guardar no servidor",
+    downloading: "Baixando no servidor",
+    progress: (percent) => `Baixando no servidor · ${percent}%`,
+    kept: "Guardada no servidor",
+    remove: "Apagar o arquivo guardado",
+    started: (title) => `Baixando "${title}" no servidor`,
+    done: (title) => `"${title}" está guardada no servidor`,
+    failed: (title) => `Não foi possível guardar "${title}" no servidor`,
+    removed: "Arquivo guardado apagado",
+  },
+
+  importList: {
+    label: "Playlist do YouTube",
+    action: (n) => `Importar como playlist (${count(n, "faixa", "faixas")})`,
+    importing: "Importando…",
+    failed: "Não foi possível ler esta playlist. Confira se ela é pública.",
+    done: (name, added, skipped) =>
+      (added ? `"${name}": ${count(added, "faixa importada", "faixas importadas")}` : `"${name}" já tinha todas as faixas`) +
+      (skipped ? ` (${skipped} indisponíveis puladas)` : ""),
+  },
+
+  openLink: {
+    opening: "Abrindo…",
+    tapToPlay: "Toque para tocar",
+    blocked: "O navegador espera um toque antes de tocar.",
+    notFound: "Não foi possível abrir este link",
+    playlistGone: "Esta playlist não existe mais.",
+    goHome: "Ir para o Início",
+    fileNotFound: "Arquivo não encontrado",
+    fileNotFoundBody: "Ele pode ter sido movido ou apagado, ou o disco não está conectado.",
   },
 };

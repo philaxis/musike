@@ -8,11 +8,13 @@ import { Modal } from "../components/Modal";
 import { EmptyState, PageHeader } from "../components/Page";
 import { TrackList } from "../components/TrackList";
 import { useT } from "../i18n";
+import { capabilities } from "../lib/api";
 import { shuffled } from "../lib/format";
 import { paths } from "../lib/routes";
 import type { Track } from "../lib/types";
 import { usePlayer } from "../player/player";
 import { useLibrary } from "../stores/library";
+import { isTvMode } from "../tv/tvMode";
 
 interface Props {
   kind: CoverKind;
@@ -106,7 +108,7 @@ export default function Collection({ kind }: Props) {
         >
           <ShuffleIcon size={24} />
         </IconButton>
-        {kind === "playlist" && (
+        {kind === "playlist" && !isTvMode() && (
           <IconButton label={t.collection.more} size="lg" onClick={() => setMoreOpen(true)}>
             <DotsThreeIcon size={26} weight="bold" />
           </IconButton>
@@ -115,7 +117,17 @@ export default function Collection({ kind }: Props) {
 
       <div className="px-2 md:px-3">
         {tracks.length > 0 ? (
-          <TrackList tracks={tracks} playlistId={playlist?.id} showAlbum />
+          <TrackList
+            tracks={tracks}
+            playlistId={playlist?.id}
+            showAlbum
+            // TV mode only plays; elsewhere a playlist's rows drag into a new order.
+            onReorder={
+              playlist && capabilities.serverLibrary && !isTvMode()
+                ? (from, to) => void lib.reorderPlaylist(playlist.id, from, to)
+                : undefined
+            }
+          />
         ) : (
           <EmptyState
             icon={<MagnifyingGlassIcon size={28} />}

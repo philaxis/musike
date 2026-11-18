@@ -20,6 +20,8 @@ export interface Resolved {
   id: string;
   title: string;
   duration: number;
+  /** Channel name; empty when only the direct fallback answered. */
+  uploader?: string;
   audio: StreamFormat;
   video?: StreamFormat;
   expiresAt: number;
@@ -51,7 +53,7 @@ export function holdDuring<T>(job: Promise<T>): Promise<T> {
   return p;
 }
 
-async function run(args: string[], timeoutMs: number): Promise<string> {
+export async function run(args: string[], timeoutMs: number): Promise<string> {
   if (maintenance) await maintenance.catch(() => {});
   const { ytdlp, env } = tools();
   if (!ytdlp) {
@@ -82,7 +84,7 @@ async function run(args: string[], timeoutMs: number): Promise<string> {
 // Failures that usually mean YouTube changed and yt-dlp needs an update.
 const OUTDATED = /nsig|signature|n challenge|JavaScript runtime|Unable to extract|Failed to extract|player response|Requested format is not available|HTTP Error 403/i;
 
-function toHttpError(stderr: string): HttpError {
+export function toHttpError(stderr: string): HttpError {
   const line = stderr.split("\n").find((l) => l.includes("ERROR")) ?? stderr.trim().split("\n").pop() ?? "";
   if (/confirm you.re not a bot|Sign in to confirm/i.test(line)) {
     return new HttpError(503, msg("botCheck"), "bot_check");
@@ -182,7 +184,7 @@ export function resolveStreams(id: string): Promise<Resolved> {
 
   const job = run(["-J", "--no-playlist", "--no-warnings", `https://www.youtube.com/watch?v=${id}`], RESOLVE_TIMEOUT_MS)
     .then((stdout): Resolved => {
-      const info = JSON.parse(stdout) as { title: string; duration?: number; formats: RawFormat[] };
+      const info = JSON.parse(stdout) as { title: string; duration?: number; uploader?: string; channel?: string; formats: RawFormat[] };
       const audio = pickAudio(info.formats);
       if (!audio) throw new HttpError(404, msg("noAudio"));
       const video = pickVideo(info.formats);
@@ -190,6 +192,7 @@ export function resolveStreams(id: string): Promise<Resolved> {
         id,
         title: info.title,
         duration: info.duration ?? 0,
+        uploader: info.uploader ?? info.channel ?? "",
         audio: toStream(audio, "audio"),
         video: video ? toStream(video, "video") : undefined,
         expiresAt: expiryOf(audio.url!),

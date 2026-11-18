@@ -19,6 +19,7 @@ import { cn } from "./lib/format";
 import { legacyRedirect, NOW_PLAYING_HASH, paths } from "./lib/routes";
 import { usePlayer } from "./player/player";
 import { useLibrary } from "./stores/library";
+import { useKeep } from "./stores/keep";
 import { openSettings, useSystem } from "./stores/system";
 import { toast, useUi } from "./stores/ui";
 import Album from "./views/Album";
@@ -28,6 +29,9 @@ import Collection from "./views/Collection";
 import Genre from "./views/Genre";
 import Home from "./views/Home";
 import Library from "./views/Library";
+import LocalAlbum from "./views/LocalAlbum";
+import LocalRoot from "./views/LocalRoot";
+import OpenLink from "./views/OpenLink";
 import Search from "./views/Search";
 
 const SHEET_HASH = `#${NOW_PLAYING_HASH}`;
@@ -48,6 +52,8 @@ export default function App() {
 
   useEffect(() => {
     void loadLibrary();
+    // Which YouTube tracks are kept on the server (and which are still downloading).
+    if (capabilities.serverLibrary) void useKeep.getState().load();
   }, [loadLibrary]);
 
   // Check yt-dlp shortly after start and say so once if something needs doing (not on Android: no yt-dlp there).
@@ -132,6 +138,11 @@ export default function App() {
               <Route path={paths.favorites} element={<Collection kind="favorites" />} />
               <Route path={paths.history} element={<Collection kind="history" />} />
               <Route path="/playlist/:id" element={<Collection kind="playlist" />} />
+              <Route path="/library/local/:root" element={<LocalRoot />} />
+              <Route path="/library/local/:root/album" element={<LocalAlbum />} />
+              <Route path={paths.playLink(":id")} element={<OpenLink key="track" kind="track" />} />
+              <Route path={paths.listLink(":id")} element={<OpenLink key="playlist" kind="playlist" />} />
+              <Route path={paths.openFile} element={<OpenLink key="file" kind="file" />} />
               <Route path="*" element={<Home />} />
             </Routes>
           )}

@@ -6,12 +6,14 @@ import { ALBUM_ID, album, ARTIST_ID, artist, GENRE_ID, genre, genreArtists, genr
 import { config } from "./config.js";
 import * as library from "./library.js";
 import { fileStorage } from "./libraryFile.js";
+import * as local from "./local.js";
 import { findVideoFor, radio, search, suggestions } from "./search.js";
+import { registerServerRoutes, trackId } from "./serverRoutes.js";
 import { proxyStream, serveFile } from "./stream.js";
 import { langOf, msg, tr } from "./i18n.js";
 import { presentJob, startJob, systemInfo, type Channel } from "./system.js";
 import { refreshTools, type Tools } from "./tools.js";
-import { HttpError, VIDEO_ID } from "./types.js";
+import { HttpError, isLocalId, VIDEO_ID } from "./types.js";
 import { downloadHd, pruneCache, resolveStreams } from "./ytdlp.js";
 
 function videoId(params: unknown): string {
@@ -43,6 +45,7 @@ export interface RunningServer {
 export async function startServer(opts: StartOptions = {}): Promise<RunningServer> {
   library.useLibraryStorage(fileStorage());
   const found = await refreshTools();
+  await local.startLocal();
   const app = Fastify({ logger: { level: process.env.LOG_LEVEL ?? "warn" } });
 
   app.setErrorHandler((err, req, reply) => {
@@ -128,14 +131,29 @@ export async function startServer(opts: StartOptions = {}): Promise<RunningServe
 
   /** Resolves stream URLs ahead of time so the next track starts instantly. */
   app.post("/api/prepare/:id", async (req) => {
-    const r = await resolveStreams(videoId(req.params));
-    return { id: r.id, title: r.title, duration: r.duration, hasSdVideo: !!r.video };
+    const id = trackId(req.params);
+    // Local tracks and kept YouTube copies need no YouTube round trip. "offset": audio only restarts at ?t=.
+    if (isLocalId(id)) {
+      const { track, hasVideo } = local.localInfo(id);
+      return { id, title: track.title, duration: track.duration, hasSdVideo: hasVideo, audioMode: local.audioMode(id) };
+    }
+    const kept = local.keptFile(id) && local.keptTrack(id);
+    if (kept) return { id, title: kept.title, duration: kept.duration, hasSdVideo: false, audioMode: "range" };
+    const r = await resolveStreams(id);
+    return { id: r.id, title: r.title, duration: r.duration, hasSdVideo: !!r.video, audioMode: "range" };
   });
 
-  app.get("/api/stream/:id/audio", (req, reply) => proxyStream(req, reply, videoId(req.params), "audio"));
+  app.get("/api/stream/:id/audio", (req, reply) => {
+    const id = trackId(req.params);
+    if (isLocalId(id)) return local.streamLocalAudio(req, reply, id);
+    const kept = local.keptFile(id);
+    if (kept) return serveFile(req, reply, kept, local.audioMime(kept));
+    return proxyStream(req, reply, id, "audio");
+  });
 
   app.get("/api/stream/:id/video", async (req, reply) => {
-    const id = videoId(req.params);
+    const id = trackId(req.params);
+    if (isLocalId(id)) return local.streamLocalVideo(req, reply, id);
     const { q } = req.query as { q?: string };
     if (q === "hd") return serveFile(req, reply, await downloadHd(id), "video/mp4");
     const resolved = await resolveStreams(id);
@@ -145,7 +163,15 @@ export async function startServer(opts: StartOptions = {}): Promise<RunningServe
 
   // Library
 
-  app.get("/api/library", () => library.getLibrary());
+  app.get("/api/library", async () => {
+    // Flags for the app: local files that are gone/offline, YouTube tracks with a kept copy.
+    const lib = await library.getLibrary();
+    return {
+      favorites: lib.favorites.map(local.annotate),
+      playlists: lib.playlists.map((p) => ({ ...p, tracks: p.tracks.map(local.annotate) })),
+      history: lib.history.map(local.annotate),
+    };
+  });
 
   /** Restores a backup file exported by any Musike instance. Big libraries need more than the 1 MB default body. */
   app.post("/api/library/import", { bodyLimit: 25 * 1024 * 1024 }, async (req) => {
@@ -160,7 +186,7 @@ export async function startServer(opts: StartOptions = {}): Promise<RunningServe
 
   app.put("/api/favorites/:id", async (req) => {
     const track = library.sanitizeTrack(req.body);
-    if (track.id !== videoId(req.params)) throw new HttpError(400, msg("idMismatch"));
+    if (track.id !== trackId(req.params)) throw new HttpError(400, msg("idMismatch"));
     return { favorites: await library.addFavorite(track) };
   });
 
@@ -171,7 +197,7 @@ export async function startServer(opts: StartOptions = {}): Promise<RunningServe
     return { favorites: await library.addFavorites(tracks.slice(0, 500).map(library.sanitizeTrack)) };
   });
 
-  app.delete("/api/favorites/:id", async (req) => ({ favorites: await library.removeFavorite(videoId(req.params)) }));
+  app.delete("/api/favorites/:id", async (req) => ({ favorites: await library.removeFavorite(trackId(req.params)) }));
 
   app.post("/api/history", async (req) => ({ history: await library.pushHistory(library.sanitizeTrack(req.body)) }));
 
@@ -200,8 +226,15 @@ export async function startServer(opts: StartOptions = {}): Promise<RunningServe
   });
 
   app.delete("/api/playlists/:pid/tracks/:id", async (req) =>
-    library.removeFromPlaylist((req.params as { pid: string }).pid, videoId(req.params)),
+    library.removeFromPlaylist((req.params as { pid: string }).pid, trackId(req.params)),
   );
+
+  /** Reorders a whole playlist: `{ ids }` must hold every current track ID exactly once. */
+  app.put("/api/playlists/:pid/tracks", async (req) =>
+    library.reorderPlaylist((req.params as { pid: string }).pid, ((req.body ?? {}) as { ids?: unknown }).ids),
+  );
+
+  registerServerRoutes(app);
 
   // Web app (production build)
 
@@ -220,7 +253,14 @@ export async function startServer(opts: StartOptions = {}): Promise<RunningServe
   await app.listen({ port, host });
 
   pruneCache().catch(() => {});
-  return { port, tools: found, close: () => app.close() };
+  return {
+    port,
+    tools: found,
+    close: () => {
+      local.stopLocal();
+      return app.close();
+    },
+  };
 }
 
 /** First free port from `start` (up to 10 tries), so a second copy or a dev server doesn't block launch. */

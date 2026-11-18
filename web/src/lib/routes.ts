@@ -10,6 +10,14 @@ export const paths = {
   favorites: "/favorites",
   history: "/history",
   playlist: (id: string) => `/playlist/${id}`,
+  /** My music: a server folder's albums, and one album's tracks. */
+  localRoot: (root: string) => `/library/local/${encodeURIComponent(root)}`,
+  localAlbum: (root: string, key: string) => `/library/local/${encodeURIComponent(root)}/album?key=${encodeURIComponent(key)}`,
+  /** Direct links (sent by the assistant or notifications): play a track, or a playlist from the start, on this device. */
+  playLink: (id: string) => `/play/${id}`,
+  listLink: (id: string) => `/list/${id}`,
+  /** A file on the server by its absolute path (download notifications). */
+  openFile: "/open",
 };
 
 /** Hash that opens the full-screen Now Playing sheet on phones (so Back closes it). */

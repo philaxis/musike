@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { getT } from "../i18n";
 import { api } from "../lib/api";
+import { server } from "../lib/server";
 import type { Library, Playlist, Track } from "../lib/types";
 import { toast } from "./ui";
 
@@ -16,6 +17,8 @@ interface LibraryState extends Library {
   deletePlaylist: (id: string) => Promise<void>;
   addToPlaylist: (id: string, t: Track | Track[]) => Promise<void>;
   removeFromPlaylist: (id: string, trackId: string) => Promise<void>;
+  /** Moves the track at `from` to `to` (Musike server only). */
+  reorderPlaylist: (id: string, from: number, to: number) => Promise<void>;
 }
 
 const replacePlaylist = (list: Playlist[], p: Playlist) => list.map((x) => (x.id === p.id ? p : x));
@@ -131,6 +134,23 @@ export const useLibrary = create<LibraryState>((set, get) => ({
     } catch (e) {
       set({ playlists: prev });
       toast((e as Error).message, "error");
+    }
+  },
+
+  reorderPlaylist: async (id, from, to) => {
+    const prev = get().playlists;
+    const playlist = prev.find((p) => p.id === id);
+    if (!playlist) return;
+    const tracks = playlist.tracks.slice();
+    const [moved] = tracks.splice(from, 1);
+    tracks.splice(to, 0, moved);
+    set({ playlists: prev.map((p) => (p.id === id ? { ...p, tracks } : p)) });
+    try {
+      // The answer holds the same tracks in the same order; the local ones keep the library's annotations.
+      await server.reorderPlaylist(id, tracks.map((t) => t.id));
+    } catch {
+      set({ playlists: prev });
+      toast(getT().collection.reorderFailed, "error");
     }
   },
 }));

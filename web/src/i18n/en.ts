@@ -97,6 +97,8 @@ export const en = {
     deleteBody: (name: string, tracks: number) =>
       `"${name}" and its list of ${count(tracks, "track", "tracks")} will be deleted. This can't be undone.`,
     delete: "Delete",
+    reorderFailed: "Couldn't save the new order",
+    dragToReorder: "Drag to reorder",
   },
 
   dialogs: {
@@ -167,6 +169,7 @@ export const en = {
     streamFailed: "YouTube stopped serving this track. Try it again in a moment.",
     offline: "You're offline. Connect to the internet to play music.",
     httpError: (status: number) => `Error ${status}`,
+    unavailable: (title: string) => `"${title}" can't be played right now: its file isn't on the server.`,
   },
 
   nowPlaying: {
@@ -248,6 +251,9 @@ export const en = {
       "Search for a song, artist or album. For music videos and live performances, use the Videos tab. You can also paste a YouTube link.",
     exploreGenres: "Browse by genre",
     albums: "Albums",
+    myMusic: "My music",
+    showAll: (n: number) => `Show all ${n}`,
+    showLess: "Show less",
   },
 
   batch: {
@@ -428,6 +434,58 @@ export const en = {
     allAlreadyIn: (name: string) => `They were all in "${name}" already`,
     ytdlpMissing: "yt-dlp wasn't found. No song plays without it.",
     ytdlpUpdate: (version: string) => `New yt-dlp version available (${version})`,
+  },
+
+  local: {
+    title: "My music",
+    rescan: "Read the folders again",
+    rescanned: "Folders read again",
+    offline: "Can't be read right now",
+    offlineBody: "The drive with this folder isn't connected. Its tracks stay in your playlists and play again once it's back.",
+    rootSub: (albums: number, tracks: number) => `${count(albums, "album", "albums")} · ${count(tracks, "track", "tracks")}`,
+    noRoots: "No music folders are set up on the server.",
+    folder: "Folder",
+    album: "Album",
+    openFailed: "Couldn't open this folder",
+    albumFailed: "Couldn't open this album",
+    noAlbums: "Nothing here yet",
+    noAlbumsBody: "This folder has no audio or video files.",
+    addToPlaylist: "Add the album to a playlist",
+    badge: "On the server",
+    unavailable: "File not available",
+  },
+
+  keep: {
+    keep: "Keep on the server",
+    downloading: "Downloading to the server",
+    progress: (percent: number) => `Downloading to the server · ${percent}%`,
+    kept: "Kept on the server",
+    remove: "Delete the kept file",
+    started: (title: string) => `Downloading "${title}" to the server`,
+    done: (title: string) => `"${title}" is kept on the server`,
+    failed: (title: string) => `Couldn't keep "${title}" on the server`,
+    removed: "Kept file deleted",
+  },
+
+  importList: {
+    label: "YouTube playlist",
+    action: (n: number) => `Import as playlist (${count(n, "track", "tracks")})`,
+    importing: "Importing…",
+    failed: "Couldn't read this playlist. Check that it's public.",
+    done: (name: string, added: number, skipped: number) =>
+      (added ? `"${name}": ${count(added, "track", "tracks")} imported` : `"${name}" already had every track`) +
+      (skipped ? ` (${skipped} unavailable skipped)` : ""),
+  },
+
+  openLink: {
+    opening: "Opening…",
+    tapToPlay: "Tap to play",
+    blocked: "Your browser waits for a tap before it plays.",
+    notFound: "Couldn't open this link",
+    playlistGone: "This playlist doesn't exist anymore.",
+    goHome: "Go to Home",
+    fileNotFound: "Couldn't find the file",
+    fileNotFoundBody: "It may have been moved or deleted, or the drive isn't connected.",
   },
 };
 

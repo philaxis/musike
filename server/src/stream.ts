@@ -75,14 +75,14 @@ export async function proxyStream(req: FastifyRequest, reply: FastifyReply, id: 
   return reply.send(body);
 }
 
-/** Serves a local file with byte-range support (used for cached HD video). */
-export async function serveFile(req: FastifyRequest, reply: FastifyReply, file: string, mime: string) {
+/** Serves a local file with byte-range support (cached HD video, local tracks and their covers, kept audio). */
+export async function serveFile(req: FastifyRequest, reply: FastifyReply, file: string, mime: string, cacheControl = "no-store") {
   const { size } = await stat(file);
   const range = typeof req.headers.range === "string" ? /bytes=(\d*)-(\d*)/.exec(req.headers.range) : null;
 
   reply.header("content-type", mime);
   reply.header("accept-ranges", "bytes");
-  reply.header("cache-control", "no-store");
+  reply.header("cache-control", cacheControl);
 
   if (!range) {
     reply.header("content-length", size);

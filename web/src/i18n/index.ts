@@ -1,23 +1,25 @@
 import { create } from "zustand";
 import { desktop } from "../lib/desktop";
 import { en, type Messages } from "./en";
+import { ko } from "./ko";
 import { pt } from "./pt";
 
 export type { Messages };
-export type Lang = "en" | "pt-BR";
+export type Lang = "en" | "pt-BR" | "ko";
 
 /** Each language named in itself, as language pickers do. */
 export const LANGUAGES: { id: Lang; name: string }[] = [
+  { id: "ko", name: "한국어" },
   { id: "en", name: "English" },
   { id: "pt-BR", name: "Português (Brasil)" },
 ];
 
-const MESSAGES: Record<Lang, Messages> = { en, "pt-BR": pt };
+const MESSAGES: Record<Lang, Messages> = { en, "pt-BR": pt, ko };
 const KEY = "musike:lang";
 
-export const isLang = (v: unknown): v is Lang => v === "en" || v === "pt-BR";
+export const isLang = (v: unknown): v is Lang => v === "en" || v === "pt-BR" || v === "ko";
 
-/** Musike speaks English until the user picks another language in Settings. */
+/** This server build speaks Korean until the user picks another language in Settings. */
 function readLang(): Lang {
   try {
     const saved = localStorage.getItem(KEY);
@@ -25,7 +27,7 @@ function readLang(): Lang {
   } catch {
     /* private mode */
   }
-  return "en";
+  return "ko";
 }
 
 function apply(lang: Lang) {
@@ -63,3 +65,8 @@ export const useT = () => useI18n((s) => s.t);
 /** For code outside React components (stores, the player): read at the moment of use. */
 export const getT = () => useI18n.getState().t;
 export const getLang = () => useI18n.getState().lang;
+/** The language the Android app's built-in backend (server code, YouTube) answers in: it has no Korean, so English. */
+export const getBackendLang = (): Exclude<Lang, "ko"> => {
+  const lang = getLang();
+  return lang === "ko" ? "en" : lang;
+};

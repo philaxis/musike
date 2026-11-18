@@ -1,7 +1,7 @@
 import { Capacitor } from "@capacitor/core";
 import { DEFAULT_CLIENTS, directAudio, fetchRemoteClients, validClients, type DirectAudio } from "../../../server/src/directAudio";
 import { msg, tr } from "../../../server/src/i18n";
-import { getLang } from "../i18n";
+import { getBackendLang as getLang } from "../i18n";
 import { ApiError } from "../lib/apiTypes";
 import { config } from "./shims/config";
 import { nativeResolverAvailable, resolveNatively } from "./ytplayer";
