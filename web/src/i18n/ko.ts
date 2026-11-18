@@ -141,7 +141,6 @@ export const ko: Messages = {
     toHd: "HD로 바꾸기 (720p, 받은 뒤 재생)",
     toSd: "SD로 바꾸기 (360p, 되면 더 빨리 시작)",
     nothingPlaying: "재생 중인 곡이 없어요. 검색해서 시작해 보세요.",
-    showNowPlaying: "지금 재생 중 보기",
     queue: "대기열",
     nowPlayingPanel: "지금 재생 중 칸",
     shortcuts: "단축키 (?)",
@@ -168,7 +167,6 @@ export const ko: Messages = {
   },
 
   nowPlaying: {
-    title: "지금 재생 중",
     coverOf: (title) => `${title} 표지`,
     playSomething: "곡을 재생하면 여기에 보여요.",
     startRadio: "이 곡으로 라디오 시작",
@@ -177,7 +175,6 @@ export const ko: Messages = {
     tabQueue: "대기열",
     panel: "지금 재생 중과 대기열",
     closePanel: "칸 닫기",
-    backToPlayer: "플레이어로 돌아가기",
     showQueue: "대기열 보기",
   },
 

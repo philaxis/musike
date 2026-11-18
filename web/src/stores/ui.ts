@@ -66,7 +66,8 @@ export type PanelTab = "playing" | "queue";
 interface UiState {
   theme: Theme;
   panelOpen: boolean;
-  drawerOpen: boolean;
+  /** Now Playing as a sheet over the area above the player bar (768-1279px), not remembered. */
+  sheetOpen: boolean;
   panelTab: PanelTab;
   toasts: Toast[];
   menu: MenuState | null;
@@ -127,7 +128,7 @@ let toastSeq = 0;
 export const useUi = create<UiState>((set, get) => ({
   theme: readTheme(),
   panelOpen: readPanel(),
-  drawerOpen: false,
+  sheetOpen: false,
   panelTab: "playing",
   toasts: [],
   menu: null,
@@ -158,13 +159,13 @@ export const useUi = create<UiState>((set, get) => ({
 
   openPanel: (panelTab) => {
     if (window.matchMedia("(min-width: 1280px)").matches) set({ panelOpen: true, panelTab });
-    else set({ drawerOpen: true, panelTab });
+    else set({ sheetOpen: true, panelTab });
   },
   togglePanel: (tab) => {
-    const { panelOpen, drawerOpen, panelTab } = get();
-    // ≥1280px the panel is a docked column (remembered); below it is a temporary drawer.
+    const { panelOpen, sheetOpen, panelTab } = get();
+    // ≥1280px the panel is a docked column (remembered); below it is a sheet over the page.
     if (!window.matchMedia("(min-width: 1280px)").matches) {
-      return set({ drawerOpen: !(drawerOpen && panelTab === tab), panelTab: tab });
+      return set({ sheetOpen: !(sheetOpen && panelTab === tab), panelTab: tab });
     }
     const open = !(panelOpen && panelTab === tab);
     try {
@@ -174,7 +175,7 @@ export const useUi = create<UiState>((set, get) => ({
     }
     set({ panelOpen: open, panelTab: tab });
   },
-  closePanel: () => set({ drawerOpen: false }),
+  closePanel: () => set({ sheetOpen: false }),
   setPanelDocked: (open) => {
     try {
       localStorage.setItem("musike:panel", open ? "open" : "closed");

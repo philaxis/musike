@@ -147,7 +147,6 @@ export const en = {
     toHd: "Switch to HD (720p, downloads before playing)",
     toSd: "Switch to SD (360p, starts faster when available)",
     nothingPlaying: "Nothing playing. Search for something to start.",
-    showNowPlaying: "Show Now playing",
     queue: "Queue",
     nowPlayingPanel: "Now playing panel",
     shortcuts: "Keyboard shortcuts (?)",
@@ -174,7 +173,6 @@ export const en = {
   },
 
   nowPlaying: {
-    title: "Now playing",
     coverOf: (title: string) => `Cover of ${title}`,
     playSomething: "Play something to see it here.",
     startRadio: "Start radio from this track",
@@ -183,7 +181,6 @@ export const en = {
     tabQueue: "Queue",
     panel: "Now playing and queue",
     closePanel: "Close panel",
-    backToPlayer: "Back to the player",
     showQueue: "Show queue",
   },
 
