@@ -1,8 +1,8 @@
 import { DotsThreeIcon, TrayIcon } from "@phosphor-icons/react";
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Navigate, useSearchParams } from "react-router";
 import { openMenuFromButton } from "../components/menuTrigger";
-import { EmptyState, PageHeader } from "../components/Page";
+import { Chip, EmptyState, PageHeader } from "../components/Page";
 import { SelectableRow, SelectedCount, SelectionBar, Short, useListSelection } from "../components/Selection";
 import { TagChips, useSourceText } from "../components/Tags";
 import { TrackListSkeleton } from "../components/TrackList";
@@ -17,22 +17,6 @@ import { useUi } from "../stores/ui";
 import { isTvMode } from "../tv/tvMode";
 
 type SourceCount = Omit<BoxSource, "at"> & { count: number };
-
-function Chip({ on, onClick, children }: { on: boolean; onClick: () => void; children: ReactNode }) {
-  return (
-    <button
-      type="button"
-      aria-pressed={on}
-      onClick={onClick}
-      className={cn(
-        "flex h-9 shrink-0 items-center gap-1.5 rounded-full px-3.5 text-sm font-medium whitespace-nowrap transition-colors",
-        on ? "bg-fg text-bg" : "bg-surface-2 text-fg-2 ring-1 ring-line hover:text-fg",
-      )}
-    >
-      {children}
-    </button>
-  );
-}
 
 /**
  * Library's 「곡 상자」: every track brought in (and the music folders), newest first, 200 at a time. Filter by

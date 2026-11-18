@@ -111,6 +111,53 @@ export interface HideTarget {
   root?: string;
 }
 
+export type StatsPeriod = "4w" | "6m" | "all";
+
+/** 「내 기록」 for a period (see server/src/stats.ts). Seconds heard; dates are Seoul's "YYYY-MM-DD". */
+export interface Stats {
+  period: StatsPeriod;
+  /** First and last day of the calendar; `from` is null with nothing heard yet. */
+  from: string | null;
+  to: string;
+  /** Listens ever. */
+  total: number;
+  summary: { seconds: number; listens: number; newTracks: number; skipRate: number; lines: number };
+  /** Only the days something was heard. */
+  days: { date: string; seconds: number; listens: number }[];
+  /** Seconds heard by the hour a track started, 0–23. */
+  hours: number[];
+  topTracks: Track[];
+  topArtists: { name: string; listens: number; thumb: string }[];
+  /** Null without the analysis results. */
+  genres: { genre: string; listens: number }[] | null;
+  onRepeat: Track[];
+  forgotten: Track[];
+}
+
+export interface StatsDay {
+  date: string;
+  seconds: number;
+  listens: number;
+  tracks: Track[];
+  /** That day's 「오늘 좋음 ☀」. */
+  liked: Track[];
+}
+
+/** One track's record; times in ms, null when never heard. */
+export interface TrackRecord {
+  listens: number;
+  skips: number;
+  lines: number;
+  seconds: number;
+  first: number | null;
+  last: number | null;
+}
+
+export interface DayLikes {
+  date: string;
+  tracks: Track[];
+}
+
 const q = (params: Record<string, string | number | undefined>) => {
   const p = new URLSearchParams();
   for (const [k, v] of Object.entries(params)) if (v !== undefined && v !== "") p.set(k, String(v));
@@ -173,6 +220,14 @@ export const server = {
   keepList: () => request<{ items: KeepItem[] }>("/api/keep").then((r) => r.items),
   keep: (id: string) => request<{ id: string; status: KeepStatus }>(`/api/keep/${id}`, { method: "POST" }),
   unkeep: (id: string) => request<void>(`/api/keep/${id}`, { method: "DELETE" }),
+
+  stats: (period: StatsPeriod, signal?: AbortSignal) => request<Stats>(`/api/stats${q({ period })}`, { signal }),
+  statsDay: (date: string, signal?: AbortSignal) => request<StatsDay>(`/api/stats/day/${date}`, { signal }),
+  trackRecord: (id: string, signal?: AbortSignal) => request<TrackRecord>(`/api/stats/track/${id}`, { signal }),
+  /** Today's (Seoul) 「오늘 좋음 ☀」: the server says which day that is. */
+  dayLikes: () => request<DayLikes>("/api/daylikes"),
+  likeToday: (track: Track) => request<DayLikes>(`/api/daylikes/${track.id}`, { method: "PUT", json: track }),
+  unlikeToday: (id: string) => request<DayLikes>(`/api/daylikes/${id}`, { method: "DELETE" }),
 };
 
 /** A YouTube / YouTube Music playlist link (playlist?list=, watch?v=…&list=, album OLAK5uy_…), or null. */

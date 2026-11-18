@@ -12,6 +12,7 @@ import { Toasts } from "./components/Toasts";
 import { TagsDialog, VersionsDialog } from "./components/Tags";
 import { DragGhost } from "./components/TrackDrag";
 import { TrackMenu } from "./components/TrackMenu";
+import { TrackRecordDialog } from "./components/TrackRecord";
 import { FloatingVideo, Theater } from "./components/Video";
 import { MD, useMediaQuery } from "./hooks/useMediaQuery";
 import { useShortcuts } from "./hooks/useShortcuts";
@@ -36,6 +37,7 @@ import LocalRoot from "./views/LocalRoot";
 import OpenLink from "./views/OpenLink";
 import Search from "./views/Search";
 import SongBox from "./views/SongBox";
+import Stats from "./views/Stats";
 
 const SHEET_HASH = `#${NOW_PLAYING_HASH}`;
 
@@ -163,6 +165,7 @@ export default function App() {
               <Route path={paths.listLink(":id")} element={<OpenLink key="playlist" kind="playlist" />} />
               <Route path={paths.openFile} element={<OpenLink key="file" kind="file" />} />
               <Route path="/library/box" element={<SongBox />} />
+              <Route path={paths.stats} element={<Stats />} />
               <Route path="*" element={<Home />} />
             </Routes>
           )}
@@ -192,6 +195,7 @@ export default function App() {
       <SettingsDialog />
       <TagsDialog />
       <VersionsDialog />
+      <TrackRecordDialog />
       <Toasts />
     </div>
   );

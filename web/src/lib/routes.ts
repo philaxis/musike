@@ -18,6 +18,8 @@ export const paths = {
     const q = new URLSearchParams(query).toString();
     return `/library/box${q ? `?${q}` : ""}`;
   },
+  /** 「내 기록」: listening stats, `?period=4w|6m|all`. */
+  stats: "/library/stats",
   /** Where Google sign-in returns (`?google=connected|error`): opens Settings. */
   settings: "/settings",
   /** Direct links (sent by the assistant or notifications): play a track, or a playlist from the start, on this device. */

@@ -9,7 +9,7 @@ import { trackTitle } from "../lib/bundles";
 import { cn } from "../lib/format";
 import { selectCurrent, usePlayer, useStatusText, videoEl } from "../player/player";
 import { useUi } from "../stores/ui";
-import { FavoriteButton, Scrubber, Transport, Volume } from "./Controls";
+import { DayLikeButton, FavoriteButton, Scrubber, Transport, Volume } from "./Controls";
 import { IconButton } from "./IconButton";
 
 /**
@@ -260,6 +260,7 @@ export function Theater() {
               <div className="grid grid-cols-[1fr_auto_1fr] items-center">
                 <div className="flex items-center">
                   <FavoriteButton track={track} />
+                  <DayLikeButton track={track} />
                 </div>
                 <Transport />
                 <div className="flex justify-end">

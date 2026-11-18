@@ -39,6 +39,8 @@
 | GET/POST/PATCH/DELETE | `/api/bundles/:id` · `POST /api/bundles {title, artist?, ids}` | 묶음(여러 곡을 한 곡처럼, id `B`+20자). 재생목록엔 묶음 줄로 넣음 |
 | GET/DELETE | `/api/google/login` · `/api/google/status` · `DELETE /api/google` | 유튜브 계정 연결(읽기 전용, 토큰 `~/.config/musike/google.json`) |
 | GET/PUT/POST | `/api/google/playlists` · `PUT /api/google/excluded {ids}` · `POST /api/google/sync` | 내 유튜브 재생목록(체크 끈 것 `excluded`) · 들여오지 않을 목록 · 새 곡을 곡 상자로(409 `google_login`이면 다시 연결) |
+| GET | `/api/stats?period=4w\|6m\|all` · `/api/stats/day/:date` · `/api/stats/track/:id` | 내 기록(들은 시간·「한 번 들음」·새로 알게 된 곡·건너뜀 비율, 날짜별, 시간대, 많이 들은 곡·아티스트·장르, 요즘 반복, 잊고 있던 애창곡) · 그날 들은 곡과 그날 ☀ · 곡 하나의 기록. `plays.jsonl`에서 계산, 날짜는 서울. 장르는 분석 결과 `taste.json`이 있을 때만 |
+| GET/PUT/DELETE | `/api/daylikes?date=` · `PUT /api/daylikes/:id {곡}` · `DELETE /api/daylikes/:id?date=` | 「오늘 좋음 ☀」(♥와 따로, `data/daylikes.json` 날짜별). 넣기는 늘 오늘(서울) |
 
 원작 API(검색, 재생목록 만들기·넣기·빼기, 즐겨찾기, 스트림)는 README의 API 표.
-웹 경로: `/play/:id`(곡·묶음 바로 재생), `/list/:pid`(재생목록 처음부터), `/library/box`(곡 상자, `?filter=untagged`·`?source=kind:ref`·`?tag=`), `/settings`(설정 열기, 구글 로그인 뒤 `?google=connected|error`로 돌아오는 곳).
+웹 경로: `/play/:id`(곡·묶음 바로 재생), `/list/:pid`(재생목록 처음부터), `/library/box`(곡 상자, `?filter=untagged`·`?source=kind:ref`·`?tag=`), `/library/stats`(내 기록, `?period=4w|6m|all`·`&day=YYYY-MM-DD`), `/settings`(설정 열기, 구글 로그인 뒤 `?google=connected|error`로 돌아오는 곳).

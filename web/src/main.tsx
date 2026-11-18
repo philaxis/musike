@@ -9,6 +9,7 @@ import { getT } from "./i18n";
 import { desktop } from "./lib/desktop";
 import { startPlayLog } from "./player/playLog";
 import { usePlayer } from "./player/player";
+import { startDayLikes } from "./stores/dayLikes";
 import { useUi } from "./stores/ui";
 import "./styles.css";
 import "./tv/tv.css";
@@ -35,6 +36,7 @@ if (!desktop) {
 }
 
 startPlayLog();
+startDayLikes();
 
 // Android TV: spatial D-pad navigation + 10-foot styling (no-op elsewhere).
 installTvMode();

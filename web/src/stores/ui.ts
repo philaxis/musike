@@ -77,6 +77,8 @@ interface UiState {
   /** The track whose tags are being edited, and the one whose other versions are shown (components/Tags.tsx). */
   tagsFor: Track | null;
   versionsFor: Track | null;
+  /** The track whose 「이 곡 기록」 is shown (components/TrackRecord.tsx). */
+  recordFor: Track | null;
   shortcutsOpen: boolean;
   settingsOpen: boolean;
   /** Cinema view: the video maximized over everything. */
@@ -97,6 +99,7 @@ interface UiState {
   setPlaylistEdit: (edit: UiState["playlistEdit"]) => void;
   openTags: (track: Track | null) => void;
   openVersions: (track: Track | null) => void;
+  openRecord: (track: Track | null) => void;
   setShortcutsOpen: (open: boolean) => void;
   setSettingsOpen: (open: boolean) => void;
   setTheater: (open: boolean) => void;
@@ -125,6 +128,7 @@ export const useUi = create<UiState>((set, get) => ({
   playlistEdit: null,
   tagsFor: null,
   versionsFor: null,
+  recordFor: null,
   shortcutsOpen: false,
   settingsOpen: false,
   theater: false,
@@ -200,6 +204,7 @@ export const useUi = create<UiState>((set, get) => ({
   setPlaylistEdit: (playlistEdit) => set({ playlistEdit, menu: null }),
   openTags: (tagsFor) => set({ tagsFor, menu: null }),
   openVersions: (versionsFor) => set({ versionsFor, menu: null }),
+  openRecord: (recordFor) => set({ recordFor, menu: null }),
   setShortcutsOpen: (shortcutsOpen) => set({ shortcutsOpen }),
   setSettingsOpen: (settingsOpen) => set({ settingsOpen }),
   setTheater: (theater) => set({ theater }),

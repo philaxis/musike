@@ -88,3 +88,20 @@ export function EmptyState({ icon, title, body, action }: { icon: ReactNode; tit
     </div>
   );
 }
+
+/** A filter pill: the song box's views, 「내 기록」's periods. */
+export function Chip({ on, onClick, children }: { on: boolean; onClick: () => void; children: ReactNode }) {
+  return (
+    <button
+      type="button"
+      aria-pressed={on}
+      onClick={onClick}
+      className={cn(
+        "flex h-9 shrink-0 items-center gap-1.5 rounded-full px-3.5 text-sm font-medium whitespace-nowrap transition-colors",
+        on ? "bg-fg text-bg" : "bg-surface-2 text-fg-2 ring-1 ring-line hover:text-fg",
+      )}
+    >
+      {children}
+    </button>
+  );
+}
