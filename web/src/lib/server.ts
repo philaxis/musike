@@ -191,6 +191,38 @@ export interface Mix {
   tracks: Track[];
 }
 
+/** Where a track leads (the taste analysis' album, composer, performance); each null when the analysis lacks it. */
+export interface TrackWorks {
+  /** My tracks on the album; a local file's own music-folder album is `local`. */
+  album: { key: string; name: string; count: number; local?: { root: string; key: string } } | null;
+  composer: string | null;
+  /** One recording of one work (the same string for its movements); `count` of my tracks. */
+  instance: { key: string; work: string; performer: string; count: number } | null;
+}
+
+export interface Performance {
+  key: string;
+  composer: string | null;
+  work: string;
+  performer: string;
+  album: string;
+}
+
+export interface ComposerCard {
+  name: string;
+  count: number;
+  works: number;
+  tracks: Track[];
+}
+
+export interface ComposerPage {
+  composer: string;
+  count: number;
+  works: { work: string; count: number; instances: { key: string; performer: string; album: string; tracks: Track[] }[] }[];
+  /** The composer's tracks without a work. */
+  others: Track[];
+}
+
 const q = (params: Record<string, string | number | undefined>) => {
   const p = new URLSearchParams();
   for (const [k, v] of Object.entries(params)) if (v !== undefined && v !== "") p.set(k, String(v));
@@ -275,6 +307,13 @@ export const server = {
     request<{ analyzed: boolean; seed: Track | null; tracks: Track[] }>(`/api/taste/radio/${id}`, { signal }),
   mixes: (signal?: AbortSignal) => request<{ ready: boolean; mixes: Mix[] }>("/api/taste/mixes", { signal }),
   mix: (id: string, signal?: AbortSignal) => request<Mix>(`/api/taste/mixes/${encodeURIComponent(id)}`, { signal }),
+  trackWorks: (id: string, signal?: AbortSignal) => request<TrackWorks>(`/api/works/track/${id}`, { signal }),
+  workAlbum: (key: string, signal?: AbortSignal) =>
+    request<{ album: { key: string; name: string; artists: string[] }; tracks: Track[] }>(`/api/works/album${q({ key })}`, { signal }),
+  performance: (key: string, signal?: AbortSignal) => request<{ instance: Performance; tracks: Track[] }>(`/api/works/instance${q({ key })}`, { signal }),
+  composers: (genre: string | undefined, signal?: AbortSignal) =>
+    request<{ ready: boolean; composers: ComposerCard[] }>(`/api/works/composers${q({ genre })}`, { signal }),
+  composer: (name: string, signal?: AbortSignal) => request<ComposerPage>(`/api/works/composer${q({ name })}`, { signal }),
 };
 
 /** A YouTube / YouTube Music playlist link (playlist?list=, watch?v=…&list=, album OLAK5uy_…), or null. */

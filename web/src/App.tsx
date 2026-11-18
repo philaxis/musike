@@ -42,6 +42,8 @@ import Mixes from "./views/Mixes";
 import TasteGenre from "./views/TasteGenre";
 import TasteGenres from "./views/TasteGenres";
 import TasteTracks from "./views/TasteTracks";
+import Composer from "./views/Composer";
+import Composers from "./views/Composers";
 
 const SHEET_HASH = `#${NOW_PLAYING_HASH}`;
 
@@ -176,6 +178,10 @@ export default function App() {
               <Route path={paths.mixes} element={<Mixes />} />
               <Route path="/library/mixes/:id" element={<TasteTracks key="mix" kind="mix" />} />
               <Route path="/library/radio/:id" element={<TasteTracks key="radio" kind="radio" />} />
+              <Route path="/library/albums/:id" element={<TasteTracks key="album" kind="album" />} />
+              <Route path="/library/performances/:id" element={<TasteTracks key="performance" kind="performance" />} />
+              <Route path="/library/composers" element={<Composers />} />
+              <Route path="/library/composers/:name" element={<Composer />} />
               <Route path="*" element={<Home />} />
             </Routes>
           )}

@@ -697,6 +697,26 @@ export const en = {
     notAnalyzed: "This track hasn't been analysed yet, so there's no radio for it.",
     openFailed: "Couldn't open this",
   },
+
+  // Albums, composers and performances of the taste analysis: from a track to where it belongs.
+  works: {
+    goToAlbum: "Go to album",
+    goToComposer: "Go to composer",
+    wholeWork: "Whole work (this performance)",
+    wholeAlbum: "Whole album",
+    album: "Album",
+    performance: "Performance",
+    findOnYoutube: "Find on YouTube",
+    composers: "Composers",
+    byComposer: "By composer",
+    composersIn: (genre: string) => `Composers · ${genre}`,
+    composerSub: (tracks: number, works: number) => [count(tracks, "track", "tracks"), works ? count(works, "work", "works") : ""].filter(Boolean).join(" · "),
+    performances: (n: number) => count(n, "performance", "performances"),
+    unknownPerformer: "Unknown performer",
+    otherTracks: "Other tracks",
+    empty: "No composers yet",
+    emptyBody: "They show up once the taste analysis finds who wrote your tracks.",
+  },
 };
 
 export type Messages = typeof en;

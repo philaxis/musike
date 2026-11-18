@@ -690,4 +690,23 @@ export const pt: Messages = {
     notAnalyzed: "Esta faixa ainda não foi analisada, então não há rádio para ela.",
     openFailed: "Não foi possível abrir",
   },
+
+  works: {
+    goToAlbum: "Ir para o álbum",
+    goToComposer: "Ir para o compositor",
+    wholeWork: "Obra inteira (esta gravação)",
+    wholeAlbum: "Álbum inteiro",
+    album: "Álbum",
+    performance: "Gravação",
+    findOnYoutube: "Procurar no YouTube",
+    composers: "Compositores",
+    byComposer: "Por compositor",
+    composersIn: (genre) => `Compositores · ${genre}`,
+    composerSub: (tracks, works) => [count(tracks, "faixa", "faixas"), works ? count(works, "obra", "obras") : ""].filter(Boolean).join(" · "),
+    performances: (n) => count(n, "gravação", "gravações"),
+    unknownPerformer: "Intérprete desconhecido",
+    otherTracks: "Outras faixas",
+    empty: "Ainda não há compositores",
+    emptyBody: "Aparecem quando a análise de gosto descobre quem compôs suas faixas.",
+  },
 };

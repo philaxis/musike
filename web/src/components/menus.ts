@@ -1,9 +1,9 @@
 import { EyeIcon, EyeSlashIcon, PencilSimpleIcon, TrashIcon } from "@phosphor-icons/react";
 import { getT } from "../i18n";
 import { api } from "../lib/api";
-import { server, type Mix, type TasteGroupCard } from "../lib/server";
+import { server, type Mix, type TasteGroupCard, type TrackWorks } from "../lib/server";
 import { groupTitle, mixAbout, mixTitle } from "../lib/taste";
-import type { AlbumCard, LocalAlbum, LocalRoot, Playlist } from "../lib/types";
+import type { AlbumCard, LocalAlbum, LocalRoot, Playlist, Track } from "../lib/types";
 import { useLibrary } from "../stores/library";
 import { useLocal } from "../stores/local";
 import { toast, useUi, type MenuExtra, type MenuTarget } from "../stores/ui";
@@ -115,4 +115,29 @@ export function tasteGroupMenu(g: TasteGroupCard): MenuTarget {
 export function mixMenu(m: Mix): MenuTarget {
   const t = getT();
   return { kind: "group", title: mixTitle(m, t), sub: mixAbout(m, t), thumb: m.tracks[0]?.thumb, load: async () => m.tracks };
+}
+
+/** The album the analysis puts a track on: my tracks of it, or a local file's whole music-folder album. */
+export function workAlbumMenu(a: NonNullable<TrackWorks["album"]>, thumb?: string): MenuTarget {
+  const t = getT();
+  const local = a.local;
+  return {
+    kind: "group",
+    title: a.name,
+    sub: t.common.tracks(a.count),
+    thumb,
+    load: async () => (local ? await server.album(local.root, local.key, false) : await server.workAlbum(a.key)).tracks,
+  };
+}
+
+/** One performance of a work, its movements in order; `tracks` when the page already has them. */
+export function performanceMenu(p: { key: string; work: string; performer: string; count: number }, thumb?: string, tracks?: Track[]): MenuTarget {
+  const t = getT();
+  return {
+    kind: "group",
+    title: p.work,
+    sub: [p.performer || t.works.unknownPerformer, t.common.tracks(p.count)].join(" · "),
+    thumb,
+    load: async () => tracks ?? (await server.performance(p.key)).tracks,
+  };
 }

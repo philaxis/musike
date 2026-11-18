@@ -689,4 +689,23 @@ export const ko: Messages = {
     notAnalyzed: "아직 분석되지 않은 곡이라 라디오를 만들 수 없어요.",
     openFailed: "열지 못했어요",
   },
+
+  works: {
+    goToAlbum: "앨범으로 가기",
+    goToComposer: "작곡가로 가기",
+    wholeWork: "이 작품 전체 (이 연주)",
+    wholeAlbum: "앨범 전체",
+    album: "앨범",
+    performance: "연주",
+    findOnYoutube: "유튜브에서 찾기",
+    composers: "작곡가",
+    byComposer: "작곡가별",
+    composersIn: (genre) => `작곡가 · ${genre}`,
+    composerSub: (tracks, works) => [`${tracks}곡`, works ? `작품 ${works}개` : ""].filter(Boolean).join(" · "),
+    performances: (n) => `연주 ${n}개`,
+    unknownPerformer: "연주자 모름",
+    otherTracks: "그 밖의 곡",
+    empty: "아직 작곡가 정보가 없어요",
+    emptyBody: "취향 분석이 곡의 작곡가를 찾으면 여기에 보여요.",
+  },
 };

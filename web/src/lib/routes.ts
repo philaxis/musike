@@ -34,6 +34,11 @@ export const paths = {
   mixes: "/library/mixes",
   mix: (id: string) => `/library/mixes/${encodeURIComponent(id)}`,
   tasteRadio: (id: string) => `/library/radio/${id}`,
+  /** Albums, composers and performances of the analysis: my tracks only. `genre` keeps the composer list to one genre. */
+  workAlbum: (key: string) => `/library/albums/${encodeURIComponent(key)}`,
+  performance: (key: string) => `/library/performances/${encodeURIComponent(key)}`,
+  composers: (genre?: string) => `/library/composers${genre ? `?genre=${encodeURIComponent(genre)}` : ""}`,
+  composer: (name: string) => `/library/composers/${encodeURIComponent(name)}`,
 };
 
 /** Hash that opens the full-screen Now Playing sheet on phones (so Back closes it). */
