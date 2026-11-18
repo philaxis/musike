@@ -69,7 +69,7 @@ export default function SongBox() {
   }, [untagged, source, tag]);
 
   useEffect(() => {
-    if (mode === "source" && !sources) server.boxSources().then(setSources, () => setSources([]));
+    if (mode === "source" && !sources) server.boxSources().then((r) => setSources(r.sources), () => setSources([]));
     if (mode === "tag" && !tags) server.tags().then(setTags, () => setTags([]));
   }, [mode]);
 

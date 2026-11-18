@@ -494,6 +494,7 @@ export const pt: Messages = {
   songBox: {
     title: "Caixa de faixas",
     tileSub: "Tudo o que entrou, com origens e etiquetas",
+    fromYoutube: "Trazidas do YouTube",
     all: "Todas",
     untagged: "Sem organizar",
     bySource: "Por origem",

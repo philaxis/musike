@@ -500,6 +500,7 @@ export const en = {
   songBox: {
     title: "Song box",
     tileSub: "Every track brought in, with sources and tags",
+    fromYoutube: "Brought in from YouTube",
     all: "All",
     untagged: "Not sorted",
     bySource: "By source",

@@ -155,10 +155,11 @@ export async function listBox(query: BoxQuery & { cursor?: string }) {
   return pageItems(filterItems(await allItems(), query), query.cursor);
 }
 
-/** Every source with how many tracks came from it, most tracks first. */
+/** Every source with how many tracks came from it, most tracks first, and how many tracks the box holds (a track with two sources counts once). */
 export async function boxSources() {
+  const items = await allItems();
   const counts = new Map<string, { kind: SourceKind; ref: string; name: string; count: number }>();
-  for (const it of await allItems()) {
+  for (const it of items) {
     for (const s of it.sources) {
       const key = sourceKey(s);
       const c = counts.get(key) ?? { kind: s.kind, ref: s.ref, name: s.name, count: 0 };
@@ -166,7 +167,7 @@ export async function boxSources() {
       counts.set(key, c);
     }
   }
-  return [...counts.values()].sort((a, b) => b.count - a.count);
+  return { sources: [...counts.values()].sort((a, b) => b.count - a.count), total: items.length };
 }
 
 /** Adds YouTube tracks from one source; local tracks and bundles are not box entries and are skipped. */
