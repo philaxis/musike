@@ -12,6 +12,7 @@
 - 데이터: `~/.local/share/musike/data`(`library.json`, `local-index.json`, `backups/`). 캐시·받아 둔 곡: `/mnt/backup8t/orca-data/musike/{cache,keep}`(HDD).
 - 내 음악 폴더(`MUSIKE_LOCAL_DIRS`, 읽기 전용, 절대 쓰지 않음): `/mnt/backup8t/gdrive/current/MUSICS/{야마시타 타츠로,카시오페아}`(구글 드라이브 사본), `~/보관함/유튜브`(yt-bulk).
 - yt-dlp: `uv tool`로 설치, `yt-dlp-update.timer`가 매일 업데이트.
+- 취향 분석(#26, `analysis/` 파이썬, 설계 `openspec/changes/analysis-move/design.md`): `musike-analysis.timer`가 매일 06:50 `uv run python -m musike_analysis update`(곡 상자 → 카드·소리/글 벡터·소리 묶음 → `~/.local/share/musike/analysis/{taste.json,audio.f32,text.f32,map/}`). 원본(조각·카드·parquet)은 `/mnt/backup8t/orca-data/musike/analysis/`. 마지막 결과 `python -m musike_analysis status`. 시험: `cd analysis && uv run --group dev pytest`.
 - 헤르메스 기술: `~/.hermes/skills/media/musike/SKILL.md`(API 표와 답장 모양). API를 바꾸면 같이 고친다.
 
 ## 개발
