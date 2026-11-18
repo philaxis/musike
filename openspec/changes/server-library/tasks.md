@@ -31,9 +31,9 @@
 
 ## 5. 운영·정리
 
-- [ ] 5.1 `musike.service` 환경(로컬 폴더, HDD 캐시), `tailscale serve --https=4443`, yt-dlp 매일 업데이트 — 확인: https 주소로 열림
-- [ ] 5.2 `AGENTS.md`(API·curl) + 헤르메스 기술 `~/.hermes/skills/media/musike/SKILL.md`(언제 쓰는지, API, 답장 모양, 지우기 전 되묻기, 원격 재생 조작 안 함), `library.json` 바꾸기 전 하루치 사본 — 확인: 텔레그램으로 "카시오페아 라이브만 모아 줘" → 재생목록·열기 링크, 링크로 폰 재생
-- [ ] 5.2-1 TV: 사용자에게 셋톱박스 기종·같은 공유기 여부 확인 → TV 브라우저 APK 설치 → 집 안 주소 시작 페이지 — 확인: 사용자 TV에서 리모컨으로 재생(사진 한 장). 안 되면 사용자에게 알리고 별도 이슈
-- [ ] 5.3 에뮬레이터 크롬 화면 꺼짐 재생 — 확인: 1분 뒤 재생 중, 다음 곡 넘어감
-- [ ] 5.4 yt-bulk 알림 링크를 Musike `/play/…`로(yt-bulk PR) — 확인: 받기 완료 알림 링크로 재생
-- [ ] 5.5 Jellyfin 끄고 지우기(`~/apps/jellyfin`, 서비스) — 확인: 서비스 없음, yt-bulk 정상
+- [x] 5.1 서비스 환경·HTTPS·yt-dlp 업데이트 — 확인: `musike.service`에 내 음악 4개 뿌리·HDD 캐시·keep, 뿌리 다섯 개 모두 읽힘, `https://…:4443/api/health` 200, `yt-dlp-update.timer` 매일 05:40
+- [x] 5.2 AGENTS.md + 헤르메스 기술 + 하루치 사본 — 확인: `hermes -z "카시오페아 라이브 앨범만 모아서…"` → 7곡 연도순 재생목록과 열기 링크(링크 주소를 모델이 잘못 쳐서 `musike-link` 도구로 바꿈), "다음 곡" → "재생은 듣고 있는 기기에서 넘겨 주세요", "RIDE ON TIME 링크 줘" → 맞는 `/play/` 링크(200). `backups/library-2026-11-18.json` 생김
+- [ ] 5.2-1 TV: 사용자 셋톱박스 기종 확인 필요(11-18 TV 꺼져 있어 네트워크에서 안 보임) → 별도 이슈 musike#6로 넘김
+- [x] 5.3 에뮬레이터 화면 꺼짐 재생 — 확인: 안드로이드 15 크롬, 유튜브 곡 화면 끄고 70초 뒤 재생 중(1:23까지 진행), 내 음악 Mint Jams 끝 근처에서 화면 끄자 Make Up City로 넘어가 0:41→0:45 진행. 맨 끝으로 건너뛸 때 처음부터 다시 받던 문제를 찾아 고침(#5)
+- [x] 5.4 yt-bulk 알림 링크 — 확인: yt-bulk#8 합침·설치(시험 36개), 설정에서 Jellyfin 키 빼고 `musike_url`, 보관함 영상 경로 `/api/local/lookup` → 곡(루키스AI 2시간 4분), `/open?path=` 페이지 200
+- [x] 5.5 Jellyfin 지우기 — 확인: 서비스·`~/apps/jellyfin`(449MB)·계정 파일 지움, :8096 닫힘, yt-bulk·musike 정상
