@@ -6,7 +6,8 @@ export interface Track {
   duration: number;
   thumb: string;
   art: string;
-  kind: "song" | "video";
+  /** "bundle": several tracks played as one (id `B` + 20 chars); the library's `bundles` holds its parts. */
+  kind: "song" | "video" | "bundle";
   /** A file in one of the server's music folders (id `L` + 20 chars); YouTube otherwise. */
   source?: "local";
   year?: number;
