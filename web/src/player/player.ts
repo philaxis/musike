@@ -6,10 +6,10 @@ import { bundleParts, bundleRow, queueRows, trackTitle } from "../lib/bundles";
 import { shuffled } from "../lib/format";
 import { paths } from "../lib/routes";
 import { isLocal, server } from "../lib/server";
-import type { Bundle, Track } from "../lib/types";
+import type { Bundle, Track, Unplayable } from "../lib/types";
 import { useLibrary } from "../stores/library";
 import { openSettings } from "../stores/system";
-import { toast } from "../stores/ui";
+import { toast, useUi } from "../stores/ui";
 import { crossfadeSupported, FADE_DEFAULT, FADE_MAX, mixer, noFade } from "./crossfade";
 
 export type Repeat = "off" | "all" | "one";
@@ -45,10 +45,17 @@ interface PlayerState {
   autoRadio: boolean;
   /** Seconds the next track overlaps the end of this one in Audio mode; 0 plays them one after the other. */
   fade: number;
+  /** YouTube tracks found this session not to play here (by `prepare` or their stream), with why; skipped like `blocked`. */
+  unplayable: Record<string, Unplayable>;
 
-  /** Plays `tracks` from row `start`; a bundle row there starts at its part `part` (0-based). */
-  playList: (tracks: Track[], start?: number, part?: number) => void;
+  /**
+   * Plays `tracks` from row `start`; a bundle row there starts at its part `part` (0-based). `chosen`: that row was
+   * picked by hand, so a track there that won't play says why instead of being skipped.
+   */
+  playList: (tracks: Track[], start?: number, part?: number, chosen?: boolean) => void;
   playTrack: (track: Track) => void;
+  /** Puts `track` in place of every queued `oldId` (another version of a track that won't play here). */
+  replaceTrack: (oldId: string, track: Track) => void;
   /** Puts tracks right after the current one (in their order). Toast with undo. */
   playNext: (tracks: Track | Track[]) => void;
   /** Puts tracks at the end of the queue. Toast with undo. */
@@ -114,12 +121,27 @@ const offsetAudio = new Map<string, boolean>();
 const playsFromOffset = (track: Track) =>
   capabilities.serverLibrary && (offsetAudio.get(track.id) ?? (isLocal(track) && track.kind === "video"));
 
-function prepare(id: string) {
+/** When each id was last prepared (ms): the window ahead doesn't ask again for AHEAD_FRESH_MS. */
+const preparedAt = new Map<string, number>();
+
+/** Resolves a track's stream ahead of time (and learns how a server file streams). Resolves to why it won't play, if so. */
+function prepare(id: string): Promise<Unplayable | null> {
   return api.prepare(id).then(
-    (r) => r.audioMode && offsetAudio.set(id, r.audioMode === "offset"),
-    () => {},
+    (r) => {
+      if (r.audioMode) offsetAudio.set(id, r.audioMode === "offset");
+      preparedAt.set(id, Date.now());
+      return null;
+    },
+    (e: ApiError) => (e.code === "unplayable" && e.reason) || null,
   );
 }
+
+/** How long after a track starts the window ahead is filled (so it never slows that start), and how long a prepared address counts as fresh. */
+const AHEAD_DELAY_MS = 4000;
+const AHEAD_FRESH_MS = 5 * 60_000;
+
+/** The spare audio deck holding the head of the next track (see `preloadHead`), so it starts at once. */
+let preloaded: { el: HTMLMediaElement; id: string; offset: boolean } | null = null;
 
 /**
  * A radio from `track`, without it: alike tracks from the server's taste analysis when it knows the track (box or
@@ -212,7 +234,7 @@ function withParts(tracks: Track[], then: (rows: Track[][]) => void) {
   );
 }
 
-export const usePlayer = create<PlayerState>((set, get) => {
+export const usePlayer = create<PlayerState>((set, get, store) => {
   const kindFor = (track: Track): Kind =>
     !backgrounded && capabilities.video && get().preferVideo && (track.kind === "video" || !!clipFor.get(track.id))
       ? "video"
@@ -232,23 +254,61 @@ export const usePlayer = create<PlayerState>((set, get) => {
     });
   }
 
-  function load(index: number, opts: { autoplay?: boolean; startAt?: number; dir?: 1 | -1; fade?: boolean } = {}) {
+  /** Why a queued track won't play here: the server's mark, or what this session found out. */
+  const blockedReason = (track: Track): Unplayable | undefined => track.blocked ?? get().unplayable[track.id];
+  const skippable = (track: Track) => !!track.unavailable || !!blockedReason(track);
+
+  /** A track picked by hand that won't play: why, in plain words, and (for a YouTube track) other versions to try. */
+  function explain(track: Track, reason: Unplayable) {
+    const t = getT().aside;
+    const find = isLocal(track) || !capabilities.serverLibrary ? undefined : { label: t.findOther, run: () => useUi.getState().openAlternatives(track) };
+    toast(t.chosen(track.title, t.why[reason]), "info", find);
+  }
+
+  // Tracks skipped in a row are told in one quiet line.
+  let skipped: Unplayable[] = [];
+  let skippedTimer: number | undefined;
+  function noteSkipped(reason: Unplayable) {
+    skipped.push(reason);
+    clearTimeout(skippedTimer);
+    skippedTimer = window.setTimeout(() => {
+      const t = getT().aside;
+      const what = new Set(skipped).size === 1 ? t.kind[skipped[0]] : t.kind.any;
+      toast(t.skipped(what, skipped.length));
+      skipped = [];
+    }, 1200);
+  }
+
+  function markUnplayable(id: string, reason: Unplayable) {
+    if (get().unplayable[id] !== reason) set((s) => ({ unplayable: { ...s.unplayable, [id]: reason } }));
+  }
+
+  /** The token of the load the user picked by hand (a row, the queue): its failure is explained, not skipped. */
+  let chosenToken = -1;
+
+  function load(index: number, opts: { autoplay?: boolean; startAt?: number; dir?: 1 | -1; fade?: boolean; chosen?: boolean } = {}) {
     const s = get();
     const track = s.queue[index];
     if (!track) return;
+    const reason = blockedReason(track);
+    if (opts.chosen && reason) return explain(track, reason);
     clearTimeout(offsetSeek);
     offsetSeek = undefined;
     if (!opts.fade) cutFade();
 
-    // A server file that is gone (or whose drive isn't mounted): skip it, the way playback is going.
-    if (track.unavailable) {
+    // A server file that is gone (or whose drive isn't mounted), or a YouTube video that won't play here: skip it
+    // quietly, the way playback is going.
+    if (skippable(track)) {
       const step = opts.dir ?? 1;
-      let next = index + step;
-      while (s.queue[next]?.unavailable) next += step;
+      let next = index;
+      for (; s.queue[next] && skippable(s.queue[next]); next += step) {
+        const why = blockedReason(s.queue[next]);
+        if (why) noteSkipped(why);
+      }
       if (s.queue[next]) return load(next, { autoplay: opts.autoplay, dir: step });
       activeMedia()?.pause();
       set({ index, status: "paused", statusText: null, position: 0, duration: track.duration });
-      toast(getT().player.unavailable(track.title), "error");
+      if (!reason) toast(getT().player.unavailable(track.title), "error");
       return;
     }
 
@@ -285,7 +345,21 @@ export const usePlayer = create<PlayerState>((set, get) => {
     }
 
     const kind = kindFor(track);
+    const offset = kind === "audio" && playsFromOffset(track);
+    const startAt = offset ? Math.floor(opts.startAt ?? 0) : 0;
+    // The head of this track already waits on the spare deck (`preloadHead`): play that deck rather than load again.
+    const head = kind === "audio" && preloaded?.id === track.id && preloaded.offset === offset && startAt === 0 ? preloaded.el : null;
+    if (head && head !== audio) {
+      // Not in a crossfade (that switched decks already): the deck that played stops, the waiting one takes over.
+      audio.pause();
+      audio.removeAttribute("src");
+      audio.load();
+      audio = head;
+      mixer.set(audio, 1);
+    }
     const media = mediaFor(kind);
+    // Used now, or about to be overwritten by this load.
+    if (preloaded && (head || preloaded.el === media)) preloaded = null;
     const other = mediaFor(kind === "video" ? "audio" : "video");
     other.pause();
     if (other.getAttribute("src")) {
@@ -294,8 +368,8 @@ export const usePlayer = create<PlayerState>((set, get) => {
     }
 
     token++;
-    const offset = kind === "audio" && playsFromOffset(track);
-    base = offset ? Math.floor(opts.startAt ?? 0) : 0;
+    if (opts.chosen) chosenToken = token;
+    base = startAt;
     loaded = { id: track.id, kind, quality: s.quality, offset };
     pendingSeek = offset ? 0 : (opts.startAt ?? 0);
     const autoplay = opts.autoplay !== false;
@@ -307,11 +381,21 @@ export const usePlayer = create<PlayerState>((set, get) => {
       statusText: kind === "video" ? (s.quality === "hd" ? "preparingHd" : "loadingVideo") : null,
       videoNote: noteFor(track),
       position: offset ? base : pendingSeek,
-      duration: track.duration,
-      buffered: 0,
+      // A waiting deck has its metadata already (its `loadedmetadata` came while it wasn't the active one).
+      duration: head && Number.isFinite(head.duration) && !offset ? head.duration : track.duration,
+      buffered: head?.buffered.length ? head.buffered.end(head.buffered.length - 1) : 0,
     });
     if (kind === "audio" && s.fade > 0) connectMixer();
     applyVolume();
+    if (head) {
+      if (pendingSeek > 0 && head.readyState > 0) {
+        head.currentTime = pendingSeek;
+        pendingSeek = 0;
+      }
+      if (autoplay) play(head);
+      setMetadata(track);
+      return;
+    }
     const start = (src: string) => {
       media.src = offset && base > 0 ? `${src}${src.includes("?") ? "&" : "?"}t=${base}` : src;
       if (autoplay) play(media);
@@ -323,11 +407,88 @@ export const usePlayer = create<PlayerState>((set, get) => {
       const mine = token;
       source.then(
         (src) => mine === token && start(src),
-        (err: ApiError) => mine === token && report(err.message, err.code),
+        (err: ApiError) => mine === token && report(err.message, err.code, err.reason),
       );
     }
     setMetadata(track);
   }
+
+  // The window around the current track (see AHEAD_DELAY_MS): the next two tracks' addresses resolved, the previous
+  // one's kept, and in Audio mode with a spare deck the head of the next one loaded there.
+
+  let aheadTimer: number | undefined;
+  let aheadRun = 0;
+  /** When the current track started playing (ms). */
+  let startedAt = 0;
+
+  function scheduleAhead(ms: number) {
+    clearTimeout(aheadTimer);
+    aheadTimer = window.setTimeout(() => void runAhead(), ms);
+  }
+
+  /** Queue positions that play after `index`, the way playback goes (wrapping on repeat-all), skipping those that won't play. */
+  function upcoming(index: number, count: number): number[] {
+    const s = get();
+    const out: number[] = [];
+    for (let k = 1; k < s.queue.length && out.length < count; k++) {
+      const i = index + k < s.queue.length ? index + k : s.repeat === "all" ? index + k - s.queue.length : -1;
+      if (i < 0) break;
+      if (!skippable(s.queue[i])) out.push(i);
+    }
+    return out;
+  }
+
+  async function runAhead() {
+    // Before the current track plays, `onStarted` runs this again.
+    if (!loaded || recordedToken !== token) return;
+    const mine = ++aheadRun;
+    const s = get();
+    const [next, after] = upcoming(s.index, 2);
+    for (const i of [next, after]) {
+      if (i === undefined) continue;
+      const ok = await warm(s.queue[i]);
+      if (mine !== aheadRun) return;
+      // It won't play: `markUnplayable` moved the window past it (a new run).
+      if (!ok) return;
+      if (i === next) preloadHead(s.queue[i]);
+    }
+    const prev = s.queue[s.index - 1];
+    if (prev && !skippable(prev)) await warm(prev);
+  }
+
+  /** Resolves a track's address unless it was lately (in Video mode, its clip's). False when it turned out not to play. */
+  async function warm(track: Track): Promise<boolean> {
+    const id = get().preferVideo ? ((await lookupClip(track)) ?? track.id) : track.id;
+    if (Date.now() - (preparedAt.get(id) ?? 0) < AHEAD_FRESH_MS) return true;
+    const reason = await prepare(id);
+    if (!reason || id !== track.id) return true;
+    markUnplayable(track.id, reason);
+    return false;
+  }
+
+  /**
+   * Loads the start of `track` on the spare audio deck without playing it: the browser buffers its head (Firefox up to
+   * a minute, Chrome a few MB) and `load` switches to that deck. Only with two decks, in Audio mode, and not while a
+   * crossfade still plays on the spare deck (`stopOutgoing` runs the window again).
+   */
+  function preloadHead(track: Track) {
+    const s = get();
+    if (decks.length < 2 || s.preferVideo || outgoing || kindFor(track) !== "audio") return;
+    const spare = decks.find((d) => d !== audio)!;
+    const offset = playsFromOffset(track);
+    if (preloaded?.el === spare && preloaded.id === track.id && preloaded.offset === offset) return;
+    const src = streamSource(track.id, "audio", s.quality);
+    if (typeof src !== "string") return;
+    preloaded = { el: spare, id: track.id, offset };
+    spare.src = src;
+  }
+
+  // A new next track (queue edited, shuffle, repeat, a track found not to play): fill the window again, but not
+  // sooner than AHEAD_DELAY_MS into the current track.
+  store.subscribe((s, prev) => {
+    if (s.queue === prev.queue && s.index === prev.index && s.repeat === prev.repeat && s.preferVideo === prev.preferVideo && s.unplayable === prev.unplayable) return;
+    scheduleAhead(Math.max(800, startedAt + AHEAD_DELAY_MS - Date.now()));
+  });
 
   async function continueWithRadio() {
     const s = get();
@@ -357,11 +518,8 @@ export const usePlayer = create<PlayerState>((set, get) => {
     // A bundle goes into the history as its row, not as the part that happens to start.
     const bundle = track.part && useLibrary.getState().bundles?.find((b) => b.id === track.part!.bundle);
     useLibrary.getState().recordPlay(bundle ? bundleRow(bundle) : track);
-    // Warm up the next track (and, in Video mode, find and resolve its clip) so it starts quickly.
-    const upcoming = s.queue[s.index + 1];
-    if (!upcoming) return;
-    if (s.preferVideo) void lookupClip(upcoming).then((id) => prepare(id ?? upcoming.id));
-    else void prepare(upcoming.id);
+    startedAt = Date.now();
+    scheduleAhead(AHEAD_DELAY_MS);
   }
 
   function onEnded() {
@@ -393,7 +551,7 @@ export const usePlayer = create<PlayerState>((set, get) => {
     const index = s.index < s.queue.length - 1 ? s.index + 1 : s.repeat === "all" ? 0 : -1;
     const current = s.queue[s.index];
     const next = s.queue[index];
-    if (!current || !next || index === s.index || next.unavailable || noFade(current, next)) return;
+    if (!current || !next || index === s.index || skippable(next) || noFade(current, next)) return;
     if (needsClipLookup(next, s.preferVideo) || kindFor(next) !== "audio") return;
     startCrossfade(index, left);
   }
@@ -431,6 +589,8 @@ export const usePlayer = create<PlayerState>((set, get) => {
     o.el.removeAttribute("src");
     o.el.load();
     if (!o.started) mixer.set(audio, 1);
+    // The spare deck is free again: the next track's head can wait there.
+    scheduleAhead(500);
   }
 
   /** Ends a crossfade at once (pause, skip, another track): only the current track plays, at full level. */
@@ -439,11 +599,21 @@ export const usePlayer = create<PlayerState>((set, get) => {
     mixer.set(audio, 1);
   }
 
-  /** Shows why a track can't play, then moves on (unless every track would fail the same way). */
-  function report(message: string, code?: ErrorCode) {
+  /**
+   * Shows why a track can't play, then moves on (unless every track would fail the same way). A video that won't play
+   * here is skipped at once with a quiet line, or explained when it was picked by hand.
+   */
+  function report(message: string, code?: ErrorCode, reason?: Unplayable) {
     const mine = token;
-    set({ status: "error", statusText: { error: message } });
     const track = get().queue[get().index];
+    if (code === "unplayable" && reason && track) {
+      markUnplayable(track.id, reason);
+      set({ status: "paused", statusText: null });
+      if (chosenToken === mine) return explain(track, reason);
+      noteSkipped(reason);
+      return get().next();
+    }
+    set({ status: "error", statusText: { error: message } });
     // Tool problems hit every track: offer the fix instead of skipping through the whole queue.
     const toolProblem = code === "tool_missing" || code === "maybe_outdated";
     const t = getT();
@@ -470,8 +640,8 @@ export const usePlayer = create<PlayerState>((set, get) => {
       return;
     }
     set({ status: "error" });
-    explainStreamError(url).then(({ message, code }) => {
-      if (mine === token) report(message, code);
+    explainStreamError(url).then(({ message, code, reason }) => {
+      if (mine === token) report(message, code, reason);
     });
   }
 
@@ -524,7 +694,14 @@ export const usePlayer = create<PlayerState>((set, get) => {
       if (isActive()) onEnded();
       else if (outgoing?.el === media) stopOutgoing();
     });
-    media.addEventListener("error", () => isActive() && media.getAttribute("src") && onError(media));
+    media.addEventListener("error", () => {
+      // The next track's head failed to load on the spare deck: drop it, its turn loads (and reports) as usual.
+      if (preloaded?.el === media) {
+        preloaded = null;
+        media.removeAttribute("src");
+        media.load();
+      } else if (isActive() && media.getAttribute("src")) onError(media);
+    });
   }
   for (const deck of decks) wire(deck);
   wire(videoEl);
@@ -586,14 +763,18 @@ export const usePlayer = create<PlayerState>((set, get) => {
     quality: saved.quality ?? "sd",
     autoRadio: saved.radioAfterQueue ?? false,
     fade: saved.fade ?? FADE_DEFAULT,
+    unplayable: {},
 
-    playList: (tracks, start = 0, part = 0) => {
+    playList: (tracks, start = 0, part = 0, chosen = false) => {
       if (!tracks.length) return;
       withParts(tracks, (rows) => {
         const at = rows[start]?.length ? start : 0;
         const all = rows.flat();
         if (!all.length) return;
         const from = Math.min(part, rows[at].length - 1);
+        // Picked by hand and won't play: say why, and leave the queue as it is.
+        const why = chosen && blockedReason(rows[at][from]);
+        if (why) return explain(rows[at][from], why);
         if (get().shuffle) {
           // Bundles stay whole: rows are shuffled, never the parts inside one.
           const rest = rows.filter((_, i) => i !== at);
@@ -608,8 +789,10 @@ export const usePlayer = create<PlayerState>((set, get) => {
 
     playTrack: (track) => {
       const s = get();
+      const why = blockedReason(track);
+      if (why) return explain(track, why);
       const at = s.queue.findIndex((t) => t.id === track.id || (t.part?.bundle === track.id && t.part.n === 1));
-      if (at >= 0) return load(at);
+      if (at >= 0) return load(at, { chosen: true });
       if (!s.queue.length) return get().playList([track]);
       withParts([track], ([parts]) => {
         const st = get();
@@ -618,7 +801,7 @@ export const usePlayer = create<PlayerState>((set, get) => {
           queue: [...st.queue.slice(0, insert), ...parts, ...st.queue.slice(insert)],
           original: st.original ? [...st.original, ...parts] : null,
         });
-        load(insert);
+        load(insert, { chosen: true });
       });
     },
 
@@ -709,7 +892,20 @@ export const usePlayer = create<PlayerState>((set, get) => {
       set({ status: "paused", position: 0 });
     },
 
-    jumpTo: (i) => load(i),
+    jumpTo: (i) => load(i, { chosen: true }),
+
+    replaceTrack: (oldId, track) =>
+      set((s) => {
+        // One new entry per old one: shuffle matches `queue` and `original` entries by identity.
+        const fresh = new Map<Track, Track>();
+        const swap = (list: Track[]) =>
+          list.map((t) => {
+            if (t.id !== oldId) return t;
+            if (!fresh.has(t)) fresh.set(t, { ...track, ...(t.part ? { part: t.part } : {}) });
+            return fresh.get(t)!;
+          });
+        return { queue: swap(s.queue), original: s.original && swap(s.original) };
+      }),
 
     clearUpcoming: () => {
       const s = get();

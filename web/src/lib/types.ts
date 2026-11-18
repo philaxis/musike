@@ -1,3 +1,6 @@
+/** Why a YouTube video won't play on this server: blocked in its country, deleted, private, age-restricted. */
+export type Unplayable = "region" | "gone" | "private" | "age";
+
 export interface Track {
   id: string;
   title: string;
@@ -17,6 +20,8 @@ export interface Track {
   kept?: boolean;
   /** From the server, never stored: a "내 음악" track the user hid, listed only while hidden items are shown. */
   hidden?: boolean;
+  /** From the server, never stored: why this YouTube track won't play here (the song box's check, or yt-dlp's answer). */
+  blocked?: Unplayable;
   /** Never on the server: this queued track is one part of a bundle the player expanded (see lib/bundles.ts). */
   part?: BundlePart;
 }

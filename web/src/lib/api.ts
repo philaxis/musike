@@ -10,7 +10,7 @@ import {
   type SystemMedia,
 } from "./apiTypes";
 import { LANG_HEADER, request } from "./http";
-import type { AlbumCard, AlbumPage, ArtistPage, Genre, GenreArtist, GenrePage, Library, Playlist, Track } from "./types";
+import type { AlbumCard, AlbumPage, ArtistPage, Genre, GenreArtist, GenrePage, Library, Playlist, Track, Unplayable } from "./types";
 
 // The HTTP backend: the Musike server (web app, desktop app). The Android build swaps this module for native/api.ts.
 export * from "./apiTypes";
@@ -83,13 +83,13 @@ export const systemMedia: SystemMedia | null = null;
 export const capabilities = { video: true, engineSettings: true, retryOnError: false, serverLibrary: true };
 
 /** Media elements hide the HTTP error body; fetch it to show the real reason. */
-export async function explainStreamError(url: string): Promise<{ message: string; code?: ErrorCode }> {
+export async function explainStreamError(url: string): Promise<{ message: string; code?: ErrorCode; reason?: Unplayable }> {
   const t = getT();
   try {
     const res = await fetch(url, { headers: { Range: "bytes=0-0", [LANG_HEADER]: getLang() } });
     if (res.ok) return { message: t.player.browserCantPlay };
     const body = await res.json().catch(() => ({}));
-    return { message: body.error ?? t.player.httpError(res.status), code: body.code };
+    return { message: body.error ?? t.player.httpError(res.status), code: body.code, reason: body.reason };
   } catch {
     return { message: t.player.serverDown };
   }

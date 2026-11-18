@@ -1,4 +1,5 @@
 import type { FastifyInstance, FastifyRequest } from "fastify";
+import { findTrack } from "./box.js";
 import { parseTarget } from "./hidden.js";
 import { langOf, msg } from "./i18n.js";
 import { keep, keepItems, unkeep } from "./keep.js";
@@ -48,8 +49,12 @@ async function anyTrack(id: string): Promise<Track> {
     };
   } catch (err) {
     // Gone from YouTube but kept here: still playable.
-    if (!kept) throw err;
-    return { id, title: kept.title, artist: kept.artist, duration: kept.duration, ...thumbs, kind: "song", kept: true };
+    if (kept) return { id, title: kept.title, artist: kept.artist, duration: kept.duration, ...thumbs, kind: "song", kept: true };
+    // Won't play here but known (song box, library): the app says why and offers other versions.
+    if (!(err instanceof HttpError) || !err.reason) throw err;
+    const known = await findTrack(id);
+    if (!known) throw err;
+    return { ...known, blocked: err.reason };
   }
 }
 

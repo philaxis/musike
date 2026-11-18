@@ -1,5 +1,5 @@
 import { request } from "./http";
-import type { Bundle, LocalAlbum, LocalRoot, Playlist, Track } from "./types";
+import type { Bundle, LocalAlbum, LocalRoot, Playlist, Track, Unplayable } from "./types";
 
 /**
  * What only the Musike server offers (the web app on a home server): its own music folders, YouTube playlist import,
@@ -32,12 +32,13 @@ export interface BoxItem {
   sources: BoxSource[];
   tags: string[];
   addedAt: number;
-  /** Deleted or made private on YouTube; still kept. */
-  gone?: true;
+  /** Why it won't play here, and since when (ms); such tracks are put aside (only the "blocked" filter lists them). */
+  blocked?: { reason: Unplayable; at: number };
 }
 
 export interface BoxQuery {
-  filter?: "untagged";
+  /** "blocked": only the tracks put aside because they won't play here. */
+  filter?: "untagged" | "blocked";
   /** A source kind, or kind:ref for one playlist or folder. */
   source?: string;
   tag?: string;
@@ -92,7 +93,8 @@ export interface GooglePlaylist {
 export interface GoogleSync {
   added: { id: string; title: string; source: string }[];
   merged: number;
-  gone: number;
+  /** Box tracks newly found not to play here (put aside). */
+  blocked: number;
   playlists: number;
 }
 
@@ -267,7 +269,17 @@ export const server = {
   importToBox: (url: string) => request<BoxImport>("/api/import/youtube/box", { method: "POST", json: { url } }),
 
   box: (query: BoxQuery, signal?: AbortSignal) => request<BoxPage>(`/api/box${q({ ...query })}`, { signal }),
-  boxSources: () => request<{ sources: (Omit<BoxSource, "at"> & { count: number })[]; total: number }>("/api/box/sources"),
+  /** Sources and how many tracks each brought; `aside`: tracks put aside because they won't play here, by reason. */
+  boxSources: () =>
+    request<{ sources: (Omit<BoxSource, "at"> & { count: number })[]; total: number; aside: Partial<Record<Unplayable, number>> }>(
+      "/api/box/sources",
+    ),
+  /** Up to 5 other versions of a track that won't play here, closest in length first. */
+  alternatives: (id: string, signal?: AbortSignal) =>
+    request<{ tracks: Track[] }>(`/api/box/${id}/alternatives`, { signal }).then((r) => r.tracks),
+  /** Puts `track` in place of `id` in the song box, playlists, favorites and bundles. */
+  replaceTrack: (id: string, track: Track) =>
+    request<{ track: Track; rows: number }>(`/api/box/${id}/replace`, { method: "POST", json: { track } }),
   /** YouTube tracks into the box, as added by hand. */
   addToBox: (tracks: Track[]) => request<unknown>("/api/box", { method: "POST", json: { tracks, source: { kind: "link" } } }),
 

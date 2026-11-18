@@ -1,7 +1,7 @@
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { FastifyInstance } from "fastify";
-import { findTrack } from "./box.js";
+import { annotator, findTrack } from "./box.js";
 import { config } from "./config.js";
 import { msg } from "./i18n.js";
 import * as library from "./library.js";
@@ -248,8 +248,9 @@ function fromPlay(p: Play): Track {
   };
 }
 
-const present = async (p: Play): Promise<Track> => local.annotate((await findTrack(p.id).catch(() => null)) ?? fromPlay(p));
-const presentAll = (counts: { play: Play }[]) => Promise.all(counts.map((c) => present(c.play)));
+const present = async (p: Play): Promise<Track> => (await annotator())((await findTrack(p.id).catch(() => null)) ?? fromPlay(p));
+/** Ranked tracks to show; those put aside in the song box (won't play here) are left out. */
+const presentAll = async (counts: { play: Play }[]) => (await Promise.all(counts.map((c) => present(c.play)))).filter((t) => !t.blocked);
 
 // 「오늘 좋음」: data/daylikes.json, `{ "2026-11-18": [track + at] }`.
 

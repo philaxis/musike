@@ -1,11 +1,13 @@
 import type { FastifyInstance } from "fastify";
 import * as box from "./box.js";
-import { msg } from "./i18n.js";
+import { checkVideos } from "./google.js";
+import { langOf, msg } from "./i18n.js";
 import * as library from "./library.js";
 import * as local from "./local.js";
 import { parsePlaylistLink, readPlaylist } from "./playlistImport.js";
+import { search } from "./search.js";
 import { trackId } from "./serverRoutes.js";
-import { BUNDLE_ID, HttpError, isBundleId, TRACK_ID, type Bundle, type Track } from "./types.js";
+import { BUNDLE_ID, HttpError, isBundleId, TRACK_ID, VIDEO_ID, type Bundle, type Track, type Unplayable } from "./types.js";
 
 // Song box, tags, bundles, and pasted playlist links into the box (see box.ts).
 
@@ -45,6 +47,12 @@ async function parts(ids: unknown): Promise<Track[]> {
 const text = (v: unknown) => (typeof v === "string" ? v : undefined);
 const presentBundle = (b: Bundle) => ({ ...b, parts: b.parts.map(local.annotate) });
 
+function youtubeId(params: unknown): string {
+  const id = (params as { id?: string }).id ?? "";
+  if (!VIDEO_ID.test(id)) throw new HttpError(400, msg("invalidVideoId"));
+  return id;
+}
+
 export function registerBoxRoutes(app: FastifyInstance) {
   // Song box
 
@@ -65,6 +73,38 @@ export function registerBoxRoutes(app: FastifyInstance) {
     const name = (text(body.source?.name) ?? "").trim().slice(0, 200);
     const r = await box.addToBox(tracks, { kind, ref: "", name, at: Date.now() });
     return { added: r.added.length, merged: r.merged, skipped: r.skipped };
+  });
+
+  /** Another version of a track that won't play here: up to 5 YouTube results for its title and artist (see `pickAlternatives`). */
+  app.get("/api/box/:id/alternatives", async (req) => {
+    const id = youtubeId(req.params);
+    const original = await box.findTrack(id);
+    if (!original) throw new HttpError(404, msg("trackNotFound", { id }));
+    // Upload titles carry noise search doesn't match ("13. … 【… OST】 【HQ 1080p】"): drop track numbers and brackets,
+    // then try the title with the artist, else the title alone.
+    const title = original.title.replace(/^\s*\d+\s*[.)-]\s*/, "").replace(/【[^】]*】|\[[^\]]*\]/g, " ").replace(/\s+/g, " ").trim() || original.title;
+    const lang = langOf(req);
+    const annotate = await box.annotator();
+    for (const q of [`${title} ${original.artist}`.trim(), title]) {
+      const [songs, videos] = await Promise.all([search(q.slice(0, 200), "song", lang).catch(() => []), search(q.slice(0, 200), "video", lang).catch(() => [])]);
+      const found = [...songs, ...videos].filter((t, i, all) => VIDEO_ID.test(t.id) && all.findIndex((x) => x.id === t.id) === i);
+      // The account (when connected) tells which results won't play here either; without it the box's marks do.
+      const checked = await checkVideos(found.map((t) => t.id)).catch(() => new Map<string, Unplayable | null>());
+      const tracks = box.pickAlternatives(original, found.map(annotate), (t) => !!t.blocked || !!checked.get(t.id));
+      if (tracks.length) return { tracks };
+    }
+    return { tracks: [] };
+  });
+
+  /** `{ track }`: puts it in place of track `id` in the box, playlists, favorites and bundles (see `box.replaceEntry`). */
+  app.post("/api/box/:id/replace", async (req) => {
+    const id = youtubeId(req.params);
+    const track = library.sanitizeTrack(((req.body ?? {}) as { track?: unknown }).track);
+    if (!VIDEO_ID.test(track.id)) throw new HttpError(400, msg("invalidTrack"));
+    if (track.id === id) throw new HttpError(400, msg("sameTrack"));
+    await box.replaceTrack(id, track);
+    const rows = await library.replaceTrack(id, track);
+    return { track: (await box.annotator())(track), rows };
   });
 
   /** A pasted playlist link: every track into the box under that playlist, no Musike playlist made. */

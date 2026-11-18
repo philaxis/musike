@@ -442,3 +442,38 @@ export async function editBundleTags(ids: string[], change: (tags: string[]) => 
   if (done.length) await persist();
   return done;
 }
+
+/**
+ * Puts `track` wherever `oldId` is in playlists (same rows), favorites (same place, once) and bundle parts; history
+ * stays as it was played. Returns how many rows changed.
+ */
+export function replaceIn(lib: Library, oldId: string, track: Track): number {
+  let n = 0;
+  const swap = (list: Track[]) =>
+    list.map((t) => {
+      if (t.id !== oldId) return t;
+      n++;
+      return track;
+    });
+  for (const p of lib.playlists) {
+    const before = n;
+    p.tracks = swap(p.tracks);
+    if (n > before) p.updatedAt = Date.now();
+  }
+  const seen = new Set<string>();
+  lib.favorites = swap(lib.favorites).filter((t) => !seen.has(t.id) && !!seen.add(t.id));
+  for (const b of lib.bundles ?? []) {
+    const before = n;
+    b.parts = swap(b.parts);
+    if (n > before) refreshRefs(lib, b);
+  }
+  return n;
+}
+
+/** `replaceIn` in the stored library. */
+export async function replaceTrack(oldId: string, track: Track): Promise<number> {
+  const lib = await load();
+  const n = replaceIn(lib, oldId, track);
+  if (n) await persist();
+  return n;
+}

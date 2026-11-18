@@ -12,7 +12,7 @@ import { HttpError, VIDEO_ID, type Track } from "./types.js";
 
 // The taste API (#26): genres and sound groups of the analysis, the alike-tracks radio and the automatic playlists.
 // Track details (title, cover) come from the song box and the music folders; tracks in neither, and YouTube tracks
-// gone without a kept copy, are left out.
+// that won't play here (put aside in the box) without a kept copy, are left out.
 
 interface Known {
   track: Track;
@@ -23,7 +23,7 @@ async function lookup(id: string): Promise<Known | null> {
   const entry = await box.boxEntry(id);
   if (entry) {
     const track = local.annotate(entry.track);
-    return entry.gone && !track.kept ? null : { track, addedAt: entry.addedAt };
+    return entry.blocked && !track.kept ? null : { track, addedAt: entry.addedAt };
   }
   const track = local.localTrack(id);
   return track && !track.unavailable ? { track, addedAt: 0 } : null;

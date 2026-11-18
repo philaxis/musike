@@ -33,13 +33,14 @@
 | POST/DELETE | `/api/playlists/:pid/tracks` `{tracks, duplicates?}` · `DELETE {at, ids}` | 넣기(이미 있는 곡은 빼고, `duplicates: true`면 모두, 5000곡까지) · 자리로 빼기(`ids[k]`가 `at[k]` 곡이어야, 아니면 409) |
 | GET/POST | `/api/import/youtube/preview?url=` · `/api/import/youtube {url,name?}` | 유튜브 재생목록 미리 보기 · 가져오기 |
 | GET/POST/DELETE | `/api/keep` · `/api/keep/:id` | 유튜브 곡 서버에 받아 두기 |
-| GET/POST | `/api/box?filter=all\|untagged&source=&tag=&q=&cursor=` · `/api/box/sources` · `POST /api/box {tracks, source}` | 곡 상자(아는 곡 전부 + 출처, 200줄씩) · 출처 목록 · 곡 넣기(같은 곡이면 출처만 더함) |
+| GET/POST | `/api/box?filter=all\|untagged\|blocked&source=&tag=&q=&cursor=` · `/api/box/sources` · `POST /api/box {tracks, source}` | 곡 상자(아는 곡 전부 + 출처, 200줄씩; 여기서 못 트는 곡은 치워 두어 빠지고 `filter=blocked`만 그것들, 항목 `blocked: {reason: region\|gone\|private\|age, at}`) · 출처 목록(+ `aside` 이유별 치워 둔 수) · 곡 넣기(같은 곡이면 출처만 더함) |
+| GET/POST | `/api/box/:id/alternatives` · `POST /api/box/:id/replace {track}` | 못 트는 곡의 다른 판 후보 5개(길이 비슷한 순, 못 트는 것 빼고) · 그 곡으로 바꾸기(곡 상자·재생목록·즐겨찾기·묶음 같은 자리, 출처에 `was: 원래 번호`) |
 | POST | `/api/import/youtube/box {url}` | 붙여 넣은 유튜브 재생목록을 곡 상자로(재생목록 안 만듦) |
 | GET/POST/DELETE | `/api/tags` · `{ids, tags}` | 꼬리표 목록(개수) · 붙이기 · 떼기. 관례: `작품:` `판본:` `편곡:` `작곡:` `연주:` `분위기:` `장르:` |
 | GET | `/api/tracks/:id/versions` | 같은 `작품:` 꼬리표 곡들(원곡 · 편곡) |
 | GET/POST/PATCH/DELETE | `/api/bundles/:id` · `POST /api/bundles {title, artist?, ids}` | 묶음(여러 곡을 한 곡처럼, id `B`+20자). 재생목록엔 묶음 줄로 넣음 |
 | GET/DELETE | `/api/google/login` · `/api/google/status` · `DELETE /api/google` | 유튜브 계정 연결(읽기 전용, 토큰 `~/.config/musike/google.json`) |
-| GET/PUT/POST | `/api/google/playlists` · `PUT /api/google/excluded {ids}` · `POST /api/google/sync` | 내 유튜브 재생목록(체크 끈 것 `excluded`) · 들여오지 않을 목록 · 새 곡을 곡 상자로(409 `google_login`이면 다시 연결) |
+| GET/PUT/POST | `/api/google/playlists` · `PUT /api/google/excluded {ids}` · `POST /api/google/sync` | 내 유튜브 재생목록(체크 끈 것 `excluded`) · 들여오지 않을 목록 · 새 곡을 곡 상자로, 뒤이어 곡 상자 전부의 재생 가능 여부 확인(`blocked`: 새로 못 트게 된 수; 409 `google_login`이면 다시 연결). 서버가 처음 뜰 때 확인 기록이 없으면 한 번 확인 |
 | GET | `/api/stats?period=4w\|6m\|all` · `/api/stats/day/:date` · `/api/stats/track/:id` | 내 기록(들은 시간·「한 번 들음」·새로 알게 된 곡·건너뜀 비율, 날짜별, 시간대, 많이 들은 곡·아티스트·장르, 요즘 반복, 잊고 있던 애창곡) · 그날 들은 곡과 그날 ☀ · 곡 하나의 기록. `plays.jsonl`에서 계산, 날짜는 서울. 장르는 분석 결과 `taste.json`이 있을 때만 |
 | GET/PUT/DELETE | `/api/daylikes?date=` · `PUT /api/daylikes/:id {곡}` · `DELETE /api/daylikes/:id?date=` | 「오늘 좋음 ☀」(♥와 따로, `data/daylikes.json` 날짜별). 넣기는 늘 오늘(서울) |
 | GET | `/api/taste/genres` · `/api/taste/genres/:genre` · `/api/taste/groups/:gid` | 취향 분석(`MUSIKE_ANALYSIS_DIR`, 기본 `~/.local/share/musike/analysis`)의 장르(곡 수·묶음 수) · 장르 안 소리 묶음(이름 같은 묶음은 `tell` 아티스트로 구분, 분석 없는 곡은 `none:<장르>`) · 묶음 곡(대표적인 곡부터). 분석이 없으면 `ready: false` |

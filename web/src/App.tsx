@@ -8,6 +8,7 @@ import { Rail } from "./components/Rail";
 import { TitleBar } from "./components/TitleBar";
 import { desktop } from "./lib/desktop";
 import { SettingsDialog } from "./components/SettingsDialog";
+import { AlternativesDialog } from "./components/Alternatives";
 import { Toasts } from "./components/Toasts";
 import { TagsDialog, VersionsDialog } from "./components/Tags";
 import { DragGhost } from "./components/TrackDrag";
@@ -212,6 +213,7 @@ export default function App() {
       <TagsDialog />
       <VersionsDialog />
       <TrackRecordDialog />
+      <AlternativesDialog />
       <Toasts />
     </div>
   );

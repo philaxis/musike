@@ -18,6 +18,6 @@ export async function request<T>(path: string, init?: RequestInit & { json?: unk
   });
   if (res.status === 204) return undefined as T;
   const body = await res.json().catch(() => ({}));
-  if (!res.ok) throw new ApiError(res.status, body.error ?? getT().player.httpError(res.status), body.code);
+  if (!res.ok) throw new ApiError(res.status, body.error ?? getT().player.httpError(res.status), body.code, body.reason);
   return body as T;
 }

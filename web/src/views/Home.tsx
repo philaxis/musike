@@ -147,7 +147,7 @@ export default function Home() {
             >
               <div className="no-scrollbar flex snap-x snap-mandatory scroll-px-4 gap-4 overflow-x-auto px-4 md:scroll-px-6 md:px-6">
                 {history.slice(0, 16).map((t, i) => (
-                  <RecentCard key={t.id} track={t} onPlay={() => playList(history, i)} />
+                  <RecentCard key={t.id} track={t} onPlay={() => playList(history, i, 0, true)} />
                 ))}
               </div>
             </Section>
