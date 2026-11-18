@@ -16,6 +16,7 @@ import { useAppearance } from "../stores/appearance";
 import { useLibrary } from "../stores/library";
 import { needsAttention, useSystem } from "../stores/system";
 import { useUi } from "../stores/ui";
+import { isTvMode } from "../tv/tvMode";
 import { Artwork } from "./Artwork";
 import { Logo, LogoMark } from "./Brand";
 import { NamePlaylistDialog } from "./Dialogs";
@@ -139,15 +140,17 @@ export function Rail() {
 
         <div className="flex items-center justify-between px-4 pb-1 [@media(max-height:540px)]:pb-0">
           <span className="hidden text-xs font-medium text-fg-3 wide:block">{t.nav.yourCollection}</span>
-          <button
-            type="button"
-            onClick={() => setCreating(true)}
-            aria-label={t.nav.newPlaylist}
-            title={t.nav.newPlaylist}
-            className="mx-auto grid size-8 place-items-center rounded-full text-fg-2 transition-colors hover:bg-surface-3 hover:text-fg wide:mx-0"
-          >
-            <PlusIcon size={18} />
-          </button>
+          {!isTvMode() && (
+            <button
+              type="button"
+              onClick={() => setCreating(true)}
+              aria-label={t.nav.newPlaylist}
+              title={t.nav.newPlaylist}
+              className="mx-auto grid size-8 place-items-center rounded-full text-fg-2 transition-colors hover:bg-surface-3 hover:text-fg wide:mx-0"
+            >
+              <PlusIcon size={18} />
+            </button>
+          )}
         </div>
 
         <div className="scroll-area flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto px-2 pb-2">

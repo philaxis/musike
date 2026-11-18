@@ -21,6 +21,10 @@ export const config = {
    * Searched before the system PATH, and where "Instalar" puts the tools when set.
    */
   binDir: process.env.MUSIKE_BIN_DIR || null,
+  /** Server music folders shown as "내 음악": `name=path;name=path` (see local.ts). Read-only. */
+  localDirs: process.env.MUSIKE_LOCAL_DIRS ?? "",
+  /** Where "keep on server" puts YouTube audio; also indexed as the root "받아 둔 곡". */
+  keepDir: process.env.MUSIKE_KEEP_DIR || "/mnt/backup8t/orca-data/musike/keep",
   /** YouTube Music language when a request doesn't say (the app always does). */
   lang: process.env.MUSIKE_LANG ?? "en",
   location: process.env.MUSIKE_LOCATION ?? "BR",

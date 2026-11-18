@@ -3,6 +3,7 @@ import { getT, useT } from "../i18n";
 import { api, capabilities, explainStreamError, streamSource, systemMedia, type ApiError, type ErrorCode } from "../lib/api";
 import { createAudio } from "../lib/audio";
 import { shuffled } from "../lib/format";
+import { isLocal } from "../lib/server";
 import type { Track } from "../lib/types";
 import { useLibrary } from "../stores/library";
 import { openSettings } from "../stores/system";
@@ -73,10 +74,32 @@ videoEl.className = "block h-full w-full object-contain bg-black";
 
 const mediaFor = (k: Kind): HTMLMediaElement => (k === "video" ? videoEl : audio);
 
-let loaded: { id: string; kind: Kind; quality: Quality } | null = null;
+/** `offset`: the audio is a server file's sound cut out on the fly from `base` seconds on (see `playsFromOffset`). */
+let loaded: { id: string; kind: Kind; quality: Quality; offset: boolean } | null = null;
 let pendingSeek = 0;
 let token = 0;
 let recordedToken = -1;
+/** Where the loaded offset stream starts in the track; 0 for every other stream. */
+let base = 0;
+/** A seek in an offset stream waiting for the bar to settle before the stream starts over. */
+let offsetSeek: number | undefined;
+/** Set while Video mode plays as audio because the page is hidden (screen off, another app). */
+let backgrounded = false;
+
+/**
+ * A server file with a video stream plays in Audio mode as its sound alone, cut out on the fly: it takes no byte
+ * ranges, so a seek starts it over at `?t=` and positions count from there. Known from `prepare`, else from the track.
+ */
+const offsetAudio = new Map<string, boolean>();
+const playsFromOffset = (track: Track) =>
+  capabilities.serverLibrary && (offsetAudio.get(track.id) ?? (isLocal(track) && track.kind === "video"));
+
+function prepare(id: string) {
+  return api.prepare(id).then(
+    (r) => r.audioMode && offsetAudio.set(id, r.audioMode === "offset"),
+    () => {},
+  );
+}
 
 const STORAGE_KEY = "musike:player";
 
@@ -113,6 +136,7 @@ const clipLookups = new Map<string, Promise<string | null>>();
 
 function lookupClip(track: Track): Promise<string | null> {
   if (track.kind === "video") return Promise.resolve(track.id);
+  if (isLocal(track)) return Promise.resolve(null); // a server file has no music video on YouTube
   if (clipFor.has(track.id)) return Promise.resolve(clipFor.get(track.id)!);
   let lookup = clipLookups.get(track.id);
   if (!lookup) {
@@ -133,11 +157,13 @@ function lookupClip(track: Track): Promise<string | null> {
 }
 
 const needsClipLookup = (track: Track, preferVideo: boolean) =>
-  preferVideo && track.kind === "song" && !clipFor.has(track.id);
+  preferVideo && track.kind === "song" && !isLocal(track) && !clipFor.has(track.id);
 
 export const usePlayer = create<PlayerState>((set, get) => {
   const kindFor = (track: Track): Kind =>
-    capabilities.video && get().preferVideo && (track.kind === "video" || !!clipFor.get(track.id)) ? "video" : "audio";
+    !backgrounded && capabilities.video && get().preferVideo && (track.kind === "video" || !!clipFor.get(track.id))
+      ? "video"
+      : "audio";
   /** The YouTube id to stream: the song itself, or its music video in Video mode. */
   const mediaIdFor = (track: Track, kind: Kind) =>
     kind === "video" && track.kind !== "video" ? clipFor.get(track.id)! : track.id;
@@ -152,10 +178,24 @@ export const usePlayer = create<PlayerState>((set, get) => {
     });
   }
 
-  function load(index: number, opts: { autoplay?: boolean; startAt?: number } = {}) {
+  function load(index: number, opts: { autoplay?: boolean; startAt?: number; dir?: 1 | -1 } = {}) {
     const s = get();
     const track = s.queue[index];
     if (!track) return;
+    clearTimeout(offsetSeek);
+    offsetSeek = undefined;
+
+    // A server file that is gone (or whose drive isn't mounted): skip it, the way playback is going.
+    if (track.unavailable) {
+      const step = opts.dir ?? 1;
+      let next = index + step;
+      while (s.queue[next]?.unavailable) next += step;
+      if (s.queue[next]) return load(next, { autoplay: opts.autoplay, dir: step });
+      activeMedia()?.pause();
+      set({ index, status: "paused", statusText: null, position: 0, duration: track.duration });
+      toast(getT().player.unavailable(track.title), "error");
+      return;
+    }
 
     // Video mode on a song: find its music video first, then load whichever fits.
     if (needsClipLookup(track, s.preferVideo)) {
@@ -185,8 +225,10 @@ export const usePlayer = create<PlayerState>((set, get) => {
     }
 
     token++;
-    loaded = { id: track.id, kind, quality: s.quality };
-    pendingSeek = opts.startAt ?? 0;
+    const offset = kind === "audio" && playsFromOffset(track);
+    base = offset ? Math.floor(opts.startAt ?? 0) : 0;
+    loaded = { id: track.id, kind, quality: s.quality, offset };
+    pendingSeek = offset ? 0 : (opts.startAt ?? 0);
     const autoplay = opts.autoplay !== false;
     set({
       index,
@@ -195,14 +237,14 @@ export const usePlayer = create<PlayerState>((set, get) => {
       // Video may need a server-side download first (HD, or videos without a combined SD stream).
       statusText: kind === "video" ? (s.quality === "hd" ? "preparingHd" : "loadingVideo") : null,
       videoNote: noteFor(track),
-      position: pendingSeek,
+      position: offset ? base : pendingSeek,
       duration: track.duration,
       buffered: 0,
     });
     media.volume = s.volume;
     media.muted = s.muted;
     const start = (src: string) => {
-      media.src = src;
+      media.src = offset && base > 0 ? `${src}${src.includes("?") ? "&" : "?"}t=${base}` : src;
       if (autoplay) play(media);
     };
     // The server's proxy URL is known right away; on Android the stream is first resolved on the phone.
@@ -247,13 +289,14 @@ export const usePlayer = create<PlayerState>((set, get) => {
     // Warm up the next track (and, in Video mode, find and resolve its clip) so it starts quickly.
     const upcoming = s.queue[s.index + 1];
     if (!upcoming) return;
-    if (s.preferVideo) void lookupClip(upcoming).then((id) => api.prepare(id ?? upcoming.id).catch(() => {}));
-    else api.prepare(upcoming.id).catch(() => {});
+    if (s.preferVideo) void lookupClip(upcoming).then((id) => prepare(id ?? upcoming.id));
+    else void prepare(upcoming.id);
   }
 
   function onEnded() {
     const s = get();
     if (s.repeat === "one") {
+      if (loaded?.offset) return load(s.index);
       const media = activeMedia();
       if (media) {
         media.currentTime = 0;
@@ -311,14 +354,15 @@ export const usePlayer = create<PlayerState>((set, get) => {
         media.currentTime = pendingSeek;
         pendingSeek = 0;
       }
-      if (Number.isFinite(media.duration)) set({ duration: media.duration });
+      // An offset stream only knows the rest of the track; the track's own length stands.
+      if (Number.isFinite(media.duration) && !loaded?.offset) set({ duration: media.duration });
       if (media === videoEl && videoEl.videoWidth && videoEl.videoHeight) {
         set({ videoAspect: videoEl.videoWidth / videoEl.videoHeight });
       }
       syncPositionState();
     });
     media.addEventListener("durationchange", () => {
-      if (isActive() && Number.isFinite(media.duration)) set({ duration: media.duration });
+      if (isActive() && Number.isFinite(media.duration) && !loaded?.offset) set({ duration: media.duration });
     });
     media.addEventListener("playing", () => {
       if (!isActive()) return;
@@ -335,13 +379,14 @@ export const usePlayer = create<PlayerState>((set, get) => {
       if (isActive() && !media.paused) set({ status: "loading" });
     });
     media.addEventListener("timeupdate", () => {
-      if (!isActive() || pendingSeek > 0) return;
-      if (Math.abs(media.currentTime - get().position) >= 0.2) set({ position: media.currentTime });
+      if (!isActive() || pendingSeek > 0 || offsetSeek !== undefined) return;
+      const at = base + media.currentTime;
+      if (Math.abs(at - get().position) >= 0.2) set({ position: at });
       syncSystemMedia(); // throttled on the other side
     });
     media.addEventListener("progress", () => {
       if (!isActive() || !media.buffered.length) return;
-      set({ buffered: media.buffered.end(media.buffered.length - 1) });
+      set({ buffered: base + media.buffered.end(media.buffered.length - 1) });
     });
     media.addEventListener("seeked", () => isActive() && syncPositionState());
     media.addEventListener("ended", () => isActive() && onEnded());
@@ -362,6 +407,17 @@ export const usePlayer = create<PlayerState>((set, get) => {
     if (loaded.kind === kind && (kind === "audio" || loaded.quality === s.quality)) return;
     load(s.index, { startAt: s.position, autoplay: wasPlaying });
   };
+
+  // A hidden page stops video on phones (screen off, another app): carry on as audio, and bring the video back on return.
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "hidden") {
+      const { status } = get();
+      if (loaded?.kind !== "video" || document.pictureInPictureElement || (status !== "playing" && status !== "loading")) return;
+      backgrounded = true;
+    } else if (backgrounded) backgrounded = false;
+    else return;
+    reloadIfKindChanged();
+  });
 
   return {
     queue: saved.queue ?? [],
@@ -491,7 +547,7 @@ export const usePlayer = create<PlayerState>((set, get) => {
     prev: () => {
       const s = get();
       if (s.position > 3 || s.index === 0) return get().seek(0);
-      load(s.index - 1);
+      load(s.index - 1, { dir: -1 });
     },
 
     seek: (seconds) => {
@@ -499,6 +555,16 @@ export const usePlayer = create<PlayerState>((set, get) => {
       set({ position: t });
       const media = activeMedia();
       const track = get().queue[get().index];
+      if (media && track && loaded?.offset && loaded.id === track.id) {
+        // This stream can't seek: start it over from there once the bar stops moving.
+        const resume = !media.paused || get().status === "loading";
+        clearTimeout(offsetSeek);
+        offsetSeek = window.setTimeout(() => {
+          offsetSeek = undefined;
+          load(get().index, { startAt: t, autoplay: resume });
+        }, 250);
+        return;
+      }
       if (!media || !track || loaded?.id !== track.id || media.readyState === 0) {
         pendingSeek = t;
         return;

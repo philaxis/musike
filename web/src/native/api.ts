@@ -15,7 +15,7 @@ import { msg, tr, type MsgKey } from "../../../server/src/i18n";
 import * as library from "../../../server/src/library";
 import { findVideoFor, radio, search, suggestions } from "../../../server/src/search";
 import { HttpError, VIDEO_ID } from "../../../server/src/types";
-import { getLang, getT } from "../i18n";
+import { getBackendLang as getLang, getT } from "../i18n";
 import { ApiError, type MusikeApi, type SystemInfo } from "../lib/apiTypes";
 import "./android";
 import { media } from "./media";
@@ -129,4 +129,4 @@ export async function saveFile(name: string, text: string) {
 
 export const systemMedia = media;
 
-export const capabilities = { video: false, engineSettings: false, retryOnError: true };
+export const capabilities = { video: false, engineSettings: false, retryOnError: true, serverLibrary: false };

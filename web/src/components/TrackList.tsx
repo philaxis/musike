@@ -1,14 +1,17 @@
-import { ClockIcon, DotsThreeIcon, HeartIcon, VideoCameraIcon } from "@phosphor-icons/react";
-import { memo, type MouseEvent } from "react";
+import { ClockIcon, CloudArrowDownIcon, CloudCheckIcon, DotsThreeIcon, HardDrivesIcon, HeartIcon, VideoCameraIcon } from "@phosphor-icons/react";
+import { memo, type CSSProperties, type MouseEvent, type PointerEvent } from "react";
 import { useT } from "../i18n";
 import { cn, formatTime } from "../lib/format";
+import { isLocal } from "../lib/server";
 import type { Track } from "../lib/types";
 import { selectCurrent, usePlayer } from "../player/player";
 import { useAppearance } from "../stores/appearance";
+import { useKeepStatus } from "../stores/keep";
 import { useLibrary } from "../stores/library";
 import { useUi } from "../stores/ui";
 import { Artwork } from "./Artwork";
 import { Equalizer } from "./Brand";
+import { useDragReorder } from "./reorder";
 
 interface RowProps {
   track: Track;
@@ -16,14 +19,18 @@ interface RowProps {
   onPlay: () => void;
   playlistId?: string;
   showAlbum: boolean;
+  /** Set where rows can be dragged into a new order. */
+  onDragStart?: (e: PointerEvent) => void;
+  dragStyle?: CSSProperties;
 }
 
-const TrackRow = memo(function TrackRow({ track, position, onPlay, playlistId, showAlbum }: RowProps) {
+const TrackRow = memo(function TrackRow({ track, position, onPlay, playlistId, showAlbum, onDragStart, dragStyle }: RowProps) {
   const isCurrent = usePlayer((s) => selectCurrent(s)?.id === track.id);
   const isPlaying = usePlayer((s) => s.status === "playing" || s.status === "loading");
   const isFavorite = useLibrary((s) => s.favorites.some((t) => t.id === track.id));
   const toggleFavorite = useLibrary((s) => s.toggleFavorite);
   const openMenu = useUi((s) => s.openMenu);
+  const keepStatus = useKeepStatus(track);
   const t = useT();
 
   const menuAt = (e: MouseEvent) => {
@@ -37,8 +44,16 @@ const TrackRow = memo(function TrackRow({ track, position, onPlay, playlistId, s
   return (
     <li
       onContextMenu={menuAt}
+      onPointerDown={onDragStart}
+      style={dragStyle}
+      title={onDragStart ? t.collection.dragToReorder : undefined}
       className={cn(
         "group relative grid items-center gap-3 rounded-xl px-2 py-1.5 transition-colors duration-150 hover:bg-surface-2 md:px-3",
+        // A long press starts a drag on touch: it mustn't select the title's text instead.
+        onDragStart && "select-none [-webkit-touch-callout:none]",
+        dragStyle?.zIndex && "bg-surface-3",
+        // A server file that is gone: still listed (and kept in playlists), skipped when playing.
+        track.unavailable && "opacity-45",
         showAlbum
           ? "grid-cols-[auto_1fr_auto] md:grid-cols-[28px_auto_1fr_auto_auto] lg:grid-cols-[28px_auto_minmax(0,1.4fr)_minmax(0,1fr)_auto_auto]"
           : "grid-cols-[auto_1fr_auto] md:grid-cols-[28px_auto_1fr_auto_auto]",
@@ -70,6 +85,16 @@ const TrackRow = memo(function TrackRow({ track, position, onPlay, playlistId, s
         </p>
         <p className="mt-0.5 flex items-center gap-1.5 truncate text-[13px] text-fg-2">
           {track.kind === "video" && <VideoCameraIcon size={13} className="shrink-0 text-fg-3" aria-label={t.common.video} />}
+          {isLocal(track) ? (
+            <HardDrivesIcon size={13} className="shrink-0 text-fg-3" aria-label={t.local.badge} />
+          ) : keepStatus === "done" ? (
+            <CloudCheckIcon size={13} className="shrink-0 text-accent-text" aria-label={t.keep.kept} />
+          ) : (
+            keepStatus === "downloading" && (
+              <CloudArrowDownIcon size={13} className="shrink-0 animate-pulse text-fg-3" aria-label={t.keep.downloading} />
+            )
+          )}
+          {track.unavailable && <span className="shrink-0 text-danger">{t.local.unavailable} ·</span>}
           <span className="truncate">{track.artist || t.common.youtube}</span>
         </p>
       </div>
@@ -114,13 +139,16 @@ interface ListProps {
   playlistId?: string;
   showAlbum?: boolean;
   header?: boolean;
+  /** Rows can be dragged into a new order; called once on release with indexes into `tracks`. */
+  onReorder?: (from: number, to: number) => void;
 }
 
-export function TrackList({ tracks, context, playlistId, showAlbum: albumWanted = true, header = true }: ListProps) {
+export function TrackList({ tracks, context, playlistId, showAlbum: albumWanted = true, header = true, onReorder }: ListProps) {
   const playList = usePlayer((s) => s.playList);
   const t = useT();
   // Pages ask for the album column where it makes sense; Settings can turn it off everywhere.
   const showAlbum = useAppearance((s) => s.albumColumn) && albumWanted;
+  const reorder = useDragReorder(!!onReorder, (from, to) => onReorder?.(from, to));
   return (
     <div>
       {header && (
@@ -142,7 +170,7 @@ export function TrackList({ tracks, context, playlistId, showAlbum: albumWanted 
           <span className="w-9" />
         </div>
       )}
-      <ul className="flex flex-col">
+      <ul ref={reorder.list} className="flex flex-col">
         {tracks.map((t, i) => (
           <TrackRow
             key={`${t.id}-${i}`}
@@ -151,6 +179,8 @@ export function TrackList({ tracks, context, playlistId, showAlbum: albumWanted 
             playlistId={playlistId}
             showAlbum={showAlbum}
             onPlay={() => playList(context ?? tracks, i)}
+            onDragStart={onReorder && reorder.start(i)}
+            dragStyle={reorder.styleFor(i)}
           />
         ))}
       </ul>

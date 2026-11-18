@@ -53,6 +53,8 @@ export interface Prepared {
   title: string;
   duration: number;
   hasSdVideo: boolean;
+  /** "offset": a server file whose audio is cut out on the fly; it can't take byte ranges, so seeking restarts it at `?t=`. */
+  audioMode?: "range" | "offset";
 }
 
 /**

@@ -1,6 +1,5 @@
 import { getLang, getT } from "../i18n";
 import {
-  ApiError,
   type Channel,
   type ErrorCode,
   type ImportResult,
@@ -10,30 +9,11 @@ import {
   type SystemJob,
   type SystemMedia,
 } from "./apiTypes";
+import { LANG_HEADER, request } from "./http";
 import type { AlbumCard, AlbumPage, ArtistPage, Genre, GenreArtist, GenrePage, Library, Playlist, Track } from "./types";
 
 // The HTTP backend: the Musike server (web app, desktop app). The Android build swaps this module for native/api.ts.
 export * from "./apiTypes";
-
-/** The server answers errors (and YouTube Music answers names, like genres) in the app's language. */
-const LANG_HEADER = "x-musike-lang";
-
-async function request<T>(path: string, init?: RequestInit & { json?: unknown }): Promise<T> {
-  const { json, ...rest } = init ?? {};
-  const res = await fetch(path, {
-    ...rest,
-    headers: {
-      [LANG_HEADER]: getLang(),
-      ...(json !== undefined ? { "content-type": "application/json" } : {}),
-      ...(rest.headers as Record<string, string> | undefined),
-    },
-    body: json !== undefined ? JSON.stringify(json) : rest.body,
-  });
-  if (res.status === 204) return undefined as T;
-  const body = await res.json().catch(() => ({}));
-  if (!res.ok) throw new ApiError(res.status, body.error ?? getT().player.httpError(res.status), body.code);
-  return body as T;
-}
 
 export const api: MusikeApi = {
   search: (q: string, type: "song" | "video", signal?: AbortSignal) =>
@@ -98,8 +78,9 @@ export async function saveFile(name: string, text: string) {
 /** Only the Android app needs its own bridge to the system's media controls. */
 export const systemMedia: SystemMedia | null = null;
 
-/** What this build can do. The Android build has no video yet, no yt-dlp to manage, and retries expired streams. */
-export const capabilities = { video: true, engineSettings: true, retryOnError: false };
+/** What this build can do. The Android build has no video yet, no yt-dlp to manage, and retries expired streams.
+ *  `serverLibrary`: the server's music folders, playlist import and keeping tracks on the server (lib/server.ts). */
+export const capabilities = { video: true, engineSettings: true, retryOnError: false, serverLibrary: true };
 
 /** Media elements hide the HTTP error body; fetch it to show the real reason. */
 export async function explainStreamError(url: string): Promise<{ message: string; code?: ErrorCode }> {

@@ -13,17 +13,21 @@ import { useEffect, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router";
 import { AlbumGrid } from "../components/AlbumTiles";
 import { Artwork } from "../components/Artwork";
+import { ImportPlaylistCard } from "../components/ImportPlaylistCard";
+import { LocalResults } from "../components/LocalResults";
 import { GenrePanel } from "../components/GenrePanel";
 import { EmptyState, PageHeader } from "../components/Page";
 import { TrackList, TrackListSkeleton } from "../components/TrackList";
 import { MD, useMediaQuery } from "../hooks/useMediaQuery";
-import { api } from "../lib/api";
+import { api, capabilities } from "../lib/api";
 import { useT } from "../i18n";
 import { cn } from "../lib/format";
 import { paths } from "../lib/routes";
+import { playlistUrl } from "../lib/server";
 import type { AlbumCard, Track } from "../lib/types";
 import { usePlayer } from "../player/player";
 import { parseList } from "./BatchSearch";
+import { isTvMode } from "../tv/tvMode";
 
 const RECENT_KEY = "musike:recent-searches";
 
@@ -81,8 +85,11 @@ export default function Search() {
   const playTrack = usePlayer((s) => s.playTrack);
 
   const linkId = videoIdFromUrl(text);
+  // A YouTube playlist link offers to import it (not in TV mode, which only plays).
+  const listUrl = capabilities.serverLibrary && !isTvMode() ? playlistUrl(text) : null;
+  const isLink = !!linkId || !!listUrl;
   // "a, b, c" probably means three songs; offer to search each one (titles can have commas, so only offer).
-  const listTerms = linkId || !text.includes(",") ? [] : parseList(text);
+  const listTerms = isLink || !text.includes(",") ? [] : parseList(text);
 
   const setGenresOpen = (open: boolean) => {
     genresOpenMemo = open;
@@ -102,7 +109,7 @@ export default function Search() {
 
   // Search as you type, debounced.
   useEffect(() => {
-    if (linkId || text.trim() === q) return;
+    if (isLink || text.trim() === q) return;
     const timer = setTimeout(() => setQuery(text), 380);
     return () => clearTimeout(timer);
   }, [text]);
@@ -137,7 +144,7 @@ export default function Search() {
 
   useEffect(() => {
     const term = text.trim();
-    if (!term || linkId) return setSuggestions([]);
+    if (!term || isLink) return setSuggestions([]);
     const ctrl = new AbortController();
     const timer = setTimeout(() => {
       api
@@ -149,7 +156,7 @@ export default function Search() {
       clearTimeout(timer);
       ctrl.abort();
     };
-  }, [text, linkId]);
+  }, [text, isLink]);
 
   useEffect(() => {
     if (!linkId) return setLinkTrack(null);
@@ -201,7 +208,7 @@ export default function Search() {
           onSubmit={(e) => {
             e.preventDefault();
             input.current?.blur();
-            if (!linkId) setQuery(text);
+            if (!isLink) setQuery(text);
           }}
           className="relative"
         >
@@ -273,7 +280,7 @@ export default function Search() {
           </div>
         )}
 
-        {!linkId && (
+        {!isLink && (
           <div className="flex flex-wrap items-center gap-2">
             <div role="tablist" aria-label={t.search.resultType} className="flex gap-2">
               {tab("song", t.search.songs)}
@@ -306,10 +313,16 @@ export default function Search() {
           </div>
         )}
 
-        {!linkId && genresOpen && <GenrePanel id="genre-panel" />}
+        {!isLink && genresOpen && <GenrePanel id="genre-panel" />}
       </div>
 
       <div className="mt-4 px-2 md:px-3">
+        {listUrl && (
+          <div className="px-2 md:px-3">
+            <ImportPlaylistCard url={listUrl} />
+          </div>
+        )}
+
         {linkId && (
           <div className="px-2 md:px-3">
             {linkTrack === "loading" && <TrackListSkeleton rows={1} />}
@@ -337,9 +350,11 @@ export default function Search() {
           </div>
         )}
 
-        {!linkId && state === "loading" && <TrackListSkeleton />}
+        {!isLink && q && kind !== "album" && capabilities.serverLibrary && <LocalResults q={q} />}
 
-        {!linkId && state === "error" && (
+        {!isLink && state === "loading" && <TrackListSkeleton />}
+
+        {!isLink && state === "error" && (
           <EmptyState
             icon={<WarningCircleIcon size={28} />}
             title={t.search.failed}
@@ -356,13 +371,13 @@ export default function Search() {
           />
         )}
 
-        {!linkId && state === "ok" && albums && (albums.length ? (
+        {!isLink && state === "ok" && albums && (albums.length ? (
           <AlbumGrid albums={albums} />
         ) : (
           <EmptyState icon={<MagnifyingGlassIcon size={28} />} title={t.search.nothingFound} body={t.search.nothingFoundBody(q, t.search.songs)} />
         ))}
 
-        {!linkId && state === "ok" && results && results.length === 0 && (
+        {!isLink && state === "ok" && results && results.length === 0 && (
           <EmptyState
             icon={<MagnifyingGlassIcon size={28} />}
             title={t.search.nothingFound}
@@ -370,9 +385,9 @@ export default function Search() {
           />
         )}
 
-        {!linkId && state === "ok" && results && results.length > 0 && <TrackList tracks={results} showAlbum={kind === "song"} />}
+        {!isLink && state === "ok" && results && results.length > 0 && <TrackList tracks={results} showAlbum={kind === "song"} />}
 
-        {!linkId && state === "idle" && (
+        {!isLink && state === "idle" && (
           <div className="px-2 md:px-3">
             {recent.length > 0 ? (
               <div className="flex flex-col gap-3">

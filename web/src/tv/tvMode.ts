@@ -2,7 +2,10 @@
  * Android TV mode: 10-foot UI plus D-pad spatial navigation.
  *
  * Turned on automatically when the Android app runs on a TV (web/src/native/android.ts), by VITE_TV=1 at build
- * time, or by opening the app with ?tv=1 (handy for trying it in a browser). Everywhere else it stays off.
+ * time, or by opening the app with ?tv=1 once (a TV browser's start page): the choice is remembered on that device,
+ * so in-app navigation and later visits stay in TV mode until ?tv=0. Everywhere else it stays off.
+ *
+ * TV mode only plays: making or editing playlists, keeping tracks on the server and importing are hidden there.
  *
  * Rules: geometry in document space (rails stay navigable when an item is scrolled out), candidates
  * overlapping the current element on the other axis win, the nearest scrollable ancestor is scrolled
@@ -22,12 +25,27 @@ const FOCUSABLE = [
 ].join(",");
 
 const REPEAT_MS = 90;
+const TV_KEY = "musike:tv";
 let lastMove = 0;
 
 export function isTvMode(): boolean {
   if (typeof window === "undefined") return false;
-  if (new URLSearchParams(window.location.search).has("tv")) return true;
+  const asked = new URLSearchParams(window.location.search).get("tv");
+  if (asked !== null) {
+    try {
+      if (asked === "0") localStorage.removeItem(TV_KEY);
+      else localStorage.setItem(TV_KEY, "1");
+    } catch {
+      /* private mode: this visit only */
+    }
+    return asked !== "0";
+  }
   if (import.meta.env.VITE_TV === "1") return true;
+  try {
+    if (localStorage.getItem(TV_KEY) === "1") return true;
+  } catch {
+    /* private mode */
+  }
   return document.documentElement.dataset.tv === "1";
 }
 

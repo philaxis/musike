@@ -7,6 +7,33 @@ export interface Track {
   thumb: string;
   art: string;
   kind: "song" | "video";
+  /** A file in one of the server's music folders (id `L` + 20 chars); YouTube otherwise. */
+  source?: "local";
+  year?: number;
+  /** From the server, never stored: the local file is gone or its folder can't be read right now. */
+  unavailable?: boolean;
+  /** From the server, never stored: this YouTube track has a copy kept on the server. */
+  kept?: boolean;
+}
+
+/** One of the server's music folders. `online` is false while it can't be read (say, the drive isn't mounted). */
+export interface LocalRoot {
+  name: string;
+  path: string;
+  online: boolean;
+  albums: number;
+  tracks: number;
+}
+
+/** A folder of a music root, or a file directly in the root (an album of its own). */
+export interface LocalAlbum {
+  root: string;
+  key: string;
+  name: string;
+  year?: number;
+  cover: string;
+  trackCount: number;
+  duration: number;
 }
 
 export interface Playlist {

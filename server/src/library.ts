@@ -1,5 +1,5 @@
 import { msg } from "./i18n.js";
-import { HttpError, VIDEO_ID, type Library, type Playlist, type Track } from "./types.js";
+import { HttpError, isLocalId, TRACK_ID, type Library, type Playlist, type Track } from "./types.js";
 
 // No Node-only imports here: the Android app runs this same module, with its own storage.
 
@@ -42,12 +42,14 @@ const str = (v: unknown, max: number) => (typeof v === "string" ? v.slice(0, max
 
 export function sanitizeTrack(input: unknown): Track {
   const t = (input ?? {}) as Record<string, unknown>;
-  const id = str(t.id, 11);
-  if (!VIDEO_ID.test(id)) throw new HttpError(400, msg("invalidTrack"));
+  const id = str(t.id, 21);
+  if (!TRACK_ID.test(id)) throw new HttpError(400, msg("invalidTrack"));
   const url = (v: unknown) => {
     const s = str(v, 500);
-    return /^https:\/\//.test(s) ? s : "";
+    // Local covers are served by this same server (relative URL).
+    return /^https:\/\//.test(s) || /^\/api\/local\/L[A-Za-z0-9_-]{20}\/cover$/.test(s) ? s : "";
   };
+  const year = typeof t.year === "number" && Number.isInteger(t.year) && t.year > 1000 && t.year < 3000 ? t.year : undefined;
   return {
     id,
     title: str(t.title, 300) || "Untitled",
@@ -57,6 +59,8 @@ export function sanitizeTrack(input: unknown): Track {
     thumb: url(t.thumb),
     art: url(t.art),
     kind: t.kind === "video" ? "video" : "song",
+    ...(isLocalId(id) ? { source: "local" as const } : {}),
+    ...(year ? { year } : {}),
   };
 }
 
@@ -145,6 +149,29 @@ export async function removeFromPlaylist(pid: string, trackId: string): Promise<
   const lib = await load();
   const p = findPlaylist(lib, pid);
   p.tracks = p.tracks.filter((t) => t.id !== trackId);
+  p.updatedAt = Date.now();
+  await persist();
+  return p;
+}
+
+/** True when `ids` holds exactly the playlist's current track IDs, each once, in any order. */
+export function isPermutation(current: string[], ids: unknown): ids is string[] {
+  if (!Array.isArray(ids) || ids.length !== current.length) return false;
+  const left = new Set(current);
+  if (left.size !== current.length) return false;
+  for (const id of ids) {
+    if (typeof id !== "string" || !left.delete(id)) return false;
+  }
+  return left.size === 0;
+}
+
+/** Puts the playlist's tracks in the given order; `ids` must be a permutation of the current IDs. */
+export async function reorderPlaylist(pid: string, ids: unknown): Promise<Playlist> {
+  const lib = await load();
+  const p = findPlaylist(lib, pid);
+  if (!isPermutation(p.tracks.map((t) => t.id), ids)) throw new HttpError(400, msg("notPermutation"));
+  const byId = new Map(p.tracks.map((t) => [t.id, t]));
+  p.tracks = ids.map((id) => byId.get(id)!);
   p.updatedAt = Date.now();
   await persist();
   return p;

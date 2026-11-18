@@ -14,6 +14,7 @@ import { paths } from "../lib/routes";
 import type { AlbumPage } from "../lib/types";
 import { usePlayer } from "../player/player";
 import { useLibrary } from "../stores/library";
+import { isTvMode } from "../tv/tvMode";
 
 /** An album, its tracks in their original order: play it whole, shuffle it, save it or pick from it. */
 export default function Album() {
@@ -97,7 +98,7 @@ export default function Album() {
             >
               {t.album.openPlaylist} <ArrowRightIcon size={16} />
             </Link>
-          ) : (
+          ) : isTvMode() ? null : (
             <button
               type="button"
               disabled={saving}
