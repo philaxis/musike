@@ -1,8 +1,9 @@
 import { DotsThreeIcon, TrayIcon } from "@phosphor-icons/react";
-import { useEffect, useState, type MouseEvent, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Navigate, useSearchParams } from "react-router";
+import { openMenuFromButton } from "../components/menuTrigger";
 import { EmptyState, PageHeader } from "../components/Page";
-import { SelectableRow, SelectedCount, SelectionBar, Short } from "../components/Selection";
+import { SelectableRow, SelectedCount, SelectionBar, Short, useListSelection } from "../components/Selection";
 import { TagChips, useSourceText } from "../components/Tags";
 import { TrackListSkeleton } from "../components/TrackList";
 import { useT } from "../i18n";
@@ -42,7 +43,6 @@ export default function SongBox() {
   const t = useT();
   const sourceText = useSourceText();
   const playList = usePlayer((s) => s.playList);
-  const openMenu = useUi((s) => s.openMenu);
   const edits = useTagEdits((s) => s.edits);
 
   const source = params.get("source") ?? "";
@@ -55,18 +55,21 @@ export default function SongBox() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [sources, setSources] = useState<SourceCount[] | null>(null);
   const [tags, setTags] = useState<{ tag: string; count: number }[] | null>(null);
-  const [selected, setSelected] = useState<Set<string>>(() => new Set());
 
   const query = { filter: untagged ? ("untagged" as const) : undefined, source: source || undefined, tag: tag || undefined };
 
+  // A new filter starts a new list: the selection empties with it (rows that left the list leave it).
   useEffect(() => {
     const ctrl = new AbortController();
     setPage(null);
     setFailed(false);
-    setSelected(new Set());
     server.box(query, ctrl.signal).then(setPage, (e: Error) => e.name !== "AbortError" && setFailed(true));
     return () => ctrl.abort();
   }, [untagged, source, tag]);
+
+  const items = page?.items ?? [];
+  const tracks: Track[] = useMemo(() => (page?.items ?? []).map((it) => it.track), [page]);
+  const sel = useListSelection(tracks, !isTvMode());
 
   useEffect(() => {
     if (mode === "source" && !sources) server.boxSources().then((r) => setSources(r.sources), () => setSources([]));
@@ -88,23 +91,9 @@ export default function SongBox() {
     }
   };
 
-  const items = page?.items ?? [];
-  const tracks: Track[] = items.map((it) => it.track);
-  const chosen = tracks.filter((x) => selected.has(x.id));
+  const chosen = sel.chosen;
   const allSelected = tracks.length > 0 && chosen.length === tracks.length;
-  const toggle = (id: string) =>
-    setSelected((prev) => {
-      const next = new Set(prev);
-      if (!next.delete(id)) next.add(id);
-      return next;
-    });
-
-  const menuAt = (track: Track) => (e: MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
-    openMenu({ track, x: r.right - 256, y: r.bottom + 6 });
-  };
+  const menuFor = (i: number) => sel.menuFor(i, { kind: "track", track: tracks[i] });
 
   return (
     <div className="pb-8">
@@ -182,12 +171,13 @@ export default function SongBox() {
           body={mode === "all" ? t.songBox.emptyBody : ""}
         />
       ) : (
-        <>
+        <div onPointerDownCapture={sel.activate}>
           <SelectionBar
             chosen={chosen}
             all={tracks}
             allSelected={allSelected}
-            onToggleAll={() => setSelected(allSelected ? new Set() : new Set(tracks.map((x) => x.id)))}
+            onToggleAll={allSelected ? sel.clear : sel.selectAll}
+            onClear={sel.clear}
             label={
               chosen.length ? (
                 <SelectedCount n={chosen.length} total={page.total} />
@@ -201,9 +191,11 @@ export default function SongBox() {
               <li key={it.track.id}>
                 <SelectableRow
                   track={it.track}
-                  selected={selected.has(it.track.id)}
-                  onToggle={() => toggle(it.track.id)}
+                  selected={sel.has(it.track.id)}
+                  onToggle={(e) => sel.toggle(i, e.shiftKey)}
                   onPlay={() => playList(tracks, i)}
+                  menu={() => menuFor(i)}
+                  drag={() => (sel.has(it.track.id) ? chosen : [it.track])}
                   dim={!!it.gone}
                   below={
                     <>
@@ -217,7 +209,7 @@ export default function SongBox() {
                   trailing={
                     <button
                       type="button"
-                      onClick={menuAt(it.track)}
+                      onClick={(e) => openMenuFromButton(e, menuFor(i))}
                       aria-label={t.trackList.moreFor(it.track.title)}
                       title={t.trackList.more}
                       className="grid size-9 shrink-0 place-items-center rounded-full text-fg-2 hover:bg-surface-3 hover:text-fg"
@@ -241,7 +233,7 @@ export default function SongBox() {
               </button>
             </div>
           )}
-        </>
+        </div>
       )}
     </div>
   );

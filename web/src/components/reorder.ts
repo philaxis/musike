@@ -1,4 +1,7 @@
 import { useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from "react";
+import type { Track } from "../lib/types";
+import { swallowNextClick } from "./menuTrigger";
+import { dropTargetAt, dropTracks, useTrackDrag } from "./TrackDrag";
 
 /** A row being dragged: where it started, the slot it would land in, how far it moved and its height. */
 interface Drag {
@@ -6,6 +9,13 @@ interface Drag {
   to: number;
   dy: number;
   height: number;
+}
+
+interface Options {
+  /** On touch, a row held and let go without moving: open its menu (the long press is taken by dragging). */
+  onHold?: (index: number, x: number, y: number) => void;
+  /** The tracks a row stands for when dropped on a sidebar playlist instead of into a new slot. */
+  dropTracks?: (index: number) => Track[];
 }
 
 const LONG_PRESS_MS = 350;
@@ -17,8 +27,9 @@ const MOUSE_SLOP = 6;
 /**
  * Drag rows of a list into a new order: with the mouse, press and move; on touch, press and hold, then move.
  * `onMove(from, to)` runs once on release, with indexes into the list as it was.
+ * Released over a sidebar playlist, the row's tracks go there instead (`dropTracks`).
  */
-export function useDragReorder(enabled: boolean, onMove: (from: number, to: number) => void) {
+export function useDragReorder(enabled: boolean, onMove: (from: number, to: number) => void, opts: Options = {}) {
   const list = useRef<HTMLUListElement>(null);
   const [drag, setDrag] = useState<Drag | null>(null);
 
@@ -32,6 +43,7 @@ export function useDragReorder(enabled: boolean, onMove: (from: number, to: numb
     let current: Drag | null = null;
     let mids: number[] = [];
     let timer: number | undefined;
+    let last = { x: x0, y: y0 };
 
     const begin = () => {
       const rects = Array.from(el.children, (c) => c.getBoundingClientRect());
@@ -40,10 +52,12 @@ export function useDragReorder(enabled: boolean, onMove: (from: number, to: numb
       setDrag(current);
       document.body.style.userSelect = "none";
       if (touch) navigator.vibrate?.(10);
+      if (opts.dropTracks) useTrackDrag.setState({ tracks: opts.dropTracks(index), ghost: false, x: x0, y: y0 });
     };
 
     const move = (ev: PointerEvent) => {
       if (ev.pointerId !== pointer) return;
+      last = { x: ev.clientX, y: ev.clientY };
       const dx = ev.clientX - x0;
       const dy = ev.clientY - y0;
       if (!current) {
@@ -58,6 +72,7 @@ export function useDragReorder(enabled: boolean, onMove: (from: number, to: numb
       const to = mids.filter((m, i) => i !== index && m < center).length;
       current = { ...current!, to, dy };
       setDrag(current);
+      if (opts.dropTracks) useTrackDrag.setState({ x: ev.clientX, y: ev.clientY, over: dropTargetAt(ev.clientX, ev.clientY) });
     };
 
     // While dragging, the page must not scroll under the finger nor open the row's menu on a long press.
@@ -67,20 +82,18 @@ export function useDragReorder(enabled: boolean, onMove: (from: number, to: numb
       ev.preventDefault();
       ev.stopPropagation();
     };
-    const swallowClick = (ev: Event) => {
-      ev.preventDefault();
-      ev.stopPropagation();
-    };
 
     const end = (ev: PointerEvent) => {
       if (ev.pointerId !== pointer) return;
       const done = current;
+      const over = done && opts.dropTracks ? dropTargetAt(ev.clientX, ev.clientY) : null;
       cleanup();
       if (!done) return;
       // Releasing the mouse would also click the row, which plays it.
-      window.addEventListener("click", swallowClick, { capture: true, once: true });
-      window.setTimeout(() => window.removeEventListener("click", swallowClick, true), 400);
-      if (done.to !== done.from) onMove(done.from, done.to);
+      swallowNextClick();
+      if (over) return dropTracks(over, opts.dropTracks!(done.from));
+      if (done.to !== done.from) return onMove(done.from, done.to);
+      if (touch && ev.type === "pointerup" && Math.hypot(last.x - x0, last.y - y0) < TOUCH_SLOP) opts.onHold?.(index, x0, y0);
     };
 
     function cleanup() {
@@ -93,6 +106,7 @@ export function useDragReorder(enabled: boolean, onMove: (from: number, to: numb
       window.removeEventListener("contextmenu", block, true);
       document.body.style.userSelect = "";
       setDrag(null);
+      if (opts.dropTracks) useTrackDrag.setState({ tracks: null, over: null });
     }
 
     window.addEventListener("pointermove", move);

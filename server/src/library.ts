@@ -135,11 +135,18 @@ export async function deletePlaylist(pid: string): Promise<void> {
   await persist();
 }
 
-export async function addToPlaylist(pid: string, tracks: Track | Track[]): Promise<Playlist> {
+/**
+ * Appends tracks to a playlist. By default a track already in it (or twice in `tracks`) is skipped;
+ * `duplicates: true` adds every one, as asked.
+ */
+export async function addToPlaylist(pid: string, tracks: Track | Track[], opts: { duplicates?: boolean } = {}): Promise<Playlist> {
   const lib = await load();
   const p = findPlaylist(lib, pid);
+  const have = new Set(p.tracks.map((t) => t.id));
   for (const track of Array.isArray(tracks) ? tracks : [tracks]) {
-    if (!p.tracks.some((t) => t.id === track.id)) p.tracks.push(track);
+    if (!opts.duplicates && have.has(track.id)) continue;
+    have.add(track.id);
+    p.tracks.push(track);
   }
   p.updatedAt = Date.now();
   await persist();
@@ -155,15 +162,37 @@ export async function removeFromPlaylist(pid: string, trackId: string): Promise<
   return p;
 }
 
-/** True when `ids` holds exactly the playlist's current track IDs, each once, in any order. */
+/**
+ * Removes the rows at `at` (0-based). `ids[k]` must be the track at `at[k]`, so a list changed elsewhere
+ * meanwhile is refused instead of losing the wrong rows; one copy of a twice-added track can go alone.
+ */
+export async function removePositions(pid: string, at: unknown, ids: unknown): Promise<Playlist> {
+  const lib = await load();
+  const p = findPlaylist(lib, pid);
+  const ok =
+    Array.isArray(at) &&
+    Array.isArray(ids) &&
+    at.length === ids.length &&
+    at.every((n, k) => Number.isInteger(n) && p.tracks[n as number]?.id === ids[k]);
+  if (!ok) throw new HttpError(409, msg("positionsChanged"));
+  const drop = new Set(at as number[]);
+  p.tracks = p.tracks.filter((_, i) => !drop.has(i));
+  p.updatedAt = Date.now();
+  await persist();
+  return p;
+}
+
+/** True when `ids` holds exactly the playlist's current track IDs (as many times each), in any order. */
 export function isPermutation(current: string[], ids: unknown): ids is string[] {
   if (!Array.isArray(ids) || ids.length !== current.length) return false;
-  const left = new Set(current);
-  if (left.size !== current.length) return false;
+  const left = new Map<string, number>();
+  for (const id of current) left.set(id, (left.get(id) ?? 0) + 1);
   for (const id of ids) {
-    if (typeof id !== "string" || !left.delete(id)) return false;
+    const n = typeof id === "string" ? left.get(id) : undefined;
+    if (!n) return false;
+    left.set(id, n - 1);
   }
-  return left.size === 0;
+  return true;
 }
 
 /** Puts the playlist's tracks in the given order; `ids` must be a permutation of the current IDs. */
@@ -171,8 +200,10 @@ export async function reorderPlaylist(pid: string, ids: unknown): Promise<Playli
   const lib = await load();
   const p = findPlaylist(lib, pid);
   if (!isPermutation(p.tracks.map((t) => t.id), ids)) throw new HttpError(400, msg("notPermutation"));
-  const byId = new Map(p.tracks.map((t) => [t.id, t]));
-  p.tracks = ids.map((id) => byId.get(id)!);
+  // A track added twice: each copy keeps its own entry, taken in order.
+  const byId = new Map<string, Track[]>();
+  for (const t of p.tracks) byId.set(t.id, [...(byId.get(t.id) ?? []), t]);
+  p.tracks = ids.map((id) => byId.get(id)!.shift()!);
   p.updatedAt = Date.now();
   await persist();
   return p;

@@ -1,7 +1,9 @@
 import { CheckIcon, PlusIcon } from "@phosphor-icons/react";
 import { useEffect, useState, type FormEvent } from "react";
+import { useLocation, useNavigate } from "react-router";
 import { useT, type Messages } from "../i18n";
 import { cn } from "../lib/format";
+import { paths } from "../lib/routes";
 import { useLibrary } from "../stores/library";
 import { useUi } from "../stores/ui";
 import { Artwork } from "./Artwork";
@@ -80,19 +82,18 @@ export function AddToPlaylistDialog() {
             <span className="font-medium">{t.nav.newPlaylist}</span>
           </button>
           {playlists.map((p) => {
-            // Done only when it already has every track being added.
+            // Marked when it already has every track being added; picking it still asks whether to add them again.
             const has = !!tracks && tracks.every((x) => p.tracks.some((t) => t.id === x.id));
             return (
               <button
                 key={p.id}
                 type="button"
-                disabled={has}
                 onClick={() => {
                   if (!tracks) return;
-                  void add(p.id, many ? tracks : tracks[0]);
                   close(null);
+                  void add(p.id, tracks);
                 }}
-                className={cn("flex items-center gap-3 rounded-xl px-2 py-2 text-left hover:bg-surface-3", has && "opacity-60")}
+                className="flex items-center gap-3 rounded-xl px-2 py-2 text-left hover:bg-surface-3"
               >
                 <Artwork src={p.tracks[0]?.thumb} className="size-11 rounded-[10px]" />
                 <span className="min-w-0 flex-1">
@@ -106,6 +107,91 @@ export function AddToPlaylistDialog() {
         </div>
       )}
     </Modal>
+  );
+}
+
+/** 「이미 있는 N곡은 빼고 넣을까요?」: leaving them out is the default (Enter). */
+export function DuplicatesDialog() {
+  const ask = useUi((s) => s.duplicates);
+  const t = useT();
+  const all = !!ask && ask.dupes === ask.total;
+  const button = "h-11 rounded-full px-5 text-sm font-medium transition-transform active:scale-[0.97]";
+  return (
+    <Modal open={!!ask} onClose={() => ask?.answer(null)} title={t.basics.dupTitle}>
+      {ask && (
+        <>
+          <p className="text-sm text-fg-2">{all ? t.basics.dupAllBody(ask.dupes, ask.name) : t.basics.dupBody(ask.dupes, ask.name)}</p>
+          <div className="mt-5 flex flex-wrap justify-end gap-2">
+            {all ? (
+              <>
+                <button type="button" onClick={() => ask.answer("all")} className={cn(button, "text-fg-2 hover:text-fg")}>
+                  {t.basics.dupAnyway}
+                </button>
+                <button type="button" autoFocus onClick={() => ask.answer(null)} className={cn(button, "bg-accent px-6 font-semibold text-accent-ink")}>
+                  {t.common.cancel}
+                </button>
+              </>
+            ) : (
+              <>
+                <button type="button" onClick={() => ask.answer("all")} className={cn(button, "text-fg-2 hover:text-fg")}>
+                  {t.basics.dupAll}
+                </button>
+                <button type="button" autoFocus onClick={() => ask.answer("skip")} className={cn(button, "bg-accent px-6 font-semibold text-accent-ink")}>
+                  {t.basics.dupSkip}
+                </button>
+              </>
+            )}
+          </div>
+        </>
+      )}
+    </Modal>
+  );
+}
+
+/** Renaming or deleting a playlist, from its page or any of its menus (sidebar, library, home). */
+export function PlaylistEditDialogs() {
+  const edit = useUi((s) => s.playlistEdit);
+  const setEdit = useUi((s) => s.setPlaylistEdit);
+  const playlist = useLibrary((s) => s.playlists.find((p) => p.id === edit?.id));
+  const navigate = useNavigate();
+  const location = useLocation();
+  const t = useT();
+  const close = () => setEdit(null);
+
+  return (
+    <>
+      <NamePlaylistDialog
+        open={edit?.kind === "rename" && !!playlist}
+        initial={playlist?.name}
+        title={t.collection.renameTitle}
+        action={t.collection.save}
+        onClose={close}
+        onSubmit={(n) => {
+          if (playlist) void useLibrary.getState().renamePlaylist(playlist.id, n);
+          close();
+        }}
+      />
+      <Modal open={edit?.kind === "delete" && !!playlist} onClose={close} title={t.collection.deleteTitle}>
+        <p className="text-sm text-fg-2">{playlist && t.collection.deleteBody(playlist.name, playlist.tracks.length)}</p>
+        <div className="mt-5 flex justify-end gap-2">
+          <button type="button" onClick={close} className="h-11 rounded-full px-5 text-sm font-medium text-fg-2 hover:text-fg">
+            {t.common.cancel}
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              close();
+              if (!playlist) return;
+              void useLibrary.getState().deletePlaylist(playlist.id);
+              if (location.pathname === paths.playlist(playlist.id)) navigate(paths.library);
+            }}
+            className="h-11 rounded-full bg-danger px-6 text-sm font-semibold text-white"
+          >
+            {t.collection.delete}
+          </button>
+        </div>
+      </Modal>
+    </>
   );
 }
 
@@ -165,20 +251,25 @@ export function NamePlaylistDialog({
   );
 }
 
-const SHORTCUTS: [string | null, keyof Messages["dialogs"]["shortcuts"]][] = [
-  [null, "playPause"], // the Space key, named in each language
-  ["← →", "seek"],
-  ["Shift + ← →", "skip"],
-  ["↑ ↓", "volume"],
-  ["M", "mute"],
-  ["L", "favorite"],
-  ["S", "shuffle"],
-  ["R", "repeat"],
-  ["V", "video"],
-  ["F", "theater"],
-  ["Q", "queue"],
-  ["/", "search"],
-  ["?", "help"],
+/** Each shortcut's keys and what it does, in the current language. */
+const SHORTCUTS: [keys: (t: Messages) => string, what: (t: Messages) => string][] = [
+  [(t) => t.dialogs.space, (t) => t.dialogs.shortcuts.playPause],
+  [() => "← →", (t) => t.dialogs.shortcuts.seek],
+  [() => "Shift + ← →", (t) => t.dialogs.shortcuts.skip],
+  [() => "↑ ↓", (t) => t.dialogs.shortcuts.volume],
+  [() => "M", (t) => t.dialogs.shortcuts.mute],
+  [() => "L", (t) => t.dialogs.shortcuts.favorite],
+  [() => "S", (t) => t.dialogs.shortcuts.shuffle],
+  [() => "R", (t) => t.dialogs.shortcuts.repeat],
+  [() => "V", (t) => t.dialogs.shortcuts.video],
+  [() => "F", (t) => t.dialogs.shortcuts.theater],
+  [() => "Q", (t) => t.dialogs.shortcuts.queue],
+  [() => "/ · Ctrl + F", (t) => t.dialogs.shortcuts.search],
+  [(t) => `Ctrl + ${t.basics.click}`, (t) => t.basics.keyToggle],
+  [(t) => `Shift + ${t.basics.click}`, (t) => t.basics.keyRange],
+  [() => "Ctrl + A", (t) => t.basics.keySelectAll],
+  [() => "Esc", (t) => t.basics.keyClear],
+  [() => "?", (t) => t.dialogs.shortcuts.help],
 ];
 
 export function ShortcutsDialog() {
@@ -189,11 +280,11 @@ export function ShortcutsDialog() {
     <Modal open={open} onClose={() => setOpen(false)} title={t.dialogs.shortcutsTitle}>
       <dl className="grid grid-cols-[auto_1fr] items-center gap-x-4 gap-y-2.5 text-sm">
         {SHORTCUTS.map(([keys, what]) => (
-          <div key={what} className="contents">
+          <div key={what(t)} className="contents">
             <dt className="flex justify-end">
-              <kbd className="kbd">{keys ?? t.dialogs.space}</kbd>
+              <kbd className="kbd">{keys(t)}</kbd>
             </dt>
-            <dd className="text-fg-2">{t.dialogs.shortcuts[what]}</dd>
+            <dd className="text-fg-2">{what(t)}</dd>
           </div>
         ))}
       </dl>

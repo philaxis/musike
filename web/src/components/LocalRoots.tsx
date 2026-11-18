@@ -1,4 +1,4 @@
-import { ArrowsClockwiseIcon, HardDrivesIcon, WarningCircleIcon } from "@phosphor-icons/react";
+import { ArrowsClockwiseIcon, DotsThreeIcon, HardDrivesIcon, WarningCircleIcon } from "@phosphor-icons/react";
 import { useEffect, useState } from "react";
 import { Link } from "react-router";
 import { useT } from "../i18n";
@@ -6,12 +6,14 @@ import { cn } from "../lib/format";
 import { paths } from "../lib/routes";
 import { useLocal } from "../stores/local";
 import { isTvMode } from "../tv/tvMode";
-import { HideMenu, ShowHiddenToggle } from "./HideControls";
+import { ShowHiddenToggle } from "./HideControls";
 import { IconButton } from "./IconButton";
+import { menuTrigger, NO_CALLOUT, openMenuFromButton } from "./menuTrigger";
+import { localRootMenu } from "./menus";
 
 /** Library's "My music": the server's music folders, each opening its albums. */
 export function LocalRoots() {
-  const { roots, status, load, rescan, showHidden, anyHidden, hide, unhide } = useLocal();
+  const { roots, status, load, rescan, showHidden, anyHidden } = useLocal();
   const [rescanning, setRescanning] = useState(false);
   const t = useT();
   // TV mode only plays: hidden items stay hidden there, with no switch and no menus.
@@ -49,9 +51,11 @@ export function LocalRoots() {
           <li key={r.name} className="relative">
             <Link
               to={paths.localRoot(r.name)}
+              {...menuTrigger(() => localRootMenu(r))}
+              draggable={false}
               className={cn(
-                "group flex items-center gap-3 rounded-[16px] p-2 transition-colors hover:bg-surface-2 md:p-3",
-                !tv && "pr-12 md:pr-12",
+                "group flex items-center gap-3 rounded-[16px] p-2 pr-12 transition-colors hover:bg-surface-2 md:p-3 md:pr-12",
+                NO_CALLOUT,
                 (!r.online || r.hidden) && "opacity-60",
               )}
             >
@@ -71,16 +75,13 @@ export function LocalRoots() {
                 </span>
               </span>
             </Link>
-            {!tv && (
-              <HideMenu
-                name={r.name}
-                hidden={!!r.hidden}
-                hideLabel={t.hide.hideFolder}
-                onHide={() => void hide({ root: r.name })}
-                onUnhide={() => void unhide({ root: r.name })}
-                className="absolute! top-1/2 right-2 -translate-y-1/2"
-              />
-            )}
+            <IconButton
+              label={t.basics.menuFor(r.name)}
+              onClick={(e) => openMenuFromButton(e, localRootMenu(r))}
+              className="absolute! top-1/2 right-2 -translate-y-1/2"
+            >
+              <DotsThreeIcon size={22} weight="bold" />
+            </IconButton>
           </li>
         ))}
         {!roots &&

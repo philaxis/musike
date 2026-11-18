@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef } from "react";
 import { Navigate, Route, Routes, useLocation, useNavigate, useNavigationType } from "react-router";
-import { AddToPlaylistDialog, ShortcutsDialog } from "./components/Dialogs";
+import { AddToPlaylistDialog, DuplicatesDialog, PlaylistEditDialogs, ShortcutsDialog } from "./components/Dialogs";
 import { MiniPlayer, TabBar } from "./components/MobileChrome";
 import { NowPlayingSheet, PanelDrawer, SidePanel } from "./components/NowPlaying";
 import { PlayerBar } from "./components/PlayerBar";
@@ -10,6 +10,7 @@ import { desktop } from "./lib/desktop";
 import { SettingsDialog } from "./components/SettingsDialog";
 import { Toasts } from "./components/Toasts";
 import { TagsDialog, VersionsDialog } from "./components/Tags";
+import { DragGhost } from "./components/TrackDrag";
 import { TrackMenu } from "./components/TrackMenu";
 import { FloatingVideo, Theater } from "./components/Video";
 import { MD, useMediaQuery } from "./hooks/useMediaQuery";
@@ -184,6 +185,9 @@ export default function App() {
       <Theater />
       <TrackMenu />
       <AddToPlaylistDialog />
+      <DuplicatesDialog />
+      <PlaylistEditDialogs />
+      <DragGhost />
       <ShortcutsDialog />
       <SettingsDialog />
       <TagsDialog />

@@ -15,11 +15,14 @@ import { paths } from "../lib/routes";
 import { useAppearance } from "../stores/appearance";
 import { useLibrary } from "../stores/library";
 import { needsAttention, useSystem } from "../stores/system";
-import { useUi } from "../stores/ui";
+import { useUi, type MenuTarget } from "../stores/ui";
 import { isTvMode } from "../tv/tvMode";
 import { Artwork } from "./Artwork";
 import { Logo, LogoMark } from "./Brand";
 import { NamePlaylistDialog } from "./Dialogs";
+import { menuTrigger, NO_CALLOUT } from "./menuTrigger";
+import { favoritesMenu, historyMenu, playlistMenu } from "./menus";
+import { useTrackDrag } from "./TrackDrag";
 
 const nav = [
   { to: paths.home, key: "home", Icon: HouseIcon, end: true },
@@ -56,18 +59,47 @@ function SettingsButton() {
   );
 }
 
-/** Shared tile: square icon/art with an active Volt ring. Labels appear on the expanded rail (≥1280px). */
-function RailLink({ to, label, sub, end, children }: { to: string; label: string; sub?: string; end?: boolean; children: ReactNode }) {
+/**
+ * Shared tile: square icon/art with an active Volt ring. Labels appear on the expanded rail (≥1280px).
+ * `drop` ("favorites", "playlist:<id>") makes it a target for tracks dragged from a list; `menu` opens on right-click.
+ */
+function RailLink({
+  to,
+  label,
+  sub,
+  end,
+  drop,
+  menu,
+  children,
+}: {
+  to: string;
+  label: string;
+  sub?: string;
+  end?: boolean;
+  drop?: string;
+  menu?: () => MenuTarget;
+  children: ReactNode;
+}) {
+  const dragging = useTrackDrag((s) => !!drop && !!s.tracks);
+  const over = useTrackDrag((s) => !!drop && s.over === drop);
   return (
     <NavLink
       to={to}
       end={end}
       title={label}
+      data-drop={drop}
+      draggable={false}
+      {...(menu && menuTrigger(menu))}
       className={({ isActive }) =>
         cn(
           "group flex items-center justify-center gap-3 rounded-[14px] p-1.5 transition-colors duration-200 wide:justify-start",
           "hover:bg-surface-3 wide:pr-3",
+          NO_CALLOUT,
           isActive && "wide:bg-surface-3",
+          // While tracks are dragged: every target shows itself, the one under the pointer lights up.
+          over
+            ? "bg-accent-soft! outline-2 outline-accent outline-solid"
+            : dragging && "outline-1 outline-line-strong outline-dashed",
         )
       }
     >
@@ -82,7 +114,7 @@ function RailLink({ to, label, sub, end, children }: { to: string; label: string
             {children}
           </span>
           <span className="hidden min-w-0 wide:block">
-            <span className={cn("block truncate text-sm font-medium", isActive ? "text-fg" : "text-fg-2 group-hover:text-fg")}>
+            <span className={cn("block truncate text-sm font-medium", isActive || over ? "text-fg" : "text-fg-2 group-hover:text-fg")}>
               {label}
             </span>
             {sub && <span className="block truncate text-xs text-fg-3">{sub}</span>}
@@ -154,18 +186,25 @@ export function Rail() {
         </div>
 
         <div className="scroll-area flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto px-2 pb-2">
-          <RailLink to={paths.favorites} label={t.nav.favorites} sub={t.common.tracks(favorites.length)}>
+          <RailLink to={paths.favorites} label={t.nav.favorites} sub={t.common.tracks(favorites.length)} drop="favorites" menu={favoritesMenu}>
             <span className="grid size-full place-items-center bg-accent-soft text-accent-text">
               <HeartIcon size={20} weight="fill" />
             </span>
           </RailLink>
-          <RailLink to={paths.history} label={t.nav.recentlyPlayed} sub={t.nav.history}>
+          <RailLink to={paths.history} label={t.nav.recentlyPlayed} sub={t.nav.history} menu={historyMenu}>
             <span className="grid size-full place-items-center bg-surface-3 text-fg-2">
               <ClockCounterClockwiseIcon size={20} />
             </span>
           </RailLink>
           {sidebarPlaylists && playlists.map((p) => (
-            <RailLink key={p.id} to={paths.playlist(p.id)} label={p.name} sub={t.common.tracks(p.tracks.length)}>
+            <RailLink
+              key={p.id}
+              to={paths.playlist(p.id)}
+              label={p.name}
+              sub={t.common.tracks(p.tracks.length)}
+              drop={isTvMode() ? undefined : `playlist:${p.id}`}
+              menu={() => playlistMenu(p)}
+            >
               <Artwork src={p.tracks[0]?.thumb} className="size-full" iconSize={18} />
             </RailLink>
           ))}

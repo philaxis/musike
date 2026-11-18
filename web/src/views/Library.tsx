@@ -2,6 +2,8 @@ import { DatabaseIcon, PlusIcon, TrayIcon, YoutubeLogoIcon } from "@phosphor-ico
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router";
 import { Cover, type CoverKind } from "../components/Cover";
+import { menuTrigger, NO_CALLOUT } from "../components/menuTrigger";
+import { favoritesMenu, historyMenu, playlistMenu } from "../components/menus";
 import { NamePlaylistDialog } from "../components/Dialogs";
 import { LocalRoots } from "../components/LocalRoots";
 import { PageHeader } from "../components/Page";
@@ -12,17 +14,34 @@ import { server, type BoxSource } from "../lib/server";
 import type { Track } from "../lib/types";
 import { IconButton } from "../components/IconButton";
 import { useLibrary } from "../stores/library";
-import { useUi } from "../stores/ui";
+import { useUi, type MenuTarget } from "../stores/ui";
 import { isTvMode } from "../tv/tvMode";
 
 const COVER = "size-16 shrink-0 rounded-[12px] md:aspect-square md:size-auto md:w-full md:rounded-[14px] md:shadow-[0_12px_32px_rgb(0_0_0/0.3)]";
 
-function Entry({ to, name, kind, tracks, sub }: { to: string; name: string; kind: CoverKind | "box"; tracks: Track[]; sub: string }) {
+function Entry({
+  to,
+  name,
+  kind,
+  tracks,
+  sub,
+  menu,
+}: {
+  to: string;
+  name: string;
+  kind: CoverKind | "box";
+  tracks: Track[];
+  sub: string;
+  /** Right-click and long press: play, queue or edit it whole. */
+  menu?: () => MenuTarget;
+}) {
   return (
     <li>
       <Link
         to={to}
-        className="group flex items-center gap-3 rounded-[16px] p-2 transition-colors hover:bg-surface-2 md:flex-col md:items-stretch md:gap-3 md:p-3"
+        {...(menu && menuTrigger(menu))}
+        draggable={false}
+        className={`group flex items-center gap-3 rounded-[16px] p-2 transition-colors hover:bg-surface-2 md:flex-col md:items-stretch md:gap-3 md:p-3 ${NO_CALLOUT}`}
       >
         {kind === "box" ? (
           <span className={`${COVER} grid place-items-center bg-accent-soft text-accent-text`}>
@@ -117,8 +136,22 @@ export default function Library() {
       />
 
       <ul className="grid grid-cols-1 gap-1 px-2 pt-2 md:grid-cols-3 md:gap-2 md:px-4 lg:grid-cols-4 2xl:grid-cols-6">
-        <Entry to={paths.favorites} name={t.nav.favorites} kind="favorites" tracks={favorites} sub={t.common.tracks(favorites.length)} />
-        <Entry to={paths.history} name={t.nav.recentlyPlayed} kind="history" tracks={history} sub={t.common.tracks(history.length)} />
+        <Entry
+          to={paths.favorites}
+          name={t.nav.favorites}
+          kind="favorites"
+          tracks={favorites}
+          sub={t.common.tracks(favorites.length)}
+          menu={favoritesMenu}
+        />
+        <Entry
+          to={paths.history}
+          name={t.nav.recentlyPlayed}
+          kind="history"
+          tracks={history}
+          sub={t.common.tracks(history.length)}
+          menu={historyMenu}
+        />
         {/* The song box is for sorting, which TV mode leaves to the phone and Hermes. */}
         {showBox && (
           <Entry
@@ -137,6 +170,7 @@ export default function Library() {
             kind="playlist"
             tracks={p.tracks}
             sub={t.library.playlistSub(p.tracks.length)}
+            menu={() => playlistMenu(p)}
           />
         ))}
       </ul>

@@ -49,10 +49,10 @@ export const api: MusikeApi = {
     request<Playlist>("/api/playlists", { method: "POST", json: { name, tracks } }),
   renamePlaylist: (id: string, name: string) => request<Playlist>(`/api/playlists/${id}`, { method: "PATCH", json: { name } }),
   deletePlaylist: (id: string) => request<void>(`/api/playlists/${id}`, { method: "DELETE" }),
-  addToPlaylist: (id: string, t: Track | Track[]) =>
-    request<Playlist>(`/api/playlists/${id}/tracks`, { method: "POST", json: Array.isArray(t) ? { tracks: t } : t }),
-  removeFromPlaylist: (id: string, trackId: string) =>
-    request<Playlist>(`/api/playlists/${id}/tracks/${trackId}`, { method: "DELETE" }),
+  addToPlaylist: (id: string, tracks: Track[], duplicates = false) =>
+    request<Playlist>(`/api/playlists/${id}/tracks`, { method: "POST", json: { tracks, duplicates } }),
+  removeRows: (id: string, at: number[], ids: string[]) =>
+    request<Playlist>(`/api/playlists/${id}/tracks`, { method: "DELETE", json: { at, ids } }),
 
   importLibrary: (backup: unknown, mode: "merge" | "replace") =>
     request<ImportResult>("/api/library/import", { method: "POST", json: { backup, mode } }),

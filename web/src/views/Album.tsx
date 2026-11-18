@@ -1,11 +1,20 @@
-import { ArrowRightIcon, MusicNotesIcon, PauseIcon, PlayIcon, PlaylistIcon, ShuffleIcon, WarningCircleIcon } from "@phosphor-icons/react";
+import {
+  ArrowRightIcon,
+  DotsThreeIcon,
+  MusicNotesIcon,
+  PauseIcon,
+  PlayIcon,
+  PlaylistIcon,
+  ShuffleIcon,
+  WarningCircleIcon,
+} from "@phosphor-icons/react";
 import { useState } from "react";
 import { Link, useLocation, useParams } from "react-router";
 import { Artwork } from "../components/Artwork";
 import { IconButton, PlayDisc } from "../components/IconButton";
+import { openMenuFromButton } from "../components/menuTrigger";
 import { BackButton, EmptyState, PageHeader } from "../components/Page";
-import { SelectableTrackList } from "../components/Selection";
-import { TrackListSkeleton } from "../components/TrackList";
+import { TrackList, TrackListSkeleton } from "../components/TrackList";
 import { useRemote } from "../hooks/useRemote";
 import { useI18n, useT } from "../i18n";
 import { api } from "../lib/api";
@@ -108,6 +117,15 @@ export default function Album() {
               <PlaylistIcon size={18} /> {t.album.saveAsPlaylist}
             </button>
           )}
+          <IconButton
+            label={t.basics.menuFor(album.title)}
+            size="lg"
+            onClick={(e) =>
+              openMenuFromButton(e, { kind: "group", title: album.title, sub: album.artist, thumb: album.thumb, load: async () => tracks })
+            }
+          >
+            <DotsThreeIcon size={26} weight="bold" />
+          </IconButton>
         </div>
       )}
 
@@ -132,7 +150,9 @@ export default function Album() {
 
       {album &&
         (tracks.length ? (
-          <SelectableTrackList key={id} tracks={tracks} numbered />
+          <div className="px-2 md:px-3">
+            <TrackList key={id} tracks={tracks} showAlbum={false} header={false} alwaysBar />
+          </div>
         ) : (
           <EmptyState icon={<MusicNotesIcon size={28} />} title={t.album.noTracks} body={t.album.noTracksBody} />
         ))}

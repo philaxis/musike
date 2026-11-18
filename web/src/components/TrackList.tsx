@@ -8,7 +8,7 @@ import {
   HeartIcon,
   VideoCameraIcon,
 } from "@phosphor-icons/react";
-import { memo, useState, type CSSProperties, type MouseEvent, type PointerEvent } from "react";
+import { useState, type CSSProperties, type MouseEvent, type PointerEvent } from "react";
 import { useT } from "../i18n";
 import { cn, formatTime } from "../lib/format";
 import { isLocal } from "../lib/server";
@@ -17,25 +17,51 @@ import { selectCurrent, usePlayer } from "../player/player";
 import { useAppearance } from "../stores/appearance";
 import { useKeepStatus } from "../stores/keep";
 import { useLibrary } from "../stores/library";
-import { useUi } from "../stores/ui";
+import type { MenuTarget } from "../stores/ui";
+import { isTvMode } from "../tv/tvMode";
 import { Artwork } from "./Artwork";
 import { Equalizer } from "./Brand";
+import { menuTrigger, NO_CALLOUT, openMenu, openMenuFromButton, startLongPress } from "./menuTrigger";
 import { useDragReorder } from "./reorder";
+import { Check, SelectedCount, SelectionBar, Short, useListSelection } from "./Selection";
+import { startTrackDrag } from "./TrackDrag";
 
 interface RowProps {
   track: Track;
   position: number;
-  onPlay: () => void;
+  /** A click on the row: plays it, or picks it (Ctrl/Shift, or while picking). */
+  onClick: (e: MouseEvent) => void;
   /** A bundle row: play it from one of its parts (0-based). */
   onPlayPart: (part: number) => void;
-  playlistId?: string;
   showAlbum: boolean;
+  menu: () => MenuTarget;
+  /**
+   * "always": a checkbox on every row (while picking); "phone": on phones always, on desktop on hover (pages that
+   * always offer picking keep their track numbers); "hover": on desktop hover only; "none": not selectable.
+   */
+  check: "always" | "phone" | "hover" | "none";
+  selected: boolean;
+  onCheck: (e: MouseEvent) => void;
+  onPointerDown: (e: PointerEvent) => void;
   /** Set where rows can be dragged into a new order. */
-  onDragStart?: (e: PointerEvent) => void;
+  reorderable: boolean;
   dragStyle?: CSSProperties;
 }
 
-const TrackRow = memo(function TrackRow({ track, position, onPlay, onPlayPart, playlistId, showAlbum, onDragStart, dragStyle }: RowProps) {
+function TrackRow({
+  track,
+  position,
+  onClick,
+  onPlayPart,
+  showAlbum,
+  menu,
+  check,
+  selected,
+  onCheck,
+  onPointerDown,
+  reorderable,
+  dragStyle,
+}: RowProps) {
   // Which part of this bundle row is playing (1-based), 0 when none.
   const playingPart = usePlayer((s) => {
     const part = selectCurrent(s)?.part;
@@ -47,46 +73,69 @@ const TrackRow = memo(function TrackRow({ track, position, onPlay, onPlayPart, p
   const isPlaying = usePlayer((s) => s.status === "playing" || s.status === "loading");
   const isFavorite = useLibrary((s) => s.favorites.some((t) => t.id === track.id));
   const toggleFavorite = useLibrary((s) => s.toggleFavorite);
-  const openMenu = useUi((s) => s.openMenu);
   const keepStatus = useKeepStatus(track);
   const t = useT();
-
-  const menuAt = (e: MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
-    const fromButton = e.type === "click";
-    openMenu({ track, playlistId, x: fromButton ? r.right - 256 : e.clientX, y: fromButton ? r.bottom + 6 : e.clientY });
-  };
+  // Phones show the checkbox column only while picking (or on pages that always offer it).
+  const phoneCol = check === "always" || check === "phone";
+  // Desktop swaps the track number for the checkbox on hover, or for good once picking.
+  const deskCheck = check === "always" || (check !== "none" && selected);
 
   return (
     <li
-      onContextMenu={menuAt}
-      onPointerDown={onDragStart}
+      onContextMenu={menuTrigger(menu).onContextMenu}
+      onPointerDown={onPointerDown}
       style={dragStyle}
-      title={onDragStart ? t.collection.dragToReorder : undefined}
+      title={reorderable ? t.collection.dragToReorder : undefined}
+      aria-selected={check === "none" ? undefined : selected}
       className={cn(
         "group relative grid items-center gap-3 rounded-xl px-2 py-1.5 transition-colors duration-150 hover:bg-surface-2 md:px-3",
-        // A long press starts a drag on touch: it mustn't select the title's text instead.
-        onDragStart && "select-none [-webkit-touch-callout:none]",
+        // A long press opens the menu (or starts a drag): it mustn't select the title's text instead.
+        NO_CALLOUT,
+        selected && "bg-accent-soft hover:bg-accent-soft",
         dragStyle?.zIndex && "bg-surface-3",
         // A server file that is gone: still listed (and kept in playlists), skipped when playing.
         // A hidden one only shows up while "숨긴 것 보기" is on.
         (track.unavailable || track.hidden) && "opacity-45",
+        phoneCol ? "grid-cols-[auto_auto_1fr_auto]" : "grid-cols-[auto_1fr_auto]",
         showAlbum
-          ? "grid-cols-[auto_1fr_auto] md:grid-cols-[28px_auto_1fr_auto_auto] lg:grid-cols-[28px_auto_minmax(0,1.4fr)_minmax(0,1fr)_auto_auto]"
-          : "grid-cols-[auto_1fr_auto] md:grid-cols-[28px_auto_1fr_auto_auto]",
+          ? "md:grid-cols-[28px_auto_1fr_auto_auto] lg:grid-cols-[28px_auto_minmax(0,1.4fr)_minmax(0,1fr)_auto_auto]"
+          : "md:grid-cols-[28px_auto_1fr_auto_auto]",
       )}
     >
       <button
         type="button"
-        onClick={onPlay}
+        onClick={onClick}
         aria-label={t.common.playX(track.title)}
         className="absolute inset-0 rounded-xl focus-visible:outline-offset-[-2px]"
       />
 
-      <span className="pointer-events-none hidden justify-center font-mono text-[13px] text-fg-3 tabular-nums md:flex">
-        {isCurrent ? <Equalizer live={isPlaying} /> : position + 1}
+      <span className={cn("relative justify-center font-mono text-[13px] text-fg-3 tabular-nums", phoneCol ? "flex" : "hidden md:flex")}>
+        {check !== "none" && (
+          <button
+            type="button"
+            role="checkbox"
+            aria-checked={selected}
+            aria-label={t.selection.select(track.title)}
+            onClick={(e) => {
+              e.stopPropagation();
+              onCheck(e);
+            }}
+            className={cn(
+              "relative z-10 -m-2 p-2",
+              phoneCol ? "grid" : "hidden",
+              deskCheck ? "md:grid" : "md:hidden md:group-hover:grid md:focus-visible:grid",
+            )}
+          >
+            <Check on={selected} />
+          </button>
+        )}
+        {check === "none" ? (
+          <span className="pointer-events-none">{isCurrent ? <Equalizer live={isPlaying} /> : position + 1}</span>
+        ) : (
+          <span className={cn("pointer-events-none", phoneCol && "max-md:hidden", deskCheck ? "md:hidden" : "md:group-hover:hidden")}>
+            {isCurrent ? <Equalizer live={isPlaying} /> : position + 1}
+          </span>
+        )}
       </span>
 
       <div className="pointer-events-none relative">
@@ -159,7 +208,7 @@ const TrackRow = memo(function TrackRow({ track, position, onPlay, onPlayPart, p
         )}
         <button
           type="button"
-          onClick={menuAt}
+          onClick={(e) => openMenuFromButton(e, menu())}
           aria-label={t.trackList.moreFor(track.title)}
           title={t.trackList.more}
           className="grid size-9 place-items-center rounded-full text-fg-2 transition-[opacity,background-color] hover:bg-surface-3 hover:text-fg md:opacity-0 md:group-hover:opacity-100 md:focus-visible:opacity-100"
@@ -193,7 +242,7 @@ const TrackRow = memo(function TrackRow({ track, position, onPlay, onPlayPart, p
       )}
     </li>
   );
-});
+}
 
 interface ListProps {
   tracks: Track[];
@@ -204,16 +253,62 @@ interface ListProps {
   header?: boolean;
   /** Rows can be dragged into a new order; called once on release with indexes into `tracks`. */
   onReorder?: (from: number, to: number) => void;
+  /** Picking several rows: Ctrl/Cmd and Shift clicks, checkboxes, the selection bar. Never in TV mode. */
+  selectable?: boolean;
+  /** The selection bar and checkboxes stay up with nothing picked ("모두 고르기 · 모두 재생"). */
+  alwaysBar?: boolean;
+  /** Where the sticky selection bar sticks on pages without a desktop header (`md:top-0`). */
+  barClassName?: string;
 }
 
-export function TrackList({ tracks, context, playlistId, showAlbum: albumWanted = true, header = true, onReorder }: ListProps) {
+export function TrackList({
+  tracks,
+  context,
+  playlistId,
+  showAlbum: albumWanted = true,
+  header = true,
+  onReorder,
+  selectable = true,
+  alwaysBar = false,
+  barClassName,
+}: ListProps) {
   const playList = usePlayer((s) => s.playList);
   const t = useT();
+  const tv = isTvMode();
   // Pages ask for the album column where it makes sense; Settings can turn it off everywhere.
   const showAlbum = useAppearance((s) => s.albumColumn) && albumWanted;
-  const reorder = useDragReorder(!!onReorder, (from, to) => onReorder?.(from, to));
+  const sel = useListSelection(tracks, selectable && !tv);
+  const picking = sel.chosen.length > 0;
+  const allSelected = picking && sel.chosen.length === new Set(tracks.map((x) => x.id)).size;
+  // Dragged onto a sidebar playlist, a picked row carries the whole selection.
+  const carried = (i: number) => (sel.has(tracks[i].id) && sel.chosen.length > 1 ? sel.chosen : [tracks[i]]);
+  const menuFor = (i: number) =>
+    sel.menuFor(i, { kind: "track", track: tracks[i], row: playlistId ? { playlistId, at: i } : undefined }, playlistId);
+  const reorder = useDragReorder(!!onReorder, (from, to) => onReorder?.(from, to), {
+    onHold: (i, x, y) => openMenu(menuFor(i), x, y),
+    dropTracks: tv ? undefined : carried,
+  });
+
   return (
-    <div>
+    <div onPointerDownCapture={sel.activate}>
+      {sel.enabled && (picking || alwaysBar) && (
+        <SelectionBar
+          className={cn("-mx-2 mb-1 md:-mx-3", barClassName)}
+          chosen={sel.chosen}
+          all={tracks}
+          allSelected={allSelected}
+          onToggleAll={allSelected ? sel.clear : sel.selectAll}
+          onClear={sel.clear}
+          rows={playlistId && picking ? { playlistId, at: sel.positions } : undefined}
+          label={
+            picking ? (
+              <SelectedCount n={sel.chosen.length} total={tracks.length} />
+            ) : (
+              <Short phone={t.selection.all} wide={t.selection.selectAll} />
+            )
+          }
+        />
+      )}
       {header && (
         <div
           className={cn(
@@ -234,16 +329,26 @@ export function TrackList({ tracks, context, playlistId, showAlbum: albumWanted 
         </div>
       )}
       <ul ref={reorder.list} className="flex flex-col">
-        {tracks.map((t, i) => (
+        {tracks.map((track, i) => (
           <TrackRow
-            key={`${t.id}-${i}`}
-            track={t}
+            key={`${track.id}-${i}`}
+            track={track}
             position={i}
-            playlistId={playlistId}
             showAlbum={showAlbum}
-            onPlay={() => playList(context ?? tracks, i)}
+            check={!sel.enabled ? "none" : picking ? "always" : alwaysBar ? "phone" : "hover"}
+            selected={sel.has(track.id)}
+            onCheck={(e) => sel.toggle(i, e.shiftKey)}
+            onClick={(e) => {
+              if (!sel.click(i, e)) playList(context ?? tracks, i);
+            }}
             onPlayPart={(n) => playList(context ?? tracks, i, n)}
-            onDragStart={onReorder && reorder.start(i)}
+            menu={() => menuFor(i)}
+            reorderable={!!onReorder}
+            onPointerDown={(e) => {
+              if (onReorder) return reorder.start(i)(e);
+              startLongPress(e, () => menuFor(i));
+              startTrackDrag(e, () => carried(i));
+            }}
             dragStyle={reorder.styleFor(i)}
           />
         ))}

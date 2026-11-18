@@ -11,6 +11,7 @@ import { cn } from "../lib/format";
 import { paths } from "../lib/routes";
 import type { Track } from "../lib/types";
 import { usePlayer } from "../player/player";
+import type { MenuTarget } from "../stores/ui";
 
 const MAX_TERMS = 50;
 /** Results kept per term, so a wrong first match can be swapped for the right one. */
@@ -187,6 +188,7 @@ export default function BatchSearch() {
             all={found}
             allSelected={allSelected}
             onToggleAll={() => selectAll(!allSelected)}
+            onClear={() => selectAll(false)}
             label={pending ? t.batch.searching(found.length, entries.length) : <SelectedCount n={chosen.length} total={entries.length} />}
           />
 
@@ -216,6 +218,14 @@ function EntryRow({ entry, index }: { entry: Entry; index: number }) {
   const [open, setOpen] = useState(false);
   const track = entry.options[entry.pick];
   const t = useT();
+  // A picked row acts for every picked one: its menu and a drag to a sidebar playlist carry them all.
+  const picked = () => (entry.selected ? pickedTracks(useBatch.getState().entries, true) : []);
+  const menu = (): MenuTarget => {
+    const many = picked();
+    return many.length > 1
+      ? { kind: "tracks", tracks: many, clear: () => useBatch.getState().selectAll(false) }
+      : { kind: "track", track, select: entry.selected ? undefined : () => update(index, { selected: true }) };
+  };
 
   if (entry.status === "loading") {
     return (
@@ -259,6 +269,8 @@ function EntryRow({ entry, index }: { entry: Entry; index: number }) {
         selected={entry.selected}
         onToggle={() => update(index, { selected: !entry.selected })}
         onPlay={() => playTrack(track)}
+        menu={menu}
+        drag={() => (picked().length > 1 ? picked() : [track])}
         note={<span className="text-fg-3">{t.batch.searched(entry.query)}</span>}
         trailing={
           entry.options.length > 1 && (

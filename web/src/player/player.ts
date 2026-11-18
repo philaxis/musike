@@ -48,10 +48,14 @@ interface PlayerState {
   /** Plays `tracks` from row `start`; a bundle row there starts at its part `part` (0-based). */
   playList: (tracks: Track[], start?: number, part?: number) => void;
   playTrack: (track: Track) => void;
-  playNext: (track: Track) => void;
-  addToQueue: (track: Track) => void;
-  /** Removes `count` queue entries from `i` (a bundle's run of parts at once). */
+  /** Puts tracks right after the current one (in their order). Toast with undo. */
+  playNext: (tracks: Track | Track[]) => void;
+  /** Puts tracks at the end of the queue. Toast with undo. */
+  addToQueue: (tracks: Track | Track[]) => void;
+  /** Removes `count` queue entries from `i` (a bundle's run of parts at once). Toast with undo. */
   removeAt: (i: number, count?: number) => void;
+  /** Moves the entries `start`…`end - 1` (upcoming only) to just before entry `before`. */
+  moveRange: (start: number, end: number, before: number) => void;
   /** Moves past the bundle the current track is a part of. */
   skipBundle: () => void;
   jumpTo: (i: number) => void;
@@ -511,6 +515,18 @@ export const usePlayer = create<PlayerState>((set, get) => {
   for (const deck of decks) wire(deck);
   wire(videoEl);
 
+  /** A toast's undo for tracks just queued: takes those very entries out again (not the one playing). */
+  const undoTakeOut = (entries: Track[]) => ({
+    label: getT().basics.undo,
+    run: () => {
+      const s = get();
+      const current = s.queue[s.index];
+      const out = new Set(entries.filter((t) => t !== current));
+      const queue = s.queue.filter((t) => !out.has(t));
+      set({ queue, original: s.original?.filter((t) => !out.has(t)) ?? null, index: Math.max(0, queue.indexOf(current)) });
+    },
+  });
+
   const reloadIfKindChanged = () => {
     const s = get();
     const track = s.queue[s.index];
@@ -592,25 +608,34 @@ export const usePlayer = create<PlayerState>((set, get) => {
       });
     },
 
-    playNext: (track) => {
-      if (!get().queue.length) return get().playList([track]);
-      withParts([track], ([parts]) => {
+    playNext: (input) => {
+      const tracks = Array.isArray(input) ? input : [input];
+      if (!tracks.length) return;
+      if (!get().queue.length) return get().playList(tracks);
+      withParts(tracks, (rows) => {
+        // Fresh entries, so undo takes out these and not an equal track queued before.
+        const parts = rows.flat().map((t) => ({ ...t }));
         const s = get();
         const insert = s.index + 1;
         set({
           queue: [...s.queue.slice(0, insert), ...parts, ...s.queue.slice(insert)],
           original: s.original ? [...s.original, ...parts] : null,
         });
-        toast(getT().player.playsNext(track.title));
+        const t = getT();
+        toast(tracks.length === 1 ? t.player.playsNext(tracks[0].title) : t.basics.playsNextMany(tracks.length), "info", undoTakeOut(parts));
       });
     },
 
-    addToQueue: (track) => {
-      if (!get().queue.length) return get().playList([track]);
-      withParts([track], ([parts]) => {
+    addToQueue: (input) => {
+      const tracks = Array.isArray(input) ? input : [input];
+      if (!tracks.length) return;
+      if (!get().queue.length) return get().playList(tracks);
+      withParts(tracks, (rows) => {
+        const parts = rows.flat().map((t) => ({ ...t }));
         const s = get();
         set({ queue: [...s.queue, ...parts], original: s.original ? [...s.original, ...parts] : null });
-        toast(getT().player.addedToQueue(track.title));
+        const t = getT();
+        toast(tracks.length === 1 ? t.player.addedToQueue(tracks[0].title) : t.basics.addedToQueueMany(tracks.length), "info", undoTakeOut(parts));
       });
     },
 
@@ -618,11 +643,23 @@ export const usePlayer = create<PlayerState>((set, get) => {
       const s = get();
       if (i < 0 || i >= s.queue.length) return;
       const end = Math.min(s.queue.length, i + count);
-      const removed = new Set(s.queue.slice(i, end));
+      const cut = s.queue.slice(i, end);
+      const removed = new Set(cut);
       const queue = [...s.queue.slice(0, i), ...s.queue.slice(end)];
       const original = s.original?.filter((t) => !removed.has(t)) ?? null;
       if (end <= s.index) return set({ queue, original, index: s.index - (end - i) });
-      if (i > s.index) return set({ queue, original });
+      if (i > s.index) {
+        set({ queue, original });
+        // Undo puts them back where they were, or right after the current track if that moved past them.
+        return toast(getT().basics.removedFromQueue(trackTitle(cut[0])), "info", {
+          label: getT().basics.undo,
+          run: () => {
+            const st = get();
+            const at = Math.max(st.index + 1, Math.min(i, st.queue.length));
+            set({ queue: [...st.queue.slice(0, at), ...cut, ...st.queue.slice(at)], original: st.original ? [...st.original, ...cut] : null });
+          },
+        });
+      }
       // Removing the current track: move on to whatever takes its place.
       set({ queue, original });
       if (queue[i]) load(i, { autoplay: s.status === "playing" });
@@ -632,6 +669,16 @@ export const usePlayer = create<PlayerState>((set, get) => {
         loaded = null;
         set({ index: Math.max(0, queue.length - 1), status: queue.length ? "paused" : "idle", position: 0 });
       }
+    },
+
+    moveRange: (start, end, before) => {
+      const s = get();
+      // Only what comes next moves: the current track and the ones played stay put.
+      if (start <= s.index || end > s.queue.length || before <= s.index || (before >= start && before <= end)) return;
+      const block = s.queue.slice(start, end);
+      const rest = [...s.queue.slice(0, start), ...s.queue.slice(end)];
+      rest.splice(before > start ? before - block.length : before, 0, ...block);
+      set({ queue: rest });
     },
 
     skipBundle: () => {
@@ -653,7 +700,16 @@ export const usePlayer = create<PlayerState>((set, get) => {
     clearUpcoming: () => {
       const s = get();
       const keep = s.queue.slice(0, s.index + 1);
+      const cut = s.queue.slice(s.index + 1);
       set({ queue: keep, original: s.original ? keep.slice() : null });
+      if (!cut.length) return;
+      toast(getT().basics.queueCleared(cut.length), "info", {
+        label: getT().basics.undo,
+        run: () => {
+          const st = get();
+          set({ queue: [...st.queue, ...cut], original: st.original ? [...st.original, ...cut] : null });
+        },
+      });
     },
 
     startRadio: async (track) => {

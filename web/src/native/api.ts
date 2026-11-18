@@ -97,8 +97,8 @@ export const api: MusikeApi = {
   createPlaylist: (name, list = []) => call(() => library.createPlaylist(name, tracks(list))),
   renamePlaylist: (id, name) => call(() => library.renamePlaylist(id, name)),
   deletePlaylist: (id) => call(() => library.deletePlaylist(id)),
-  addToPlaylist: (id, t) => call(() => library.addToPlaylist(id, Array.isArray(t) ? tracks(t) : library.sanitizeTrack(t))),
-  removeFromPlaylist: (id, trackId) => call(() => library.removeFromPlaylist(id, trackId)),
+  addToPlaylist: (id, list, duplicates) => call(() => library.addToPlaylist(id, tracks(list), { duplicates })),
+  removeRows: (id, at, ids) => call(() => library.removePositions(id, at, ids)),
   importLibrary: (backup, mode) =>
     call(async () => {
       const b = (backup ?? {}) as { format?: unknown; version?: unknown; library?: unknown };

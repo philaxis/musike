@@ -1,33 +1,38 @@
 import {
   ArrowSquareOutIcon,
+  CheckSquareIcon,
   CloudArrowDownIcon,
   CloudCheckIcon,
   EyeIcon,
   EyeSlashIcon,
   HeartIcon,
   ListPlusIcon,
+  MinusCircleIcon,
   PlayIcon,
   PlaylistIcon,
   QueueIcon,
   RadioIcon,
+  ShuffleIcon,
   SkipForwardIcon,
   StackIcon,
   TagIcon,
   TrashIcon,
+  XIcon,
 } from "@phosphor-icons/react";
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { MD, useMediaQuery } from "../hooks/useMediaQuery";
-import { useT } from "../i18n";
+import { useT, type Messages } from "../i18n";
 import { capabilities } from "../lib/api";
-import { cn } from "../lib/format";
+import { cn, shuffled } from "../lib/format";
 import { isLocal } from "../lib/server";
+import type { Track } from "../lib/types";
 import { usePlayer } from "../player/player";
 import { useKeep } from "../stores/keep";
 import { useLocal } from "../stores/local";
 import { useLibrary } from "../stores/library";
-import { useUi } from "../stores/ui";
+import { toast, useUi, type MenuState, type MenuTarget } from "../stores/ui";
 import { isTvMode } from "../tv/tvMode";
 import { Artwork } from "./Artwork";
 
@@ -51,17 +56,218 @@ function Item({ icon, children, onClick, danger }: { icon: ReactNode; children: 
   );
 }
 
-export function TrackMenu() {
-  const menu = useUi((s) => s.menu);
-  const close = useUi((s) => s.closeMenu);
+const Divider = () => <div className="mx-3 my-1 h-px bg-line" />;
+
+/** What the menu is about, for its heading and label. */
+function heading(menu: MenuTarget, t: Messages): { title: string; sub?: string; thumb?: string } {
+  if (menu.kind === "track") return { title: menu.track.title, sub: menu.track.artist, thumb: menu.track.thumb };
+  if (menu.kind === "tracks") return { title: t.basics.selected(menu.tracks.length), thumb: menu.tracks[0]?.thumb };
+  return { title: menu.title, sub: menu.sub, thumb: menu.thumb };
+}
+
+/** Entries for one track. */
+function TrackItems({ menu, run }: { menu: Extract<MenuState, { kind: "track" }>; run: (fn: () => void) => () => void }) {
+  const t = useT();
+  const track = menu.track;
   const openAddToPlaylist = useUi((s) => s.openAddToPlaylist);
-  const isFavorite = useLibrary((s) => (menu ? s.favorites.some((t) => t.id === menu.track.id) : false));
-  const keepItem = useKeep((s) => (menu ? s.items[menu.track.id] : undefined));
+  const isFavorite = useLibrary((s) => s.favorites.some((x) => x.id === track.id));
+  const keepItem = useKeep((s) => s.items[track.id]);
   // The bundle this menu's row stands for (or a part of) is playing: offer to skip the rest of it.
   const inPlayingBundle = usePlayer((s) => {
     const part = s.queue[s.index]?.part;
-    return !!menu && !!part && (part.bundle === menu.track.id || part.run === menu.track.part?.run);
+    return !!part && (part.bundle === track.id || part.run === track.part?.run);
   });
+  const local = isLocal(track);
+  // YouTube-only actions (radio, keep, open on YouTube) aren't for local files nor bundles.
+  const youtube = !local && track.kind !== "bundle";
+  // TV mode only plays: no playlist editing or keeping there.
+  const tv = isTvMode();
+  const keepStatus = keepItem?.status ?? (track.kept ? "done" : "none");
+  const progress = keepItem?.progress;
+  const percent = progress === undefined ? null : Math.round(progress <= 1 ? progress * 100 : progress);
+  const player = usePlayer.getState;
+
+  return (
+    <>
+      {menu.select && (
+        <>
+          <Item icon={<CheckSquareIcon size={18} />} onClick={run(menu.select)}>
+            {t.basics.select}
+          </Item>
+          <Divider />
+        </>
+      )}
+      <Item icon={<PlayIcon size={18} />} onClick={run(() => player().playTrack(track))}>
+        {t.trackMenu.playNow}
+      </Item>
+      <Item icon={<QueueIcon size={18} />} onClick={run(() => player().playNext(track))}>
+        {t.trackMenu.playNext}
+      </Item>
+      <Item icon={<ListPlusIcon size={18} />} onClick={run(() => player().addToQueue(track))}>
+        {t.trackMenu.addToQueue}
+      </Item>
+      {menu.queued && (
+        <Item icon={<MinusCircleIcon size={18} />} onClick={run(() => player().removeAt(menu.queued!.at, menu.queued!.count))}>
+          {t.basics.removeFromQueue}
+        </Item>
+      )}
+      {youtube && (
+        <Item icon={<RadioIcon size={18} />} onClick={run(() => void player().startRadio(track))}>
+          {t.trackMenu.startRadio}
+        </Item>
+      )}
+      {inPlayingBundle && (
+        <Item icon={<SkipForwardIcon size={18} />} onClick={run(() => player().skipBundle())}>
+          {t.songBox.skipBundle}
+        </Item>
+      )}
+      <Divider />
+      <Item
+        icon={<HeartIcon size={18} weight={isFavorite ? "fill" : "regular"} className={isFavorite ? "text-accent-text" : ""} />}
+        onClick={run(() => void useLibrary.getState().toggleFavorite(track))}
+      >
+        {isFavorite ? t.common.removeFromFavorites : t.common.addToFavorites}
+      </Item>
+      {!tv && (
+        <Item icon={<PlaylistIcon size={18} />} onClick={() => openAddToPlaylist([track])}>
+          {t.trackMenu.addToPlaylist}
+        </Item>
+      )}
+      {menu.row && !tv && (
+        <Item danger icon={<TrashIcon size={18} />} onClick={run(() => void useLibrary.getState().removeRows(menu.row!.playlistId, [menu.row!.at]))}>
+          {t.trackMenu.removeFromPlaylist}
+        </Item>
+      )}
+      {local && capabilities.serverLibrary && !tv && (
+        <Item
+          icon={track.hidden ? <EyeIcon size={18} /> : <EyeSlashIcon size={18} />}
+          onClick={run(() => void useLocal.getState()[track.hidden ? "unhide" : "hide"]({ ids: [track.id] }))}
+        >
+          {track.hidden ? t.hide.unhide : t.hide.hide}
+        </Item>
+      )}
+      {capabilities.serverLibrary && (
+        <>
+          {/* Tags are edited on phones and laptops; TV mode only plays, but can still list other versions. */}
+          {!tv && (
+            <Item icon={<TagIcon size={18} />} onClick={() => useUi.getState().openTags(track)}>
+              {t.songBox.tags}
+            </Item>
+          )}
+          <Item icon={<StackIcon size={18} />} onClick={() => useUi.getState().openVersions(track)}>
+            {t.songBox.versions}
+          </Item>
+        </>
+      )}
+      {youtube && capabilities.serverLibrary && !tv && (
+        <>
+          <Divider />
+          {keepStatus === "downloading" ? (
+            <Item icon={<CloudArrowDownIcon size={18} className="animate-pulse" />}>
+              {percent === null ? t.keep.downloading : t.keep.progress(percent)}
+            </Item>
+          ) : keepStatus === "done" ? (
+            <>
+              <Item icon={<CloudCheckIcon size={18} className="text-accent-text" />}>{t.keep.kept}</Item>
+              <Item danger icon={<TrashIcon size={18} />} onClick={run(() => void useKeep.getState().remove(track))}>
+                {t.keep.remove}
+              </Item>
+            </>
+          ) : (
+            <Item icon={<CloudArrowDownIcon size={18} />} onClick={run(() => void useKeep.getState().keep(track))}>
+              {t.keep.keep}
+            </Item>
+          )}
+        </>
+      )}
+      {youtube && (
+        <>
+          <Divider />
+          <Item
+            icon={<ArrowSquareOutIcon size={18} />}
+            onClick={run(() => window.open(`https://www.youtube.com/watch?v=${track.id}`, "_blank", "noopener"))}
+          >
+            {t.trackMenu.openYoutube}
+          </Item>
+        </>
+      )}
+    </>
+  );
+}
+
+/** Entries for many tracks: the ones picked in a list, or an album, playlist or folder (fetched when picked). */
+function ManyItems({ menu, run }: { menu: Exclude<MenuState, { kind: "track" }>; run: (fn: () => void) => () => void }) {
+  const t = useT();
+  const tv = isTvMode();
+  const player = usePlayer.getState;
+  // The tracks, then what to do with them; a failed or empty load says so instead.
+  const withTracks = (fn: (tracks: Track[]) => void) =>
+    run(async () => {
+      let tracks: Track[];
+      try {
+        tracks = menu.kind === "tracks" ? menu.tracks : await menu.load();
+      } catch (e) {
+        return toast(`${t.basics.loadFailed}: ${(e as Error).message}`, "error");
+      }
+      if (!tracks.length) return toast(t.basics.empty);
+      fn(tracks);
+    });
+
+  return (
+    <>
+      <Item icon={<PlayIcon size={18} />} onClick={withTracks((list) => player().playList(list, 0))}>
+        {menu.kind === "group" ? t.basics.playAll : t.common.play}
+      </Item>
+      <Item icon={<ShuffleIcon size={18} />} onClick={withTracks((list) => player().playList(shuffled(list), 0))}>
+        {t.basics.shuffle}
+      </Item>
+      <Item icon={<QueueIcon size={18} />} onClick={withTracks((list) => player().playNext(list))}>
+        {t.trackMenu.playNext}
+      </Item>
+      <Item icon={<ListPlusIcon size={18} />} onClick={withTracks((list) => player().addToQueue(list))}>
+        {t.trackMenu.addToQueue}
+      </Item>
+      <Divider />
+      {menu.kind === "tracks" && (
+        <Item icon={<HeartIcon size={18} />} onClick={withTracks((list) => void useLibrary.getState().addFavorites(list))}>
+          {t.common.addToFavorites}
+        </Item>
+      )}
+      {!tv && (
+        <Item icon={<PlaylistIcon size={18} />} onClick={withTracks((list) => useUi.getState().openAddToPlaylist(list))}>
+          {t.trackMenu.addToPlaylist}
+        </Item>
+      )}
+      {menu.kind === "tracks" && menu.rows && !tv && (
+        <Item
+          danger
+          icon={<TrashIcon size={18} />}
+          onClick={run(() => {
+            void useLibrary.getState().removeRows(menu.rows!.playlistId, menu.rows!.at);
+            menu.clear?.();
+          })}
+        >
+          {t.basics.removeFromPlaylist}
+        </Item>
+      )}
+      {menu.kind === "tracks" && menu.clear && (
+        <Item icon={<XIcon size={18} />} onClick={run(menu.clear)}>
+          {t.basics.clearSelection}
+        </Item>
+      )}
+      {menu.kind === "group" &&
+        menu.extras?.map((x) => (
+          <Item key={x.label} danger={x.danger} icon={<x.icon size={18} />} onClick={run(x.run)}>
+            {x.label}
+          </Item>
+        ))}
+    </>
+  );
+}
+
+export function TrackMenu() {
+  const menu = useUi((s) => s.menu);
+  const close = useUi((s) => s.closeMenu);
   const isMd = useMediaQuery(MD);
   const box = useRef<HTMLDivElement>(null);
   const t = useT();
@@ -71,7 +277,7 @@ export function TrackMenu() {
     if (!menu || !isMd || !box.current) return;
     const { width, height } = box.current.getBoundingClientRect();
     setPos({
-      left: Math.min(menu.x, window.innerWidth - width - 12),
+      left: Math.max(12, Math.min(menu.x, window.innerWidth - width - 12)),
       top: menu.y + height > window.innerHeight - 12 ? Math.max(12, menu.y - height) : menu.y,
     });
   }, [menu, isMd]);
@@ -88,120 +294,20 @@ export function TrackMenu() {
   }, [menu, close]);
 
   const run = (fn: () => void) => () => {
-    fn();
     close();
+    fn();
   };
 
-  const local = menu ? isLocal(menu.track) : false;
-  // YouTube-only actions (radio, keep, open on YouTube) aren't for local files nor bundles.
-  const youtube = !!menu && !local && menu.track.kind !== "bundle";
-  // TV mode only plays: no playlist editing or keeping there.
-  const tv = isTvMode();
-  const keepStatus = keepItem?.status ?? (menu?.track.kept ? "done" : "none");
-  const progress = keepItem?.progress;
-  const percent = progress === undefined ? null : Math.round(progress <= 1 ? progress * 100 : progress);
-
-  const content = menu && (
-    <div role="menu" aria-label={t.trackMenu.actionsFor(menu.track.title)} data-escape-closes className="flex flex-col">
-      <Item icon={<PlayIcon size={18} />} onClick={run(() => usePlayer.getState().playTrack(menu.track))}>
-        {t.trackMenu.playNow}
-      </Item>
-      <Item icon={<QueueIcon size={18} />} onClick={run(() => usePlayer.getState().playNext(menu.track))}>
-        {t.trackMenu.playNext}
-      </Item>
-      <Item icon={<ListPlusIcon size={18} />} onClick={run(() => usePlayer.getState().addToQueue(menu.track))}>
-        {t.trackMenu.addToQueue}
-      </Item>
-      {youtube && (
-        <Item icon={<RadioIcon size={18} />} onClick={run(() => void usePlayer.getState().startRadio(menu.track))}>
-          {t.trackMenu.startRadio}
-        </Item>
-      )}
-      {inPlayingBundle && (
-        <Item icon={<SkipForwardIcon size={18} />} onClick={run(() => usePlayer.getState().skipBundle())}>
-          {t.songBox.skipBundle}
-        </Item>
-      )}
-      <div className="mx-3 my-1 h-px bg-line" />
-      <Item
-        icon={<HeartIcon size={18} weight={isFavorite ? "fill" : "regular"} className={isFavorite ? "text-accent-text" : ""} />}
-        onClick={run(() => void useLibrary.getState().toggleFavorite(menu.track))}
-      >
-        {isFavorite ? t.common.removeFromFavorites : t.common.addToFavorites}
-      </Item>
-      {!tv && (
-        <Item icon={<PlaylistIcon size={18} />} onClick={() => openAddToPlaylist([menu.track])}>
-          {t.trackMenu.addToPlaylist}
-        </Item>
-      )}
-      {menu.playlistId && !tv && (
-        <Item
-          danger
-          icon={<TrashIcon size={18} />}
-          onClick={run(() => void useLibrary.getState().removeFromPlaylist(menu.playlistId!, menu.track.id))}
-        >
-          {t.trackMenu.removeFromPlaylist}
-        </Item>
-      )}
-      {local && capabilities.serverLibrary && !tv && (
-        <Item
-          icon={menu.track.hidden ? <EyeIcon size={18} /> : <EyeSlashIcon size={18} />}
-          onClick={run(() => void useLocal.getState()[menu.track.hidden ? "unhide" : "hide"]({ ids: [menu.track.id] }))}
-        >
-          {menu.track.hidden ? t.hide.unhide : t.hide.hide}
-        </Item>
-      )}
-      {capabilities.serverLibrary && (
-        <>
-          {/* Tags are edited on phones and laptops; TV mode only plays, but can still list other versions. */}
-          {!tv && (
-            <Item icon={<TagIcon size={18} />} onClick={() => useUi.getState().openTags(menu.track)}>
-              {t.songBox.tags}
-            </Item>
-          )}
-          <Item icon={<StackIcon size={18} />} onClick={() => useUi.getState().openVersions(menu.track)}>
-            {t.songBox.versions}
-          </Item>
-        </>
-      )}
-      {youtube && capabilities.serverLibrary && !tv && (
-        <>
-          <div className="mx-3 my-1 h-px bg-line" />
-          {keepStatus === "downloading" ? (
-            <Item icon={<CloudArrowDownIcon size={18} className="animate-pulse" />}>
-              {percent === null ? t.keep.downloading : t.keep.progress(percent)}
-            </Item>
-          ) : keepStatus === "done" ? (
-            <>
-              <Item icon={<CloudCheckIcon size={18} className="text-accent-text" />}>{t.keep.kept}</Item>
-              <Item danger icon={<TrashIcon size={18} />} onClick={run(() => void useKeep.getState().remove(menu.track))}>
-                {t.keep.remove}
-              </Item>
-            </>
-          ) : (
-            <Item icon={<CloudArrowDownIcon size={18} />} onClick={run(() => void useKeep.getState().keep(menu.track))}>
-              {t.keep.keep}
-            </Item>
-          )}
-        </>
-      )}
-      {youtube && (
-        <>
-          <div className="mx-3 my-1 h-px bg-line" />
-          <Item
-            icon={<ArrowSquareOutIcon size={18} />}
-            onClick={run(() => window.open(`https://www.youtube.com/watch?v=${menu.track.id}`, "_blank", "noopener"))}
-          >
-            {t.trackMenu.openYoutube}
-          </Item>
-        </>
-      )}
+  const head = menu && heading(menu, t);
+  const content = menu && head && (
+    <div role="menu" aria-label={t.trackMenu.actionsFor(head.title)} data-escape-closes className="flex flex-col">
+      {menu.kind === "track" ? <TrackItems menu={menu} run={run} /> : <ManyItems menu={menu} run={run} />}
     </div>
   );
 
   return createPortal(
     <AnimatePresence>
-      {menu && (
+      {menu && head && (
         <div className="fixed inset-0 z-50" onContextMenu={(e) => e.preventDefault()}>
           <motion.div
             className={cn("absolute inset-0", isMd ? "bg-transparent" : "bg-scrim")}
@@ -218,8 +324,15 @@ export function TrackMenu() {
               exit={{ opacity: 0, scale: 0.97 }}
               transition={{ duration: 0.16, ease: [0.16, 1, 0.3, 1] }}
               style={pos}
-              className="absolute w-64 origin-top-left rounded-2xl border border-line-strong bg-surface-2 p-1.5 shadow-[0_16px_48px_rgb(0_0_0/0.45)]"
+              className="scroll-area absolute max-h-[calc(100dvh-24px)] w-64 origin-top-left overflow-y-auto rounded-2xl border border-line-strong bg-surface-2 p-1.5 shadow-[0_16px_48px_rgb(0_0_0/0.45)]"
             >
+              {/* Many tracks: say which, since the menu isn't next to one row. */}
+              {menu.kind !== "track" && (
+                <>
+                  <p className="truncate px-3 pt-1.5 pb-1 text-xs font-medium text-fg-2">{head.title}</p>
+                  <Divider />
+                </>
+              )}
               {content}
             </motion.div>
           ) : (
@@ -228,15 +341,15 @@ export function TrackMenu() {
               animate={{ y: 0 }}
               exit={{ y: "100%" }}
               transition={{ type: "spring", stiffness: 420, damping: 40 }}
-              className="island safe-bottom absolute inset-x-0 bottom-0 rounded-b-none"
+              className="island safe-bottom absolute inset-x-0 bottom-0 max-h-[90dvh] rounded-b-none"
             >
-              <div className="island-core p-2">
+              <div className="island-core scroll-area max-h-[90dvh] overflow-y-auto p-2">
                 <div className="mx-auto mt-1 mb-2 h-1 w-9 rounded-full bg-surface-4" />
                 <div className="flex items-center gap-3 px-3 pb-3">
-                  <Artwork src={menu.track.thumb} className="size-12 rounded-[10px]" />
+                  <Artwork src={head.thumb} className="size-12 rounded-[10px]" />
                   <div className="min-w-0">
-                    <p className="truncate font-medium">{menu.track.title}</p>
-                    <p className="truncate text-sm text-fg-2">{menu.track.artist}</p>
+                    <p className="truncate font-medium">{head.title}</p>
+                    {head.sub && <p className="truncate text-sm text-fg-2">{head.sub}</p>}
                   </div>
                 </div>
                 <div className="mx-3 mb-1 h-px bg-line" />

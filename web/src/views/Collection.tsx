@@ -1,10 +1,9 @@
-import { DotsThreeIcon, MagnifyingGlassIcon, PauseIcon, PencilSimpleIcon, PlayIcon, ShuffleIcon, TrashIcon } from "@phosphor-icons/react";
-import { useState } from "react";
-import { Link, useNavigate, useParams } from "react-router";
+import { DotsThreeIcon, MagnifyingGlassIcon, PauseIcon, PlayIcon, ShuffleIcon } from "@phosphor-icons/react";
+import { Link, useParams } from "react-router";
 import { Cover, type CoverKind } from "../components/Cover";
-import { NamePlaylistDialog } from "../components/Dialogs";
 import { IconButton, PlayDisc } from "../components/IconButton";
-import { Modal } from "../components/Modal";
+import { openMenuFromButton } from "../components/menuTrigger";
+import { favoritesMenu, historyMenu, playlistMenu } from "../components/menus";
 import { EmptyState, PageHeader } from "../components/Page";
 import { TrackList } from "../components/TrackList";
 import { useT } from "../i18n";
@@ -24,15 +23,11 @@ interface Props {
 /** Playlist, Favorites and History share one layout. */
 export default function Collection({ kind }: Props) {
   const { id } = useParams();
-  const navigate = useNavigate();
   const lib = useLibrary();
   const playList = usePlayer((s) => s.playList);
   const toggle = usePlayer((s) => s.toggle);
   const queue = usePlayer((s) => s.queue);
   const status = usePlayer((s) => s.status);
-  const [renaming, setRenaming] = useState(false);
-  const [confirmDelete, setConfirmDelete] = useState(false);
-  const [moreOpen, setMoreOpen] = useState(false);
   const t = useT();
 
   const playlist = kind === "playlist" ? lib.playlists.find((p) => p.id === id) : undefined;
@@ -110,11 +105,13 @@ export default function Collection({ kind }: Props) {
         >
           <ShuffleIcon size={24} />
         </IconButton>
-        {kind === "playlist" && !isTvMode() && (
-          <IconButton label={t.collection.more} size="lg" onClick={() => setMoreOpen(true)}>
-            <DotsThreeIcon size={26} weight="bold" />
-          </IconButton>
-        )}
+        <IconButton
+          label={t.basics.menuFor(name)}
+          size="lg"
+          onClick={(e) => openMenuFromButton(e, playlist ? playlistMenu(playlist) : kind === "favorites" ? favoritesMenu() : historyMenu())}
+        >
+          <DotsThreeIcon size={26} weight="bold" />
+        </IconButton>
       </div>
 
       <div className="px-2 md:px-3">
@@ -123,6 +120,8 @@ export default function Collection({ kind }: Props) {
             tracks={tracks}
             playlistId={playlist?.id}
             showAlbum
+            // No desktop header on this page: the selection bar sticks to the very top there.
+            barClassName="md:top-0"
             // TV mode only plays; elsewhere a playlist's rows drag into a new order.
             onReorder={
               playlist && capabilities.serverLibrary && !isTvMode()
@@ -149,69 +148,6 @@ export default function Collection({ kind }: Props) {
           />
         )}
       </div>
-
-      {playlist && (
-        <>
-          <Modal open={moreOpen} onClose={() => setMoreOpen(false)} title={playlist.name}>
-            <div className="flex flex-col">
-              <button
-                type="button"
-                onClick={() => {
-                  setMoreOpen(false);
-                  setRenaming(true);
-                }}
-                className="flex items-center gap-3 rounded-xl px-3 py-3 text-left hover:bg-surface-3"
-              >
-                <PencilSimpleIcon size={18} className="text-fg-2" /> {t.collection.rename}
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setMoreOpen(false);
-                  setConfirmDelete(true);
-                }}
-                className="flex items-center gap-3 rounded-xl px-3 py-3 text-left text-danger hover:bg-surface-3"
-              >
-                <TrashIcon size={18} /> {t.collection.deletePlaylist}
-              </button>
-            </div>
-          </Modal>
-
-          <NamePlaylistDialog
-            open={renaming}
-            initial={playlist.name}
-            title={t.collection.renameTitle}
-            action={t.collection.save}
-            onClose={() => setRenaming(false)}
-            onSubmit={(n) => {
-              void lib.renamePlaylist(playlist.id, n);
-              setRenaming(false);
-            }}
-          />
-
-          <Modal open={confirmDelete} onClose={() => setConfirmDelete(false)} title={t.collection.deleteTitle}>
-            <p className="text-sm text-fg-2">
-              {t.collection.deleteBody(playlist.name, playlist.tracks.length)}
-            </p>
-            <div className="mt-5 flex justify-end gap-2">
-              <button type="button" onClick={() => setConfirmDelete(false)} className="h-11 rounded-full px-5 text-sm font-medium text-fg-2 hover:text-fg">
-                {t.common.cancel}
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setConfirmDelete(false);
-                  void lib.deletePlaylist(playlist.id);
-                  navigate(paths.library);
-                }}
-                className="h-11 rounded-full bg-danger px-6 text-sm font-semibold text-white"
-              >
-                {t.collection.delete}
-              </button>
-            </div>
-          </Modal>
-        </>
-      )}
     </div>
   );
 }
