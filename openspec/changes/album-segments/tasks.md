@@ -15,4 +15,4 @@
 
 ## 4. 문서·운영
 - [x] 4.1 `AGENTS.md` API 표 — 확인: `pnpm typecheck`, `pnpm --filter ./server test`(58), `pnpm build`, `openspec validate album-segments --strict` 통과
-- [ ] 4.2 운영 설치: `~/scratch/tatsuro-split/segments.json`을 `~/.local/share/musike/data/`에 두고 `POST /api/local/rescan`(또는 서비스 재시작), 헤르메스 기술에 구간 API
+- [x] 4.2 운영 설치 — 확인: `segments.json`을 운영 데이터 폴더에 두고 재시작, 뿌리 「야마시타 타츠로」 61앨범·511곡, 운영 화면(390px)에 RIDE ON TIME 9곡(いつか·Daydream·Silent Screamer·Ride On Time…), 헤르메스 기술에 구간 API 절
