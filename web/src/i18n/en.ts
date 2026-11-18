@@ -12,6 +12,8 @@ export const en = {
     close: "Close",
     back: "Back",
     cancel: "Cancel",
+    newVersion: "A new version of Musike is ready",
+    reload: "Reload",
     retry: "Try again",
     loading: "Loading",
     play: "Play",
