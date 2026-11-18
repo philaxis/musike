@@ -193,6 +193,7 @@ export const en = {
     removeX: (title: string) => `Remove ${title} from the queue`,
     remove: "Remove from queue",
     nowPlaying: "Now playing",
+    played: "Played",
     upNext: "Up next",
     clear: "Clear",
     nothingQueued: "Nothing in the queue.",

@@ -1,5 +1,5 @@
 import { CaretDownIcon, QueueIcon, XIcon } from "@phosphor-icons/react";
-import { useState, type CSSProperties, type PointerEvent } from "react";
+import { useLayoutEffect, useRef, useState, type CSSProperties, type PointerEvent } from "react";
 import { useT } from "../i18n";
 import { queueRows, trackTitle } from "../lib/bundles";
 import { cn, formatTime } from "../lib/format";
@@ -10,6 +10,9 @@ import { Artwork } from "./Artwork";
 import { Equalizer } from "./Brand";
 import { menuTrigger, NO_CALLOUT, openMenu } from "./menuTrigger";
 import { useDragReorder } from "./reorder";
+
+/** How many already-played tracks the queue panel lists above the current one (they all stay in the queue). */
+const PAST_SHOWN = 50;
 
 /** Drag handlers, position and menu of an upcoming row. */
 interface RowDrag {
@@ -96,6 +99,11 @@ export function QueueList({ compact = false }: { compact?: boolean }) {
   const current = queue[index];
   // What comes next, row by row: the rest of a bundle is one row.
   const upcoming = queueRows(queue.slice(index + 1)).map((r) => ({ start: r.start + index + 1, end: r.end + index + 1 }));
+  // What already played stays in the queue (jumping ahead doesn't drop it): the last PAST_SHOWN, oldest first.
+  const pastFrom = Math.max(0, index - PAST_SHOWN);
+  const currentRef = useRef<HTMLElement>(null);
+  // Opening the queue lands on the current track; the played ones are a scroll up.
+  useLayoutEffect(() => currentRef.current?.scrollIntoView({ block: "start" }), []);
   const menuAt = (r: { start: number; end: number }): MenuTarget => ({
     kind: "track",
     track: queue[r.start],
@@ -124,7 +132,7 @@ export function QueueList({ compact = false }: { compact?: boolean }) {
     );
   }
 
-  const row = (i: number, isCurrent: boolean, drag?: RowDrag) => {
+  const row = (i: number, isCurrent: boolean, drag?: RowDrag, past = false) => {
     const track = queue[i];
     const title = trackTitle(track);
     const menu = drag?.menu ?? ((): MenuTarget => ({ kind: "track", track }));
@@ -139,6 +147,7 @@ export function QueueList({ compact = false }: { compact?: boolean }) {
           "group relative flex items-center gap-3 rounded-xl px-2 py-1.5 hover:bg-surface-3",
           NO_CALLOUT,
           drag?.style?.zIndex && "bg-surface-3",
+          past && "opacity-55 hover:opacity-100",
         )}
       >
         <button type="button" onClick={() => jumpTo(i)} className="absolute inset-0 rounded-xl" aria-label={t.common.playX(title)} />
@@ -171,7 +180,16 @@ export function QueueList({ compact = false }: { compact?: boolean }) {
 
   return (
     <div className={cn("flex flex-col gap-4", compact ? "" : "pb-4")}>
-      <section>
+      {index > 0 && (
+        <section>
+          <h3 className="px-2 pb-1.5 text-xs font-medium text-fg-3">
+            {t.queue.played} <span className="font-mono">{index}</span>
+          </h3>
+          <ul>{Array.from({ length: index - pastFrom }, (_, k) => row(pastFrom + k, false, undefined, true))}</ul>
+        </section>
+      )}
+
+      <section ref={currentRef} className="scroll-mt-2">
         <h3 className="px-2 pb-1.5 text-xs font-medium text-fg-3">{t.queue.nowPlaying}</h3>
         <ul>{row(index, true)}</ul>
       </section>
