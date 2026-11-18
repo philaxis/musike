@@ -20,3 +20,8 @@ server/cache/
 .env
 .DS_Store
 Thumbs.db
+
+# Analysis worker (Python)
+analysis/.venv/
+__pycache__/
+.pytest_cache/

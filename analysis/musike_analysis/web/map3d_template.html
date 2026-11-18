@@ -1,0 +1,2183 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover">
+<title>음악 지도</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
+<link rel="stylesheet" href="user.css">
+<style>
+:root{color-scheme:light;--bg:#fafaf9;--fg:#1c1d21;--mut:#6b7079;--card:rgba(255,255,255,.92);--solid:#fff;--line:#e3e5e9;--chip:#f1f2f4;--acc:#0b8a7c;--acc-ink:#fff;--play:#c27c0e;--fav:#e8457a;--shadow:0 8px 28px rgba(20,24,32,.10);--grey:#c9cdd3;--axis:#c3c7ce}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){color-scheme:dark;--bg:#0e1014;--fg:#e6e7ea;--mut:#959aa4;--card:rgba(24,27,33,.92);--solid:#181b21;--line:#2a2e36;--chip:#232730;--acc:#5fd3c4;--acc-ink:#04201c;--play:#f0b35b;--fav:#ff6f9c;--shadow:0 8px 28px rgba(0,0,0,.45);--grey:#3a3f48;--axis:#4a505b}}
+:root[data-theme="dark"]{color-scheme:dark;--bg:#0e1014;--fg:#e6e7ea;--mut:#959aa4;--card:rgba(24,27,33,.92);--solid:#181b21;--line:#2a2e36;--chip:#232730;--acc:#5fd3c4;--acc-ink:#04201c;--play:#f0b35b;--fav:#ff6f9c;--shadow:0 8px 28px rgba(0,0,0,.45);--grey:#3a3f48;--axis:#4a505b}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;overflow:hidden;overscroll-behavior:none;background:var(--bg);color:var(--fg);font:14px/1.5 "Pretendard Variable",Pretendard,system-ui,-apple-system,"Apple SD Gothic Neo","Noto Sans KR",sans-serif;-webkit-text-size-adjust:100%}
+a{color:var(--acc)}
+button,select,input{font:inherit;color:inherit}
+#stage{position:fixed;inset:0;touch-action:none}
+#stage canvas{display:block}
+
+/* 컨트롤: 왼쪽 위 카드 하나, 기본은 접힘(검색 + 버튼 둘) */
+#ctl{position:fixed;left:16px;top:16px;z-index:20;width:400px;background:var(--card);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow)}
+#top{display:flex;flex-wrap:wrap;align-items:center;gap:6px;padding:8px}
+#top .brand{flex:1}  /* 첫 줄: 이름 + 버튼들, 둘째 줄: 검색창 전체 폭 */
+#top .brand{font-weight:700;font-size:15px;padding:0 4px 0 6px;white-space:nowrap;letter-spacing:-.01em}
+#q{order:9;flex:1 1 100%;min-width:0;border:1px solid var(--line);background:var(--solid);border-radius:9px;padding:7px 10px;font-size:14px;outline:none}
+#q:focus{border-color:var(--acc)}
+.ib{flex:none;width:34px;height:34px;border:1px solid transparent;background:none;border-radius:9px;cursor:pointer;display:grid;place-items:center;color:var(--mut)}
+.ib:hover{background:var(--chip);color:var(--fg)}
+.ib.on{color:var(--acc);background:var(--chip)}
+.ib svg{width:18px;height:18px}
+#more{display:none;border-top:1px solid var(--line);padding:12px 14px 14px;max-height:calc(100vh - 90px);overflow:auto}
+#ctl.open #more{display:block}
+.sec{margin-bottom:14px}
+.sec:last-child{margin-bottom:0}
+.sec>h4{margin:0 0 7px;font-size:12px;font-weight:600;color:var(--mut);letter-spacing:.02em}
+.seg{display:flex;gap:4px;flex-wrap:wrap}
+.seg button,.chipbtn{border:1px solid var(--line);background:var(--solid);border-radius:999px;padding:4px 11px;font-size:13px;cursor:pointer;white-space:nowrap}
+.seg button.on,.chipbtn.on{border-color:var(--acc);color:var(--acc);font-weight:600}
+.seg.big{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+.seg.big button{min-height:42px;padding:8px 6px;border-radius:10px;font-size:13px;white-space:nowrap}
+.seg.sizes button{padding:6px 14px}
+select.sel{width:100%;min-height:36px;border:1px solid var(--line);background:var(--solid);border-radius:9px;padding:6px 8px;font-size:13px}
+#adv{border-top:1px solid var(--line);padding-top:10px;margin-bottom:0}
+#adv>summary{font-size:13px;font-weight:600;color:var(--mut);padding:2px 0 8px}
+#adv .advbody{padding-top:2px}
+#adv .sec:last-child{margin-bottom:0}
+.axes{display:grid;grid-template-columns:44px 1fr;gap:6px 8px;align-items:center}
+.axes label{font-size:12px;color:var(--mut)}
+.axes select{width:100%;border:1px solid var(--line);background:var(--solid);border-radius:8px;padding:5px 6px;font-size:13px}
+.axes .miss{grid-column:2;margin-top:-4px;font-size:11px;color:var(--mut)}
+.row{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.row input[type=range]{flex:1;accent-color:var(--acc)}
+.btn{border:1px solid var(--line);background:var(--solid);border-radius:8px;padding:5px 10px;font-size:13px;cursor:pointer;white-space:nowrap}
+.btn.on{border-color:var(--acc);color:var(--acc)}
+.btn:disabled{opacity:.45;cursor:default}
+details{border-top:1px solid var(--line);padding-top:10px;margin-bottom:12px}
+details summary{cursor:pointer;font-size:12px;font-weight:600;color:var(--mut);list-style:none}
+details summary::-webkit-details-marker{display:none}
+details summary::before{content:"▸ ";}
+details[open] summary::before{content:"▾ ";}
+.fgrp{margin-top:9px}
+.fgrp b{display:block;font-size:12px;font-weight:500;color:var(--mut);margin-bottom:4px}
+.fgrp .seg button{padding:2px 9px;font-size:12px}
+.links{display:flex;gap:12px;flex-wrap:wrap;font-size:13px;border-top:1px solid var(--line);padding-top:10px}
+.links a{text-decoration:none}
+.hint{font-size:12px;color:var(--mut);margin-top:8px}
+.hint .ph{display:none}
+
+/* 검색 결과(search.js): 검색창 아래 붙은 카드 목록. 접으면 '결과 N개' 한 줄 */
+#results{position:fixed;left:16px;top:var(--below,66px);width:min(480px,calc(100% - 32px));max-height:min(70vh,640px);z-index:25;background:var(--solid);border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow);display:none;flex-direction:column;overflow:hidden}
+#results.on{display:flex}
+#results .sbar{flex:none;display:flex;gap:8px;align-items:center;width:100%;border:0;background:none;padding:9px 12px;cursor:pointer;text-align:left;font-size:13px;border-bottom:1px solid var(--line)}
+#results .sbar:hover{background:var(--chip)}
+#results .shead{flex:none;display:flex;align-items:stretch;border-bottom:1px solid var(--line)}
+#results .shead .sbar{flex:1;min-width:0;border-bottom:0}
+#results .spin{flex:none;margin:6px 8px 6px 0;border:1px solid var(--line);background:var(--solid);border-radius:999px;padding:0 10px;font-size:12px;cursor:pointer;color:var(--fg);white-space:nowrap}
+#results .spin:hover:not(:disabled){border-color:var(--acc);color:var(--acc)}
+#results .spin.on{border-color:var(--acc);color:var(--acc);cursor:default}
+#results.fold .shead{border-bottom:0}
+#results .rtg{display:flex;flex-wrap:wrap;gap:4px;margin-top:4px}
+#results .sbar b{font-weight:700;white-space:nowrap}
+#results .sst{flex:1;min-width:0;color:var(--mut);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#results .sst.ld::before{content:"";display:inline-block;width:9px;height:9px;margin-right:6px;border:2px solid var(--line);border-top-color:var(--acc);border-radius:50%;vertical-align:-1px;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+#results .sfold{flex:none;color:var(--mut);font-size:12px;display:flex;align-items:center;gap:4px}
+#results .sfold i{font-style:normal;display:inline-block;transition:transform .15s}
+#results.fold .sfold i{transform:rotate(180deg)}
+#results.fold .sbar{border-bottom:0}
+#results.fold .slist{display:none}
+#results .slist{overflow:auto;padding:4px;overscroll-behavior:contain}
+#results .snone{padding:14px 10px;color:var(--mut);font-size:13px}
+#results .rr{display:flex;gap:9px;align-items:flex-start;padding:8px;border-radius:8px;cursor:pointer;border:1px solid transparent}
+#results .rr:hover,#results .rr.act{background:var(--chip)}
+#results .rr.cur{border-color:var(--acc);background:var(--chip)}
+#results .rr.cur .rk{color:var(--acc);font-weight:700}
+#results .rk{flex:none;width:18px;text-align:right;color:var(--mut);font-size:12px;padding-top:1px}
+#results .sdiv{padding:10px 10px 2px;font-size:11px;color:var(--mut)}
+#results .rr.ch .rk{font-size:10px;letter-spacing:.02em}
+#results .rm{flex:1;min-width:0}
+#results .rt{font-weight:600;line-height:1.35;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#results .ra{color:var(--mut);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#results .rs{color:var(--mut);font-size:12px;line-height:1.4;margin-top:1px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+#results .rf{display:flex;gap:8px;align-items:center;margin-top:4px;font-size:11px}
+#results .rkind{border-radius:999px;padding:0 7px;background:var(--chip);color:var(--mut)}
+#results .rkind.sem{color:#2c6e9e}
+#results .rkind.both{color:var(--acc)}
+.sbadge{display:inline-block;vertical-align:middle;margin-left:6px;padding:0 7px;border-radius:999px;border:1px solid var(--line);background:var(--chip);color:var(--mut);font-size:11px;font-weight:500;line-height:18px;white-space:nowrap}
+#results .rsc{color:var(--mut);font-variant-numeric:tabular-nums}
+#results .rd{margin-left:auto;color:var(--acc);text-decoration:none;border:1px solid var(--line);border-radius:6px;padding:0 6px;white-space:nowrap}
+
+/* 최근 검색(빈 검색창에 포커스) */
+#results .rch{flex:none;display:flex;align-items:center;gap:8px;padding:9px 12px 7px;border-bottom:1px solid var(--line);font-size:12px;color:var(--mut)}
+#results .rch b{color:var(--fg);font-size:13px;font-weight:600}
+#results .rca{margin-left:auto;border:0;background:none;color:var(--mut);font-size:12px;cursor:pointer;padding:4px 6px;border-radius:6px}
+#results .rca:hover{background:var(--chip);color:var(--fg)}
+#results .rc{display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:8px;cursor:pointer;font-size:13px}
+#results .rc:hover,#results .rc.act{background:var(--chip)}
+#results .rci{flex:none;width:16px;height:16px;color:var(--mut)}
+#results .rci svg{width:16px;height:16px;display:block}
+#results .rct{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#results .rcx{flex:none;width:26px;height:26px;border:0;border-radius:7px;background:none;color:var(--mut);font-size:16px;cursor:pointer;line-height:1}
+#results .rcx:hover{background:var(--line);color:var(--fg)}
+
+/* 정보 패널 */
+#panel{position:fixed;top:16px;right:16px;bottom:16px;width:380px;z-index:30;background:var(--solid);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow);overflow:auto;padding:16px 18px 24px;transform:translateX(calc(100% + 24px));transition:transform .22s ease;overscroll-behavior:contain}
+#panel.open{transform:none}
+#panel .grab{display:none}
+#panel .x{position:absolute;top:10px;right:10px;width:30px;height:30px;border:0;background:none;color:var(--mut);font-size:20px;cursor:pointer;border-radius:8px}
+#panel .x:hover{background:var(--chip)}
+#panel .drive{display:block;text-align:center;background:var(--acc);color:var(--acc-ink);text-decoration:none;font-weight:600;padding:11px;border-radius:10px;margin:26px 0 16px}
+#panel h2{font-size:19px;margin:0 0 4px;line-height:1.35;letter-spacing:-.01em}
+#panel .au{color:var(--mut);margin-bottom:10px}
+#panel .chips{display:flex;flex-wrap:wrap;gap:5px;margin:6px 0}
+#panel .chip{font-size:12px;padding:2px 9px;border-radius:999px;background:var(--chip)}
+#panel .chip .dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:5px;vertical-align:0}
+#panel p{margin:10px 0;line-height:1.6}
+#panel h3{font-size:12px;color:var(--mut);margin:20px 0 6px;font-weight:600;letter-spacing:.02em}
+#panel .score{display:grid;grid-template-columns:72px 1fr 18px;gap:8px;align-items:center;font-size:12px;margin:5px 0}
+#panel .score i{display:block;height:6px;background:var(--chip);border-radius:3px;overflow:hidden}
+#panel .score i b{display:block;height:100%;background:var(--acc)}
+#panel .score small{grid-column:2;margin-top:-5px;color:var(--mut);display:flex;justify-content:space-between;font-size:11px}
+#panel ul{margin:0;padding:0;list-style:none}
+#panel li{padding:6px 0;border-bottom:1px solid var(--line);font-size:13px}
+#panel li:last-child{border-bottom:0}
+#panel li.nb{cursor:pointer;display:flex;gap:8px;align-items:center}
+#panel li.nb:hover span{color:var(--acc)}
+#panel li.nb span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#panel li.nb em{font-style:normal;color:var(--mut);font-size:12px;font-variant-numeric:tabular-nums}
+#panel li.nb .dot{width:8px;height:8px;border-radius:50%;flex:none}
+#panel li a{text-decoration:none}
+#panel .mut{color:var(--mut)}
+#panel .pt li{padding:8px 0}
+#panel .pt .ph{display:flex;align-items:baseline;gap:6px;margin-bottom:4px}
+#panel .pt .pn{font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#panel .pt .pw{margin-left:auto;color:var(--mut);font-size:12px;font-variant-numeric:tabular-nums}
+#panel .pt .pb{height:5px;background:var(--chip);border-radius:3px;overflow:hidden}
+#panel .pt .pb b{display:block;height:100%;background:var(--acc);border-radius:3px}
+#panel .pt .ch{color:var(--mut);font-size:11px;line-height:1.45;margin-top:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* 정보 패널 위: 지나온 곡(뒤로/앞으로 · 빵부스러기) */
+#panel .navh{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:2px 0 4px}
+#panel .nvb{flex:none;width:30px;height:30px;border:1px solid var(--line);background:var(--solid);border-radius:8px;cursor:pointer;color:var(--fg);font-size:15px;line-height:1;display:grid;place-items:center}
+#panel .nvb:hover:not(:disabled){border-color:var(--acc);color:var(--acc)}
+#panel .nvb:disabled{opacity:.35;cursor:default}
+#panel .nvc{flex:none;font-size:12px;color:var(--mut);font-variant-numeric:tabular-nums;margin-right:2px}
+#panel .navt{flex:1 1 100%;display:flex;align-items:center;gap:2px;min-width:0;font-size:12px;color:var(--mut);overflow:hidden;white-space:nowrap;margin-bottom:8px}
+#panel .navt .crm{flex:0 1 auto;min-width:0;max-width:96px;border:0;background:none;padding:2px 4px;font-size:12px;color:var(--mut);cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;border-radius:5px}
+#panel .navt .crm:hover{background:var(--chip);color:var(--fg)}
+#panel .navt .crm.on{color:var(--acc);font-weight:600}
+#panel .navt .sep{flex:none;color:var(--line)}
+
+/* 이름표·툴팁·범례·상태 */
+.lbl{position:fixed;z-index:12;pointer-events:none;font-size:12px;color:var(--fg);background:var(--card);padding:1px 6px;border-radius:5px;white-space:nowrap;transform:translate(9px,-50%);max-width:240px;overflow:hidden;text-overflow:ellipsis}
+.lbl.sel{font-weight:800;font-size:13px;color:var(--acc-ink);background:var(--acc);box-shadow:0 2px 12px rgba(0,0,0,.28);z-index:13;padding:2px 8px;border-radius:7px}
+.lbl.grp{transform:translate(-50%,-50%);font-weight:700;font-size:13px;color:var(--mut);background:none;text-shadow:0 0 3px var(--bg),0 0 3px var(--bg),0 0 6px var(--bg);letter-spacing:-.01em}
+.lbl.amb{font-size:11px;max-width:170px;opacity:.85}
+.lbl.hov{box-shadow:0 0 0 1px var(--acc);background:var(--solid);opacity:1}
+.axl{position:fixed;z-index:11;pointer-events:none;font-size:12px;color:var(--mut);white-space:nowrap;transform:translate(-50%,-50%)}
+.axl b{color:var(--fg);font-weight:600}
+#tip{position:fixed;z-index:40;pointer-events:none;background:var(--solid);color:var(--fg);border:1px solid var(--line);box-shadow:var(--shadow);padding:5px 9px;border-radius:8px;font-size:13px;max-width:340px;display:none}
+#tip small{display:block;color:var(--mut);font-size:12px}
+#tip b,#tip small{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#tip b{display:block;font-weight:600}
+#legend{position:fixed;left:16px;bottom:16px;z-index:15;font-size:12px;color:var(--mut);background:var(--card);border:1px solid var(--line);border-radius:10px;padding:7px 10px;max-width:min(52vw,460px);max-height:30vh;overflow:auto;line-height:1.9}
+#legend .it{white-space:nowrap;margin-right:10px;display:inline-block}
+#legend .it i{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:4px;vertical-align:-.5px}
+#legend .ramp{display:flex;align-items:center;gap:8px}
+#legend .ramp i{display:block;width:140px;height:8px;border-radius:4px}
+#status{position:fixed;right:16px;bottom:16px;z-index:15;font-size:12px;color:var(--mut);pointer-events:none;text-align:right}
+#edge{position:fixed;z-index:14;display:none;width:46px;height:46px;padding:0;border:0;border-radius:50%;background:var(--acc);color:var(--acc-ink);box-shadow:var(--shadow),0 0 0 3px color-mix(in srgb,var(--bg) 70%,transparent);cursor:pointer;place-items:center;transform:translate(-50%,-50%)}
+#edge.on{display:grid}
+#edge svg{width:24px;height:24px;transform:rotate(var(--a,0deg))}
+#edge:hover{filter:brightness(1.06)}
+#legend .lt{display:inline-flex;align-items:center;border:0;background:none;padding:0 4px 0 0;color:var(--mut);font-size:12px;cursor:pointer}
+#legend.fold{padding:2px 8px}
+#legend.fold .lb{display:none}
+
+/* 조건 버블(필터 칩): 검색창 아래 줄. 폰은 하단 카드 위 가로 스크롤 한 줄 */
+#chips{display:flex;flex-wrap:wrap;gap:5px;align-items:center;padding:0 8px 8px}
+#chips .bub{display:inline-flex;align-items:center;gap:2px;max-width:100%;border:1px solid var(--acc);background:color-mix(in srgb,var(--acc) 10%,var(--solid));color:var(--fg);border-radius:999px;padding:0 2px 0 10px;font-size:12px;font-weight:600;line-height:26px;white-space:nowrap}
+#chips .bub>span{overflow:hidden;text-overflow:ellipsis}
+#chips .bub .bx{flex:none;width:24px;height:24px;border:0;background:none;border-radius:50%;cursor:pointer;color:var(--mut);font-size:14px;line-height:1;display:grid;place-items:center}
+#chips .bub .bx:hover{background:color-mix(in srgb,var(--acc) 22%,transparent);color:var(--fg)}
+#chips .bub select{flex:none;max-width:76px;border:0;background:none;color:var(--acc);font-size:12px;font-weight:600;cursor:pointer;padding:0 2px}
+#chips .cnt{font-size:12px;color:var(--mut);white-space:nowrap;margin-left:2px}
+#chips .cnt b{color:var(--fg);font-variant-numeric:tabular-nums}
+#chips .clr,#chips .add{border:1px dashed var(--line);background:none;border-radius:999px;padding:0 10px;font-size:12px;line-height:26px;cursor:pointer;color:var(--mut);white-space:nowrap}
+#chips .add{border-style:solid;color:var(--fg)}
+#chips .clr:hover,#chips .add:hover{border-color:var(--acc);color:var(--acc)}
+.ib.tagb{font-weight:800;font-size:17px}
+#chips .cnt.all{margin-left:0}
+
+/* 되돌리기 토스트: 버블을 지우면 몇 초간(Ctrl+Z 도 됨) */
+#undo{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom));transform:translate(-50%,20px);z-index:70;display:flex;align-items:center;gap:10px;max-width:calc(100% - 24px);padding:6px 6px 6px 14px;background:var(--fg);color:var(--bg);border-radius:12px;box-shadow:var(--shadow);font-size:13px;opacity:0;pointer-events:none;transition:opacity .15s,transform .15s}
+#undo.on{opacity:1;transform:translate(-50%,0);pointer-events:auto}
+#undo span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#undo button{flex:none;border:0;background:var(--acc);color:var(--acc-ink);border-radius:8px;padding:6px 12px;font-size:13px;font-weight:700;cursor:pointer}
+#undo kbd{font:500 10.5px/1 ui-monospace,monospace;opacity:.7;margin-left:4px}
+
+/* 명령 팔레트(Ctrl+K · ⌘ 버튼): 보는 방식·조건 더하기·개인 기능을 글자(초성 포함)로 찾는다 */
+.ib.cmdk{width:auto;padding:0 8px;gap:4px;display:flex;border-color:var(--line);background:var(--solid);color:var(--fg);font-size:12.5px;font-weight:600}
+.ib.cmdk kbd{font:500 10.5px/1 ui-monospace,monospace;color:var(--mut);border:1px solid var(--line);border-radius:4px;padding:2px 3px;background:var(--chip)}
+.ib.cmdk:hover{border-color:var(--acc)}
+#pal{position:fixed;inset:0;z-index:60;background:rgba(10,12,16,.07);display:flex;justify-content:center;align-items:flex-start;padding-top:min(12vh,110px)}
+#pal[hidden]{display:none}
+.pd-pal{width:min(600px,calc(100% - 32px));max-height:min(70vh,620px);background:var(--solid);color:var(--fg);border:1px solid var(--line);border-radius:16px;box-shadow:0 24px 60px rgba(0,0,0,.28);display:flex;flex-direction:column;overflow:hidden}
+.pd-in{display:flex;align-items:center;gap:10px;padding:12px 12px 12px 16px;border-bottom:1px solid var(--line)}
+.pd-in>svg{width:19px;height:19px;color:var(--mut);flex:none}
+.pd-in input{flex:1;min-width:0;border:0;background:none;outline:none;font-size:16px;color:var(--fg)}
+.pd-esc{flex:none;border:1px solid var(--line);background:var(--chip);border-radius:6px;padding:2px 7px;font-size:11px;color:var(--mut);cursor:pointer}
+.pd-esc kbd{font:inherit}
+.pd-esc span{display:none}
+.pd-crumb{padding:7px 16px;font-size:12px;color:var(--mut);border-bottom:1px solid var(--line)}
+.pd-crumb button{border:0;background:var(--chip);border-radius:6px;padding:2px 8px;font-size:12px;cursor:pointer;color:var(--fg);margin-right:6px}
+.pd-list{flex:1;overflow:auto;padding:6px;overscroll-behavior:contain}
+.pd-gh{font-size:11px;font-weight:600;color:var(--mut);padding:8px 10px 4px;letter-spacing:.02em}
+.pd-it{display:flex;align-items:center;gap:10px;width:100%;border:0;background:none;border-radius:9px;padding:7px 10px;cursor:pointer;text-align:left;color:var(--fg)}
+.pd-it.act{background:var(--chip)}
+.pd-it .ic{flex:none;width:24px;text-align:center;color:var(--mut);font-size:14px}
+.pd-it .tx{flex:1;min-width:0;display:flex;align-items:baseline;gap:8px}
+.pd-it .tx b{font-weight:550;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pd-it .tx small{font-size:12px;color:var(--mut);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pd-it .rt{flex:none;font-size:12px;color:var(--mut);display:flex;align-items:center;gap:2px}
+.pd-it .rt i{display:inline-block;width:8px;height:8px;border-radius:50%}
+.pd-it .rt .ramp{width:60px;height:7px;border-radius:4px}
+.pd-it.on .tx b{color:var(--acc);font-weight:650}
+.pd-it.on .ic{color:var(--acc)}
+.pd-it.dis{opacity:.5}
+.pd-none{padding:22px;text-align:center;color:var(--mut);font-size:13px}
+.pd-foot{display:flex;gap:14px;padding:8px 14px;border-top:1px solid var(--line);font-size:11px;color:var(--mut)}
+.pd-foot kbd{font:500 10.5px/1 ui-monospace,monospace;border:1px solid var(--line);border-radius:4px;padding:2px 4px;background:var(--chip);margin-right:3px}
+
+/* 조건 더하기 메뉴 · 주제 태그 트리: 왼쪽 위 카드 아래(폰은 하단 시트) */
+.fpane{position:fixed;left:16px;top:var(--below,66px);width:340px;max-height:calc(100vh - var(--below,66px) - 70px);z-index:27;background:var(--solid);border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow);display:none;flex-direction:column;overflow:hidden;font-size:13px}
+.fpane.open{display:flex}
+.fpane .fh{flex:none;display:flex;align-items:center;gap:8px;padding:10px 8px 8px 14px;border-bottom:1px solid var(--line)}
+.fpane .fh b{font-size:14px;flex:1}
+.fpane .fx{width:32px;height:32px;border:0;background:none;font-size:20px;line-height:1;color:var(--mut);cursor:pointer;border-radius:8px}
+.fpane .fx:hover{background:var(--chip)}
+.fpane .fb{flex:1;overflow:auto;overscroll-behavior:contain;padding:8px 12px 12px}
+#addmenu .fgrp:first-child{margin-top:0}
+#addmenu .seg button{padding:3px 10px;font-size:12px}
+#addmenu .rng{display:flex;gap:6px;align-items:center;margin-top:6px;font-size:12px;color:var(--mut)}
+#addmenu .rng select{border:1px solid var(--line);background:var(--solid);border-radius:7px;padding:3px 4px;font-size:12px}
+#addmenu .fhint{font-size:11px;color:var(--mut);margin-top:3px}
+#tags .tq{width:100%;border:1px solid var(--line);background:var(--solid);border-radius:8px;padding:6px 9px;font-size:13px;outline:none;margin-bottom:6px}
+#tags .tq:focus{border-color:var(--acc)}
+#tags .tr{display:flex;align-items:center;gap:2px;min-height:30px;padding-left:calc(var(--d,0) * 16px);border-radius:7px}
+#tags .tr:hover{background:var(--chip)}
+#tags .tr.on{box-shadow:inset 3px 0 0 var(--acc)}
+#tags .tr.on .tn{color:var(--acc);font-weight:700}
+#tags .tw{flex:none;width:24px;height:24px;border:0;background:none;color:var(--mut);cursor:pointer;border-radius:6px;font-size:11px}
+#tags .tw.leaf{visibility:hidden}
+#tags .tn{flex:1;min-width:0;border:0;background:none;text-align:left;cursor:pointer;padding:4px 2px;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#tags .tc{flex:none;color:var(--mut);font-size:12px;font-variant-numeric:tabular-nums;padding-right:8px}
+#tags .tnone{color:var(--mut);font-size:12px;padding:10px 4px}
+#tags .tfoot{flex:none;display:flex;gap:8px;align-items:center;padding:8px 12px;border-top:1px solid var(--line);font-size:11px;color:var(--mut)}
+#tags .tfoot .btn{margin-left:auto}
+
+/* 정보 패널·검색 결과의 주제 태그: 경로 마디마다 누르면 그 태그 버블 */
+.ttag{display:inline-flex;align-items:center;font-size:12px;border-radius:999px;background:var(--chip);padding:0 8px;line-height:22px;white-space:nowrap}
+.ttag button{border:0;background:none;padding:0 1px;font-size:12px;cursor:pointer;color:inherit}
+.ttag button:hover{color:var(--acc);text-decoration:underline}
+.ttag i{font-style:normal;color:var(--mut);padding:0 1px}
+.ttag button.root{color:var(--mut)}
+#panel .chip.gb{border:0;cursor:pointer;font:inherit;font-size:12px}
+#panel .chip.gb:hover{color:var(--acc)}
+#panel h3 .h3b{float:right;border:1px solid var(--line);background:var(--solid);border-radius:999px;font-size:11px;padding:0 8px;line-height:20px;cursor:pointer;color:var(--fg);font-weight:500}
+#panel h3 .h3b:hover{border-color:var(--acc);color:var(--acc)}
+
+/* 터치: 점을 누르면 뜨는 작은 카드(곡 이름 + ♥·재생·상세) */
+#card{position:fixed;left:50%;bottom:calc(12px + env(safe-area-inset-bottom));transform:translateX(-50%);z-index:28;width:min(520px,calc(100% - 20px));display:none;align-items:center;gap:8px;padding:6px 6px 6px 14px;background:var(--solid);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow)}
+#card.open{display:flex}
+#card .cm{flex:1;min-width:0}
+#card .cm b,#card .cm small{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#card .cm b{font-weight:650;line-height:1.35}
+#card .cm small{color:var(--mut);font-size:12px}
+#card .cb{flex:none;min-width:44px;min-height:44px;padding:0 12px;border:1px solid var(--line);background:var(--solid);border-radius:10px;display:grid;place-items:center;font-size:13px;font-weight:600;text-decoration:none;color:var(--fg);cursor:pointer}
+#card .cb.pri{background:var(--acc);border-color:var(--acc);color:var(--acc-ink)}
+#card .cb.bk{font-size:17px;padding:0 10px}
+#card .cb[hidden]{display:none}
+#card .cb[aria-disabled="true"]{opacity:.4;pointer-events:none}
+#results .semon{display:block;width:calc(100% - 8px);margin:4px;min-height:44px;border:1px dashed var(--line);background:var(--chip);border-radius:9px;font-size:13px;cursor:pointer;color:var(--fg)}
+
+/* 터치 기기: 누르는 곳 44px, 범례 접기, 노치 안전 영역 */
+@media (pointer:coarse){
+  button,a,select,input{touch-action:manipulation}
+  #results .slist,#panel,#more,#legend{touch-action:pan-y}
+  .ib{width:44px;height:44px}
+  #q{min-height:40px;font-size:16px}  /* 16px 미만이면 iOS 가 입력할 때 확대한다 */
+  .btn{min-height:44px;padding:5px 14px}
+  .seg button,.chipbtn{min-height:38px;padding:4px 13px}
+  .seg.big button{min-height:44px}
+  .seg.sizes button{min-height:40px}
+  select.sel{min-height:44px}
+  #edge{width:50px;height:50px}
+  .fgrp .seg button{min-height:36px;padding:2px 11px}
+  .axes select{min-height:40px}
+  #panel .x{width:44px;height:44px;top:4px;right:4px}
+  #panel li.nb{min-height:44px}
+  #panel .nvb{width:40px;height:40px}
+  #results .rc{min-height:44px}
+  #results .rcx{width:36px;height:36px}
+  #results .sbar{min-height:44px}
+  #results .rd{padding:6px 10px}
+  #ctl{left:max(16px,env(safe-area-inset-left))}
+  #panel{right:max(16px,env(safe-area-inset-right))}
+  #chips .bub{line-height:34px}
+  #chips .bub .bx{width:32px;height:32px}
+  #chips .clr,#chips .add{line-height:34px}
+  #tags .tr{min-height:40px}
+  #tags .tw{width:36px;height:36px}
+  #legend .lt{display:inline-flex;align-items:center;min-height:36px;border:0;background:none;padding:0 4px;color:var(--mut);font-size:12px;cursor:pointer}
+  #legend.fold{padding:0 6px}
+  #legend.fold .lb{display:none}
+}
+
+/* 폰: 컨트롤·정보 패널은 하단 시트 */
+@media (max-width:720px){
+  #ctl{left:calc(10px + env(safe-area-inset-left));right:calc(10px + env(safe-area-inset-right));top:calc(10px + env(safe-area-inset-top));width:auto;backdrop-filter:none;-webkit-backdrop-filter:none;background:var(--solid)}  /* 블러는 fixed 자식(#more 시트)의 기준을 바꾼다 */
+  #ctl #more{position:fixed;left:0;right:0;bottom:0;max-height:62vh;background:var(--solid);border:1px solid var(--line);border-radius:16px 16px 0 0;box-shadow:var(--shadow);padding:10px 16px calc(16px + env(safe-area-inset-bottom));z-index:35}
+  #ctl #more::before{content:"";display:block;width:36px;height:4px;border-radius:2px;background:var(--line);margin:0 auto 10px}
+  #top .brand{display:none}
+  #top{justify-content:flex-end}
+  #results{left:10px;width:calc(100% - 20px);top:calc(62px + env(safe-area-inset-top));max-height:none}
+  #results:not(.fold){top:auto;left:0;right:0;bottom:0;width:auto;max-height:60vh;border-radius:16px 16px 0 0;border-bottom:0;z-index:36;padding-bottom:env(safe-area-inset-bottom)}
+  #results:not(.fold)::before{content:"";display:block;flex:none;width:36px;height:4px;border-radius:2px;background:var(--line);margin:8px auto 0}
+  body.sopen #legend,body.sopen #status{display:none}
+  #panel{top:auto;left:0;right:0;bottom:0;width:auto;height:56vh;border-radius:16px 16px 0 0;border-bottom:0;transform:translateY(105%);padding-top:6px}
+  #panel.full{height:calc(100vh - 70px)}
+  #panel .grab{display:block;width:100%;height:22px;border:0;background:none;cursor:pointer;padding:0}
+  #panel .grab::before{content:"";display:block;width:36px;height:4px;border-radius:2px;background:var(--line);margin:8px auto}
+  #panel .drive{margin-top:12px}
+  #legend{left:10px;bottom:calc(10px + env(safe-area-inset-bottom));max-width:calc(100% - 20px);max-height:18vh}
+  body.sheet #legend,body.sheet #status{display:none}
+  #status{right:10px;bottom:auto;top:calc(62px + env(safe-area-inset-top))}
+  #panel{padding-bottom:calc(24px + env(safe-area-inset-bottom))}
+  /* 키보드가 떠 있으면 결과를 아래 시트 대신 검색창 바로 밑에, 보이는 높이만큼 */
+  body.kb #ctl{top:calc(var(--vvt,0px) + 10px)}
+  /* 검색창·버블 줄 아래(--below) */
+  body.kb #results:not(.fold){top:calc(var(--vvt,0px) + var(--below,62px));bottom:auto;left:10px;right:10px;max-height:calc(var(--vvh,100vh) - 70px);border-radius:12px;border-bottom:1px solid var(--line);padding-bottom:0}
+  body.kb #results:not(.fold)::before{display:none}
+  /* 팔레트도 키보드가 떠 있으면 아래 시트 대신 보이는 영역 위쪽에 */
+  body.pkb #pal{align-items:flex-start;padding-top:calc(var(--vvt,0px) + 10px)}
+  body.pkb .pd-pal{width:calc(100% - 20px);max-height:calc(var(--vvh,100vh) - 20px);border-radius:12px;border-bottom:1px solid var(--line);padding-bottom:0}
+  body.pkb .pd-pal::before{display:none}
+  /* 조건 버블: 검색 카드 안 둘째 줄(가로 스크롤). 아래 시트·카드에 가리지 않게 늘 위에 */
+  #chips{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;overscroll-behavior:contain;padding-right:28px;mask-image:linear-gradient(90deg,#000 calc(100% - 24px),transparent);-webkit-mask-image:linear-gradient(90deg,#000 calc(100% - 24px),transparent)}  /* 오른쪽 끝 페이드 = 더 있음 */
+  #chips::-webkit-scrollbar{display:none}
+  #chips .bub,#chips .clr,#chips .cnt,#chips .add{flex:none}
+  #chips .add{order:-1}
+  #chips:not(:has(.bub)) .cnt.all{display:none}
+  #results{top:var(--below,62px)}
+  #status{top:var(--below,62px)}
+  body:has(#results.on) #status,body:has(#chips .bub) #status{display:none}  /* 곡 수는 결과 바·버블 줄에 이미 있다 */
+  .ib.cmdk span,.ib.cmdk kbd{display:none}
+  .ib.cmdk{width:44px;justify-content:center;padding:0}
+  #pal{padding-top:0;align-items:flex-end;background:rgba(10,12,16,.18)}
+  .pd-pal{width:100%;max-height:min(78vh,calc(var(--vvh,100vh) - 40px));border-radius:16px 16px 0 0;border-bottom:0;padding-bottom:env(safe-area-inset-bottom)}
+  .pd-pal::before{content:"";display:block;flex:none;width:36px;height:4px;border-radius:2px;background:var(--line);margin:8px auto 0}
+  .pd-foot{display:none}
+  #results .sfold{font-size:0}  /* "접기/펼치기" 글자는 빼고 ⌃ 만 */
+  #results .sfold i{font-size:14px}
+  .hint .pc{display:none}
+  .hint .ph{display:inline}
+  .pd-esc kbd{display:none}
+  .pd-esc span{display:inline}
+  .pd-esc{min-width:44px;min-height:40px;font-size:13px;padding:0 10px;border-radius:9px}
+  .pd-it{min-height:48px}
+  .pd-it .tx{flex-direction:column;gap:0;align-items:flex-start}
+  .pd-it .tx b{max-width:100%}
+  #undo{bottom:calc(84px + env(safe-area-inset-bottom))}
+  .fpane{left:0;right:0;top:auto;bottom:0;width:auto;max-height:66vh;border-radius:16px 16px 0 0;border-bottom:0;z-index:37;padding-bottom:env(safe-area-inset-bottom)}
+  .fpane::before{content:"";display:block;flex:none;width:36px;height:4px;border-radius:2px;background:var(--line);margin:8px auto 0}
+}
+/* ---------------- 음악 전용 ---------------- */
+.fpane .fb{overflow-x:hidden}
+#addmenu .seg button{max-width:100%;overflow:hidden;text-overflow:ellipsis}
+/* 정보 패널 머리: 썸네일(누르면 재생)·재생/유튜브 버튼 */
+#panel .pthumb{position:relative;display:block;width:100%;aspect-ratio:16/9;border:0;padding:0;margin:4px 0 10px;border-radius:10px;overflow:hidden;background:var(--chip);cursor:pointer}
+#panel .pthumb img{width:100%;height:100%;object-fit:cover;display:block}
+#panel .pthumb i{position:absolute;left:10px;bottom:10px;font-style:normal;font-size:12px;font-weight:700;padding:3px 9px;border-radius:999px;background:rgba(0,0,0,.6);color:#fff}
+#panel .pthumb i.on{background:var(--play);color:#1a1206}
+#panel .pbtns{display:flex;gap:8px;margin:0 0 14px}
+#panel .pbtns .pp{flex:1;border:0;background:var(--acc);color:var(--acc-ink);font-weight:650;padding:10px;border-radius:10px;cursor:pointer}
+#panel .pbtns .pp.on{background:var(--play);color:#1a1206}
+#panel .pbtns .yt{flex:none;display:grid;place-items:center;padding:0 14px;border:1px solid var(--line);border-radius:10px;text-decoration:none;color:var(--fg);font-size:13px}
+#panel .pbtns .yt:hover{border-color:var(--acc);color:var(--acc)}
+#panel .chip.cb2{border:0;cursor:pointer;font:inherit;font-size:12px;color:inherit}
+#panel .chip.cb2:hover{color:var(--acc)}
+#panel .chip.snd{background:color-mix(in srgb,#8a6cff 14%,var(--chip))}
+#panel .chip.pl{background:color-mix(in srgb,var(--play) 14%,var(--chip))}
+#panel .score small{grid-column:2}
+#panel dl.meta{display:grid;grid-template-columns:56px 1fr;gap:3px 10px;font-size:13px;margin:10px 0}
+#panel dl.meta dt{color:var(--mut)}
+#panel dl.meta dd{margin:0;min-width:0;overflow-wrap:anywhere}
+#panel li.nb small{color:var(--mut);margin-left:6px;font-size:12px}
+#panel li.nb.now span{color:var(--play);font-weight:600}
+#results .rr.snd .rk{font-size:10px;letter-spacing:.02em;color:#8a6cff}
+#results .rwhy{display:flex;flex-wrap:wrap;gap:4px;margin-top:4px}
+#results .rwhy span{font-size:11px;border-radius:999px;padding:0 7px;line-height:20px;background:color-mix(in srgb,#8a6cff 14%,var(--chip));color:var(--fg)}
+#results .rtg button{border:0;background:var(--chip);border-radius:999px;padding:0 8px;font-size:11px;line-height:20px;cursor:pointer;color:var(--fg)}
+#results .rtg button:hover{color:var(--acc)}
+#tags .tsec{font-size:11px;font-weight:700;color:var(--mut);padding:10px 4px 4px;letter-spacing:.02em}
+#card .cb.fav{font-size:18px;padding:0 10px;color:var(--mut)}
+#card .cb.fav.on{color:var(--fav)}
+#card .cb.play.on{background:var(--play);border-color:var(--play);color:#1a1206}
+
+/* 미니 플레이어: 재생 중이면 화면 아래 가운데(정보 패널을 뺀 영역), 폰은 하단 카드 위 두 줄 */
+#mini{position:fixed;z-index:29;left:50%;bottom:calc(16px + env(safe-area-inset-bottom));transform:translateX(-50%);width:min(580px,calc(100% - 32px));display:flex;align-items:center;gap:10px;padding:6px 8px 6px 6px;background:var(--solid);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow)}
+#mini[hidden]{display:none}
+#mini .mv{flex:none;width:112px;aspect-ratio:16/9;border-radius:8px;overflow:hidden;background:#000}
+#mini .mv iframe,#mini .mv>div{width:100%;height:100%;border:0;display:block}
+#mini .mt{flex:1;min-width:0;border:0;background:none;text-align:left;cursor:pointer;padding:3px 6px;border-radius:8px;color:var(--fg)}
+#mini .mt:hover{background:var(--chip)}
+#mini .mt b,#mini .mt small{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#mini .mt b{font-weight:650}
+#mini .mt small{color:var(--mut);font-size:12px}
+#mini .mt em{font-style:normal;color:var(--play)}
+#mini .mc{flex:none;display:flex;align-items:center;gap:2px}
+#mini .mc button{width:38px;height:38px;border:0;background:none;border-radius:10px;cursor:pointer;color:var(--fg);display:grid;place-items:center;padding:0}
+#mini .mc button:hover:not(:disabled){background:var(--chip)}
+#mini .mc button:disabled{opacity:.35;cursor:default}
+#mini .mc button svg{width:19px;height:19px}
+#mini .mc .pp{background:var(--acc);color:var(--acc-ink);border-radius:50%}
+#mini .mc .pp:hover:not(:disabled){background:var(--acc);filter:brightness(1.08)}
+#mini .mc [data-m="auto"]{color:var(--mut)}
+#mini .mc [data-m="auto"].on{color:var(--acc);background:var(--chip)}
+body.popen #mini{left:calc((100% - 412px) / 2)}
+body.playing #legend{bottom:calc(16px + 84px)}
+body.playing #status{bottom:calc(16px + 84px)}
+body.playing #undo{bottom:calc(20px + 84px + env(safe-area-inset-bottom))}
+@media (max-width:720px){
+  #mini{left:10px;right:10px;width:auto;transform:none;bottom:calc(10px + env(safe-area-inset-bottom));flex-wrap:wrap;gap:4px 8px;padding:6px}
+  #mini .mv{width:84px}
+  #mini .mc{flex:1 1 100%;justify-content:space-around}
+  #mini .mc button{width:44px;height:44px}
+  body.popen #mini{left:10px;bottom:calc(56vh + 8px)}
+  body.cardup #mini{bottom:calc(82px + env(safe-area-inset-bottom))}
+  body.playing #legend{bottom:calc(10px + 118px + env(safe-area-inset-bottom))}
+  body.playing #undo{bottom:calc(84px + 118px + env(safe-area-inset-bottom))}
+}
+</style>
+</head>
+<body>
+<div id="stage"></div>
+<div id="ctl">
+  <div id="top">
+    <span class="brand">음악 지도</span>
+    <input id="q" type="search" placeholder="곡·아티스트·분위기 검색 (예: 비 오는 날 재즈)" autocomplete="off" enterkeyhint="search">
+    <button class="ib tagb" id="tagbtn" type="button" title="분위기·소리 태그" aria-label="분위기·소리 태그">#</button>
+    <span id="user-slot"></span>
+    <button class="ib cmdk" id="cmdk" type="button" title="설정·명령 (Ctrl+K)" aria-label="설정·명령" aria-haspopup="dialog"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6a3 3 0 1 0-3 3h12a3 3 0 1 0-3-3v12a3 3 0 1 0 3-3H6a3 3 0 1 0 3 3V6Z"/></svg><span>설정</span><kbd>Ctrl K</kbd></button>
+    <button id="toggle" type="button" hidden aria-label="내 기록"></button>
+  </div>
+  <div id="chips" aria-label="조건"></div>
+  <!-- 내 기록(♥·평점·최근 들은 곡·검색 기록): 상단 ♥ 버튼·팔레트로 연다. 보기 설정은 명령 팔레트(#pal) -->
+  <div id="more">
+    <div class="sec" id="user-sec"></div>
+    <div class="hint"><span class="pc">드래그 회전 · 휠 확대 · 오른쪽 드래그 이동 · 점 클릭 = 선택 · Ctrl+K = 설정·명령 · Space = 재생/일시정지 · N = 다음 곡 · 조건은 버블 ✕ 로만 풀린다</span><span class="ph">한 손가락 회전 · 두 손가락 확대·이동 · 점 누르기 = 선택 · ⌘ = 설정·명령 · 조건은 버블 ✕ 로만 풀린다</span></div>
+  </div>
+</div>
+<div id="pal" hidden><div class="pd-pal" role="dialog" aria-label="설정·명령">
+  <div class="pd-in"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.5 4.5"/></svg><input type="text" placeholder="무엇을 바꿀까요? 예: 색 시대 · 재즈 · 즐겨찾기 · ㅅㄹ" autocomplete="off" spellcheck="false" enterkeyhint="go"><button type="button" class="pd-esc"><kbd>Esc</kbd><span>닫기</span></button></div>
+  <div class="pd-crumb" hidden></div>
+  <div class="pd-list" role="listbox"></div>
+  <div class="pd-foot"><span><kbd>↑</kbd><kbd>↓</kbd> 미리 보기</span><span><kbd>Enter</kbd> 고르기</span><span><kbd>Esc</kbd> 되돌리고 닫기(조건은 그대로)</span></div>
+</div></div>
+<div id="undo" role="status" aria-live="polite"><span></span><button type="button">되돌리기<kbd>Ctrl Z</kbd></button></div>
+<div id="results" role="listbox" aria-label="검색 결과"></div>
+<aside id="addmenu" class="fpane" aria-label="조건 더하기"></aside>
+<aside id="tags" class="fpane" aria-label="분위기·소리 태그"></aside>
+<aside id="panel" aria-label="곡 정보"></aside>
+<div id="card" role="dialog" aria-label="고른 곡"><button class="cb bk" type="button" aria-label="이전 곡" title="이전 곡" hidden>←</button><div class="cm"><b></b><small></small></div><button class="cb fav" type="button" hidden></button><button class="cb pri play" type="button" aria-label="재생">▶</button><button class="cb det" type="button">상세</button></div>
+<div id="mini" hidden role="region" aria-label="미니 플레이어"></div>
+<div id="tip"></div>
+<div id="legend"></div>
+<div id="status"></div>
+<button id="edge" type="button" aria-label="선택한 곡으로 이동" title="선택한 곡으로 이동" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5M5 12l7-7 7 7"/></svg></button>
+<script>
+const DATA = __DATA__;
+const STATIC = __STATIC__;
+window.P = DATA.points;
+</script>
+<script type="importmap">
+{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"}}
+</script>
+<script type="module">
+import * as THREE from "three";
+import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+
+THREE.ColorManagement.enabled = false;  // 팔레트 색을 그대로
+const D = DATA, P = D.points, n = P.length, R = 100;
+const $ = id => document.getElementById(id);
+const store = window.store || { get: (k, f = null) => f, set() {}, on() {}, off() {} };  // search.js 가 먼저 정의한다
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const ytUrl = id => `https://www.youtube.com/watch?v=${encodeURIComponent(id)}`;
+const thumbUrl = id => `https://i.ytimg.com/vi/${encodeURIComponent(id)}/hqdefault.jpg`;
+const isTouch = matchMedia("(pointer: coarse)").matches;
+const narrow = () => innerWidth <= 720;
+const mobile = () => isTouch || innerWidth <= 768;  // 점을 누르면 카드부터, 자동 회전 끔, 뒤로가기로 시트 닫기
+let dirty = true;  // 다시 그릴 게 있음(모바일은 화면이 멈춰 있으면 그리지 않는다)
+const css = name => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)");
+const fract = x => x - Math.floor(x);
+const jit = (i, k) => fract(Math.sin(i * 12.9898 + k * 78.233) * 43758.5453) * 2 - 1;  // 점마다 고정된 −1~1
+const U = () => window.musicUser || null;  // user.js(♥·내 평점)
+const player = () => window.musicPlayer || null;  // player.js(미니 플레이어)
+const VID = /^[A-Za-z0-9_-]{6,20}$/;
+
+// ---------------------------------------------------------------- 변수(축·색·크기 후보)
+const pct = v => `${(v * 100).toFixed(1)}%`;
+const PV = D.pca.variance;
+const decadeOf = p => p.e || (p.y ? `${Math.floor(p.y / 10) * 10}년대` : "");
+const SC = key => p => (p.s && p.s[key]) || null;  // 카드 점수 1~5(에너지·밝기·어쿠스틱·보컬)
+// 지형 좌표는 세 축을 같은 배율로 맞춘다(축마다 따로 늘리면 모양이 찌그러진다).
+// 서재 지도 좌표(UMAP, 가장 먼 점 반경 100)는 중앙값 중심에서 95% 지점 반경이 0.95R 이다. 곡 지형은 지워진 영상 74곡이 멀리 섬을 이뤄
+// 가장 먼 점으로 맞추면 나머지가 쪼그라들므로 같은 95% 지점을 0.95R 로 맞추고(그러면 반경 분포가 서재 지도와 같아진다),
+// 그 밖으로 튄 점은 연속 변수처럼 반경 1.08R 에 붙여 첫 화면 밖으로 나가지 않게 한다.
+// UMAP 축 방향은 임의다. 서재 지도처럼 가장 넓게 퍼진 축을 가로, 다음을 깊이, 가장 얇은 축을 높이에 둔다(곡 지형은 한 축으로 길어
+// 그 축이 깊이로 가면 카메라 쪽으로 뻗어 화면에 절반 크기로 보인다). 축을 맞바꾸면 거울상이 되므로 그때는 깊이 축 부호를 뒤집는다.
+const fitBox = get => {
+  const xs = P.map(get).filter(Boolean), med = a => a.sort((x, y) => x - y)[a.length >> 1];
+  const c = [0, 1, 2].map(k => med(xs.map(x => x[k])));
+  const r = xs.map(x => Math.hypot(x[0] - c[0], x[1] - c[1], x[2] - c[2])), r95 = Math.max(1e-6, r.slice().sort((x, y) => x - y)[Math.floor((r.length - 1) * 0.95)] || 1);
+  const core = xs.filter((_, i) => r[i] <= r95), sd = [0, 1, 2].map(k => core.reduce((s, x) => s + (x[k] - c[k]) ** 2, 0));
+  const o = [0, 1, 2].sort((a, b) => sd[b] - sd[a]), odd = (o[0] > o[1]) + (o[0] > o[2]) + (o[1] > o[2]) & 1;
+  return { c, s: 0.95 / r95, o, sg: [1, odd ? -1 : 1, 1] };
+};
+const fitAt = (B, x, k) => { const d = Math.hypot(x[0] - B.c[0], x[1] - B.c[1], x[2] - B.c[2]) * B.s, j = B.o[k]; return B.sg[k] * (x[j] - B.c[j]) * B.s * (d > 1.08 ? 1.08 / d : 1); };
+const XB = fitBox(p => p.x), AB = fitBox(p => p.ax);
+const VARS = {
+  u1: { label: "지형 ①", group: "지형", get: p => fitAt(XB, p.x, 0), raw: true, terrain: true },
+  u2: { label: "지형 ②", group: "지형", get: p => fitAt(XB, p.x, 1), raw: true, terrain: true },
+  u3: { label: "지형 ③", group: "지형", get: p => fitAt(XB, p.x, 2), raw: true, terrain: true },
+  a1: { label: "소리 지형 ①", group: "소리", get: p => p.ax ? fitAt(AB, p.ax, 0) : null, raw: true, terrain: true, sound: true },
+  a2: { label: "소리 지형 ②", group: "소리", get: p => p.ax ? fitAt(AB, p.ax, 1) : null, raw: true, terrain: true, sound: true },
+  a3: { label: "소리 지형 ③", group: "소리", get: p => p.ax ? fitAt(AB, p.ax, 2) : null, raw: true, terrain: true, sound: true },
+  pc1: { label: `PCA 1 (${pct(PV[0])})`, short: "PCA 1", group: "PCA", get: p => p.pc[0], sym: true },
+  pc2: { label: `PCA 2 (${pct(PV[1])})`, short: "PCA 2", group: "PCA", get: p => p.pc[1], sym: true },
+  pc3: { label: `PCA 3 (${pct(PV[2])})`, short: "PCA 3", group: "PCA", get: p => p.pc[2], sym: true },
+  y: { label: "연도", group: "곡 정보", get: p => p.y || null, q: true, fmt: v => String(Math.round(v)) },
+  en: { label: "에너지", group: "점수", get: SC("energy"), step: true, ends: ["잔잔", "격렬"] },
+  va: { label: "밝기", group: "점수", get: SC("valence"), step: true, ends: ["어두움", "밝음"] },
+  ac: { label: "어쿠스틱", group: "점수", get: SC("acoustic"), step: true, ends: ["전자", "어쿠스틱"] },
+  vo: { label: "보컬", group: "점수", get: SC("vocal"), step: true, ends: ["연주곡", "보컬"] },
+  rt: { label: "내 평점", group: "내 기록", get: p => (U() && U().rating(p.id)) || null, step: true, ends: ["1", "5"], dyn: true },
+  none: { label: "없음 (평평하게)", short: "", group: "", get: () => 0, raw: true },
+};
+const quant = (s, q) => s[Math.min(s.length - 1, Math.max(0, Math.round(q * (s.length - 1))))];
+function computeVar(key, v) {  // 변수 → 점마다 −1~1(값 없으면 null)
+  const raw = P.map(v.get), t = raw.map(x => x == null ? null : v.log ? Math.log(x) : x);
+  const have = t.filter(x => x != null).sort((a, b) => a - b);
+  v.missing = raw.length - have.length;
+  if (v.raw) v.norm = t;
+  else if (v.sym) { const m = Math.max(...have.map(Math.abs)) || 1; v.norm = t.map(x => x == null ? null : x / m); }
+  else if (v.step) { const g = 2 / ((v.hi || 5) - 1); v.norm = t.map((x, i) => x == null ? null : -1 + (x - 1) * g + jit(i, 7) * g * 0.4); }  // 정수 값: 층(간격 g) 안에서 고정 시드로 흩뿌림
+  else {
+    const lo = quant(have, 0.02), hi = quant(have, 0.98);
+    v.norm = t.map(x => x == null ? null : Math.max(-1.08, Math.min(1.08, 2 * (x - lo) / ((hi - lo) || 1) - 1)));
+    const back = x => v.log ? Math.exp(x) : x;
+    v.ends = [v.fmt(back(lo)), v.fmt(back(hi))];
+  }
+  v.key = key;
+}
+for (const [key, v] of Object.entries(VARS)) computeVar(key, v);
+const AXIS_KEYS = ["u1", "u2", "u3", "a1", "a2", "a3", "pc1", "pc2", "pc3", "y", "en", "va", "ac", "vo", "rt", "none"];
+
+const PALETTE = ["#4e79a7","#f28e2b","#e15759","#76b7b2","#59a14f","#edc948","#b07aa1","#ff9da7","#9c755f","#bcbd22","#d37295","#8cd17d","#a0cbe8","#ffbe7d"];
+const many = k => Array.from({ length: k }, (_, i) => `hsl(${Math.round(i * 137.508) % 360} 58% ${i % 2 ? 46 : 58}%)`);
+// 범주 색: 값 이름을 곡 수 많은 순으로(첫 색이 큰 무리)
+function catOf(label, get, opts = {}) {
+  const cnt = new Map();
+  P.forEach(p => { const v = get(p) || "모름"; cnt.set(v, (cnt.get(v) || 0) + 1); });
+  const names = [...cnt.entries()].sort((a, b) => b[1] - a[1]).map(x => x[0]);
+  const idx = new Map(names.map((nm, k) => [nm, k]));
+  return { label, names, get: p => idx.get(get(p) || "모름") ?? 0, many: opts.many, val: get };
+}
+const COLORS = {
+  g: catOf("장르", p => p.g || "기타"),
+  sg: catOf("하위장르", p => p.sg, { many: true }),
+  e: catOf("시대", decadeOf, { many: true }),
+  pl: catOf("재생목록 (첫 번째)", p => (p.pl && p.pl[0]) || "재생목록 없음", { many: true }),
+  pr: { label: "의사표시", names: ["좋아요", "옛 기록", "AI 추가"], get: p => p.l ? 0 : p.pr === "ai_added" ? 2 : 1, pal: ["#e15759", "#8b93a1", "#4e79a7"] },
+  k1: { label: "큰 군집", names: D.coarse.map(c => c.name), get: p => p.k1 },
+  k2: { label: "세부 군집", names: D.fine.map(c => c.name), get: p => p.k2, many: true },
+  fav: { label: "즐겨찾기", names: ["♥ 즐겨찾기", "그 외"], get: p => U() && U().fav(p.id) ? 0 : 1, pal: ["#ff5d8f", "#8b93a1"], user: true },
+};
+for (const c of Object.values(COLORS)) c.pal = c.pal || (c.many ? many(c.names.length) : PALETTE);
+const COLOR_NUM = ["en", "va", "ac", "vo", "y", "rt"];
+const RAMP = ["#3b2c84", "#2c6e9e", "#22a08a", "#8cc63f", "#f5d22c"];
+const rampAt = t => { const x = Math.max(0, Math.min(1, t)) * (RAMP.length - 1), a = Math.floor(x), b = Math.min(a + 1, RAMP.length - 1); return new THREE.Color(RAMP[a]).lerp(new THREE.Color(RAMP[b]), x - a); };
+const SIZE_KEYS = ["none", "l", "fav", "rt", "en"];
+const GENRES = COLORS.g.names;
+const counted = list => { const c = new Map(); P.forEach(p => list(p).forEach(v => v && c.set(v, (c.get(v) || 0) + 1))); return [...c.entries()].sort((a, b) => b[1] - a[1]); };
+const MOODS = counted(p => p.m || []), SOUNDS = counted(p => p.st || []), PLAYLISTS = counted(p => p.pl || []);
+const SUBGENRES = counted(p => [p.sg]), ERAS = counted(p => [decadeOf(p)]);
+
+const PRESETS = {
+  terrain: { label: "지형 (UMAP)", x: "u1", y: "u2", z: "u3", color: "g", size: "none" },
+  era: { label: "연대 × 에너지 × 밝기", x: "y", y: "va", z: "en", color: "g", size: "none" },
+  sound: { label: "소리 지형 (오디오)", x: "a1", y: "a2", z: "a3", color: "g", size: "none" },
+};
+
+// ---------------------------------------------------------------- 상태(URL 에 남겨 공유·새로고침에 유지)
+const S = { ...PRESETS.terrain, k: 10 };
+try {
+  const q = new URLSearchParams(location.search);
+  for (const key of ["x", "y", "z"]) if (VARS[q.get(key)]) S[key] = q.get(key);
+  if (COLORS[q.get("color")] || COLOR_NUM.includes(q.get("color"))) S.color = q.get("color");
+  if (SIZE_KEYS.includes(q.get("size"))) S.size = q.get("size");
+} catch (_) { /* 기본값 */ }
+// 소리 지형: 세 축이 모두 오디오 좌표면 오디오가 없는 곡은 조건 밖처럼 유령으로 둔다
+const soundView = () => ["x", "y", "z"].every(k => VARS[S[k]].sound || S[k] === "none");
+// 대기 원근법(깊이감): 기본 켬. 셰이더가 카메라~군집 깊이 범위로 정규화해 먼 점을 배경색 쪽으로 섞는다.
+let depthOn = 1;
+try { depthOn = localStorage.getItem("musicmap-depth") === "0" ? 0 : 1; } catch (_) { /* 저장 불가 */ }
+const DEPTH_K = 0.55;
+const depthU = {
+  uDepthOn: { value: depthOn }, uDepthK: { value: DEPTH_K },
+  uNear: { value: 0 }, uFar: { value: 1 }, uBg: { value: new THREE.Color(css("--bg")) },
+  uMaxPx: { value: 28 },  // 아주 가까이 확대해도 점이 화면을 덮지 않게 화면 크기 상한(px, resize 에서 화소 비율 반영)
+};
+// URL: ?x=&y=&z=&color=&size= (보기) · #조건&v=<videoId>(고른 곡, 커넥터가 주는 곡 링크)
+function hashNow() {
+  const h = chipsToHash(), v = selected >= 0 ? "v=" + encodeURIComponent(P[selected].id) : "";
+  return [h, v].filter(Boolean).join("&");
+}
+function saveURL() {
+  try {
+    const q = new URLSearchParams();
+    for (const key of ["x", "y", "z", "color", "size"]) if (S[key] !== PRESETS.terrain[key]) q.set(key, S[key]);
+    const h = hashNow();
+    history.replaceState(history.state, "", location.pathname + (q.toString() ? "?" + q : "") + (h ? "#" + h : ""));
+  } catch (_) { /* 미리보기 등 */ }
+}
+// #v=<videoId> 로 열면 그 곡을 고른다(커넥터가 주는 링크). 선택이 바뀌면 해시도 바꾼다.
+function parseVideoHash(hash) {
+  try {
+    const v = new URLSearchParams(String(hash || "").replace(/^#/, "")).get("v");
+    return v && /^[A-Za-z0-9_-]{6,20}$/.test(v) ? v : null;
+  } catch (_) { return null; }
+}
+
+// ---------------------------------------------------------------- 조건 버블(필터 칩) 상태
+// 바닥 층: 조건 밖 곡은 아주 옅은 유령이 되고 누르기·호버·이름표에서 빠진다. 곡 선택(빛바랜 강조)은 그 위 층이라 서로 끄지 않는다.
+// 종류가 다른 버블끼리 AND. 장르(g)는 한 버블에 값 여럿 = OR('+ 장르'), 분위기(m)·소리 태그(st)는 버블마다 AND. 나머지 종류는 하나씩(새로 고르면 바꿈).
+// 버블은 ✕ 와 '모두 지우기'로만 지운다(ESC·빈 곳·곡·이름표 클릭으로는 안 풀림, 지우면 되돌리기 토스트). 상태는 URL 해시에 남아 링크로 공유된다.
+const RANGES = {  // 범위 버블: [lo, hi]
+  en: { label: "에너지", hi: 5, get: SC("energy"), ends: ["잔잔한 곡", "에너지 보통", "격렬한 곡"] },
+  va: { label: "밝기", hi: 5, get: SC("valence"), ends: ["어두운 곡", "밝기 보통", "밝은 곡"] },
+};
+const ENUMS = {  // 값 하나 버블: [이름표, 값 이름들, 점 → 값 번호]
+  pr: ["의사표시", COLORS.pr.names, COLORS.pr.get],
+  c1: ["큰 군집", D.coarse.map(c => c.name), p => p.k1],
+};
+const STRS = {  // 문자열 값 하나 버블: [이름표, 점 → 값 목록, 버블 앞 기호]
+  sg: ["하위장르", p => [p.sg], ""],
+  e: ["시대", p => [decadeOf(p)], ""],
+  pl: ["재생목록", p => p.pl || [], "▤ "],
+};
+const MULTI = {  // 버블마다 AND: [이름표, 점 → 값 목록, 버블 앞 기호]
+  m: ["분위기", p => p.m || [], "~ "],
+  st: ["소리 태그", p => p.st || [], "♪ "],
+};
+let chips = [];  // [{k, v}] 더한 순서
+let favSet = new Set(), rateSet = new Set(), qSet = new Set();  // ♥·내 평점(user.js)·검색 결과(search.js)
+const visible = new Uint8Array(n).fill(1);  // 곡 점이 조건 안인가
+const rangeText = (k, [lo, hi]) => {
+  const r = RANGES[k];
+  if (lo === 1 && hi === 2) return r.ends[0];
+  if (lo === 3 && hi === 3) return r.ends[1];
+  if (lo === 4 && hi === 5) return r.ends[2];
+  return `${r.label} ${lo === hi ? lo : hi === r.hi ? `${lo}+` : lo === 1 ? `~${hi}` : `${lo}–${hi}`}`;
+};
+const pointOf = new Map(P.map((p, i) => [p.id, i]));
+const nbAnchor = c => pointOf.has(c.v) ? pointOf.get(c.v) : -1;
+function chipText(c) {
+  if (c.k === "g") return c.v.map(g => GENRES[g]).join(" 또는 ");
+  if (MULTI[c.k]) return MULTI[c.k][2] + c.v;
+  if (STRS[c.k]) return STRS[c.k][2] + c.v;
+  if (RANGES[c.k]) return rangeText(c.k, c.v);
+  if (ENUMS[c.k]) return (c.k === "c1" ? "◎ " : "") + ENUMS[c.k][1][c.v];
+  if (c.k === "fav") return "♥ 즐겨찾기만";
+  if (c.k === "r") return `★ 내 평점 ${c.v}${c.v < 5 ? "+" : ""}`;
+  if (c.k === "q") return `🔍 ${c.v}`;
+  if (c.k === "nb" || c.k === "na") { const a = nbAnchor(c); return `${c.k === "na" ? "소리 이웃" : "이웃"}: ${a >= 0 ? P[a].t : "?"}`; }
+  return c.k;
+}
+const nbList = (i, k) => k === "na" ? (P[i].an || []) : P[i].nn;
+function chipTest(c) {  // (점 p, 곡 번호 b) → 조건 안인가
+  if (c.k === "g") return p => c.v.includes(COLORS.g.get(p));
+  if (MULTI[c.k]) { const get = MULTI[c.k][1]; return p => get(p).includes(c.v); }
+  if (STRS[c.k]) { const get = STRS[c.k][1]; return p => get(p).includes(c.v); }
+  if (RANGES[c.k]) { const [lo, hi] = c.v, get = RANGES[c.k].get; return p => { const x = get(p); return x != null && x >= lo && x <= hi; }; }
+  if (ENUMS[c.k]) { const get = ENUMS[c.k][2]; return p => get(p) === c.v; }
+  if (c.k === "fav") return (p, b) => favSet.has(b);
+  if (c.k === "r") return (p, b) => rateSet.has(b);
+  if (c.k === "q") return (p, b) => qSet.has(b);
+  if (c.k === "nb" || c.k === "na") {
+    const a = nbAnchor(c), set = new Set(a >= 0 ? [a, ...nbList(a, c.k).slice(0, S.k)] : []);
+    return (p, b) => set.has(b);
+  }
+  return () => true;
+}
+function applyFilters() {
+  const tests = chips.map(chipTest), sv = soundView();
+  for (let i = 0; i < n; i++) visible[i] = (!sv || P[i].ax) && tests.every(t => t(P[i], i)) ? 1 : 0;
+}
+// URL 해시: #g=재즈|클래식&sg=하드 밥&e=1950년대&m=차분함&st=스윙&pl=jazz2&pr=좋아요&c1=재즈&en=4-5&va=1-2&fav=1&r=4&q=검색어&nb=videoId&na=videoId (순서 = 버블 순서)
+function chipsToHash() {
+  const q = new URLSearchParams();
+  for (const c of chips) {
+    if (c.k === "g") q.append("g", c.v.map(g => GENRES[g]).join("|"));
+    else if (RANGES[c.k]) q.append(c.k, c.v.join("-"));
+    else if (ENUMS[c.k]) q.append(c.k, ENUMS[c.k][1][c.v]);
+    else q.append(c.k, String(c.v));
+  }
+  return q.toString();
+}
+function chipsFromHash(h) {
+  const out = [];
+  let q;
+  try { q = new URLSearchParams(String(h || "").replace(/^#/, "")); } catch (_) { return out; }
+  for (const [k, v] of q) {
+    if (k === "g") { const gs = v.split("|").map(nm => GENRES.indexOf(nm)).filter(g => g >= 0); if (gs.length) out.push({ k, v: gs }); }
+    else if ((MULTI[k] || STRS[k]) && v) out.push({ k, v });
+    else if (RANGES[k]) { const [lo, hi] = v.split("-").map(Number); if (lo >= 1 && hi >= lo && hi <= RANGES[k].hi) out.push({ k, v: [lo, hi] }); }
+    else if (ENUMS[k]) { const x = ENUMS[k][1].indexOf(v); if (x >= 0) out.push({ k, v: x }); }
+    else if (k === "fav") out.push({ k, v: 1 });
+    else if (k === "r") out.push({ k, v: Math.max(1, Math.min(5, +v || 1)) });
+    else if (k === "q" && v.trim()) out.push({ k, v: v.trim() });
+    else if ((k === "nb" || k === "na") && VID.test(v)) out.push({ k, v });
+  }
+  return out;
+}
+
+// ---------------------------------------------------------------- three.js
+const stage = $("stage");
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+stage.appendChild(renderer.domElement);
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(50, 1, 0.5, 4000);
+// 틀(상자)이 보이면 조금 더 멀리서 본다
+let framed = false;
+// 세로 화면(폰)에선 가로 폭에 맞춰 물러난다. 서재 지도 가로 폭(2~98%)은 143 인데 곡 지형은 긴 축을 가로에 둬 더 넓으니 그 비율만큼 더 물러난다.
+const HOME_W = (() => { const a = VARS.u1.norm.filter(x => x != null).sort((x, y) => x - y); return a.length ? Math.max(1, (quant(a, 0.98) - quant(a, 0.02)) * R / 143) : 1; })();
+const home = () => new THREE.Vector3(80, 60, 250).multiplyScalar(Math.max(1, 0.75 * innerHeight / innerWidth * HOME_W) * (framed ? 1.45 : 1));
+camera.position.copy(home());
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.dampingFactor = 0.08;
+controls.autoRotate = !mobile();  // 폰에선 어지럽고 배터리를 먹는다
+controls.autoRotateSpeed = 0.6;
+controls.zoomToCursor = true;
+controls.minDistance = 5;
+controls.maxDistance = 1000;
+
+const cur = new Float32Array(n * 3), from = new Float32Array(n * 3), dest = new Float32Array(n * 3);
+const col = new Float32Array(n * 3), size = new Float32Array(n), alpha = new Float32Array(n), abase = new Float32Array(n), mark = new Float32Array(n);
+const hlv = new Float32Array(n), rimv = new Float32Array(n);  // 선택 점 숨쉬기 세기 / 이웃 점 얇은 테두리
+const geo = new THREE.BufferGeometry();
+geo.setAttribute("position", new THREE.BufferAttribute(cur, 3));
+geo.setAttribute("color", new THREE.BufferAttribute(col, 3));
+geo.setAttribute("size", new THREE.BufferAttribute(size, 1));
+geo.setAttribute("alpha", new THREE.BufferAttribute(alpha, 1));
+geo.setAttribute("mark", new THREE.BufferAttribute(mark, 1));  // 1 = 내 ♥ 곡(분홍 테두리)
+geo.setAttribute("hl", new THREE.BufferAttribute(hlv, 1));
+geo.setAttribute("rim", new THREE.BufferAttribute(rimv, 1));
+const mat = new THREE.ShaderMaterial({
+  uniforms: { scale: { value: 1 }, uBreath: { value: 1 }, uAcc: { value: new THREE.Color(css("--acc")) }, ...depthU },
+  vertexShader: `attribute float size; attribute float alpha; attribute float mark; attribute float hl; attribute float rim; attribute vec3 color; varying vec3 vC; varying float vA; varying float vM; varying float vR; varying float vH; varying float vD;
+    uniform float scale; uniform float uBreath; uniform float uNear; uniform float uFar; uniform float uMaxPx;
+    void main(){ vC=color; vA=alpha; vM=mark; vR=rim; vH=hl; vec4 mv=modelViewMatrix*vec4(position,1.0); vD=clamp((-mv.z-uNear)/max(uFar-uNear,0.001),0.0,1.0); gl_PointSize=min((size+mark*1.6)*scale*(1.0+(uBreath-1.0)*hl)*(760.0/-mv.z),uMaxPx*(1.0+(uBreath-1.0)*hl)); gl_Position=projectionMatrix*mv; }`,
+  fragmentShader: `varying vec3 vC; varying float vA; varying float vM; varying float vR; varying float vH; varying float vD; uniform vec3 uAcc; uniform vec3 uBg; uniform float uDepthOn; uniform float uDepthK;
+    void main(){ vec2 d=gl_PointCoord-0.5; float r=length(d); if(r>0.5) discard; float edge=smoothstep(0.5,0.42,r);
+      if(vM>0.5&&r>0.32){ gl_FragColor=vec4(1.0,0.36,0.56,max(vA,0.85)*edge); return; }
+      float rim=smoothstep(0.33,0.4,r)*(1.0-smoothstep(0.42,0.47,r))*vR;
+      float bead=0.90+0.20*dot(d,vec2(-0.7071,-0.7071));
+      float fog=uDepthK*uDepthOn*smoothstep(0.15,1.0,vD)*(1.0-0.7*max(vH,vR));
+      vec3 base=mix(vC*bead*(r>0.4?0.82:1.0),uBg,clamp(fog,0.0,1.0));
+      gl_FragColor=vec4(mix(base,uAcc,rim*0.85),vA*edge); }`,
+  transparent: true, depthWrite: false,
+});
+const cloud = new THREE.Points(geo, mat);
+scene.add(cloud);
+
+// 선택한 곡 표시: 실제 점 크기에 맞춘 점 + 은은한 가산 혼합 halo. 깊이를 무시해 늘 다른 점 위에 그린다.
+// 점은 1.0↔1.25로 숨 쉬고, halo 는 같은 주기로 밝기만 바뀐다(두꺼운 링 없음).
+const selDotGeo = new THREE.BufferGeometry();
+const selDotPos = new Float32Array(3), selDotSize = new Float32Array(1);
+selDotGeo.setAttribute("position", new THREE.BufferAttribute(selDotPos, 3));
+selDotGeo.setAttribute("hsize", new THREE.BufferAttribute(selDotSize, 1));
+const selDotMat = new THREE.ShaderMaterial({
+  uniforms: { scale: { value: 1 }, uBreath: { value: 1 }, uMaxPx: depthU.uMaxPx, uColor: { value: new THREE.Color(css("--acc")) } },
+  vertexShader: `attribute float hsize; uniform float scale; uniform float uBreath; uniform float uMaxPx;
+    void main(){ vec4 mv=modelViewMatrix*vec4(position,1.0); gl_PointSize=min(hsize*scale*uBreath*(760.0/-mv.z),uMaxPx*uBreath); gl_Position=projectionMatrix*mv; }`,
+  fragmentShader: `uniform vec3 uColor;
+    void main(){ vec2 d=gl_PointCoord-0.5; float r=length(d)*2.0; if(r>1.0) discard;
+      gl_FragColor=vec4(uColor,1.0-smoothstep(0.84,0.98,r)); }`,
+  transparent: true, depthTest: false, depthWrite: false,
+});
+const selDot = new THREE.Points(selDotGeo, selDotMat);
+selDot.renderOrder = 1001;
+selDot.frustumCulled = false;
+selDot.visible = false;
+scene.add(selDot);
+
+const haloCap = 1;
+const haloPos = new Float32Array(haloCap * 3), haloSize = new Float32Array(haloCap);
+const haloGeo = new THREE.BufferGeometry();
+haloGeo.setAttribute("position", new THREE.BufferAttribute(haloPos, 3));
+haloGeo.setAttribute("hsize", new THREE.BufferAttribute(haloSize, 1));
+haloGeo.setDrawRange(0, 0);
+const haloMat = new THREE.ShaderMaterial({
+  uniforms: { scale: { value: 1 }, uMaxPx: depthU.uMaxPx, uK: { value: 2.8 }, uPulse: { value: 0.6 }, uStr: { value: 0.6 }, uColor: { value: new THREE.Color(css("--acc")) } },
+  vertexShader: `attribute float hsize; uniform float scale; uniform float uK; uniform float uMaxPx;
+    void main(){ vec4 mv=modelViewMatrix*vec4(position,1.0); gl_PointSize=min(hsize*scale*uK*(760.0/-mv.z),uMaxPx*uK); gl_Position=projectionMatrix*mv; }`,
+  fragmentShader: `uniform vec3 uColor; uniform float uPulse; uniform float uStr;
+    void main(){ vec2 d=gl_PointCoord-0.5; float r=length(d)*2.0; if(r>1.0) discard;
+      float f=pow(max(0.0,1.0-r),1.8); gl_FragColor=vec4(uColor, f*uStr*(0.55+0.45*uPulse)); }`,
+  transparent: true, depthTest: false, depthWrite: false, blending: THREE.AdditiveBlending,
+});
+const selHalo = new THREE.Points(haloGeo, haloMat);
+selHalo.renderOrder = 1000;
+selHalo.frustumCulled = false;
+selHalo.visible = false;
+scene.add(selHalo);
+
+// 재생 중인 곡: 작은 고리가 퍼지듯 맥박(선택 강조와 다른 색). 깊이를 무시해 늘 보인다.
+const playGeo = new THREE.BufferGeometry();
+const playPos = new Float32Array(3), playSize = new Float32Array(1);
+playGeo.setAttribute("position", new THREE.BufferAttribute(playPos, 3));
+playGeo.setAttribute("hsize", new THREE.BufferAttribute(playSize, 1));
+const playMat = new THREE.ShaderMaterial({
+  uniforms: { scale: { value: 1 }, uMaxPx: depthU.uMaxPx, uT: { value: 0 }, uColor: { value: new THREE.Color(css("--play")) } },
+  vertexShader: `attribute float hsize; uniform float scale; uniform float uMaxPx;
+    void main(){ vec4 mv=modelViewMatrix*vec4(position,1.0); gl_PointSize=clamp(hsize*scale*(760.0/-mv.z)*3.2,18.0,uMaxPx*3.2); gl_Position=projectionMatrix*mv; }`,
+  fragmentShader: `uniform vec3 uColor; uniform float uT;
+    void main(){ vec2 d=gl_PointCoord-0.5; float r=length(d)*2.0; if(r>1.0) discard;
+      float w=0.32+0.62*uT; float ring=smoothstep(w-0.14,w-0.04,r)*(1.0-smoothstep(w,w+0.08,r));
+      float core=smoothstep(0.30,0.24,r)*(1.0-smoothstep(0.16,0.22,r));
+      gl_FragColor=vec4(uColor, max(ring*(1.0-uT)*0.95, core*0.9)); }`,
+  transparent: true, depthTest: false, depthWrite: false,
+});
+const playDot = new THREE.Points(playGeo, playMat);
+playDot.renderOrder = 1002;
+playDot.frustumCulled = false;
+playDot.visible = false;
+scene.add(playDot);
+let playing = -1, playState = "idle";
+
+// 축: 상자 한 모서리에서 세 방향으로 선. 화면 위쪽(three 의 y)이 '높이(Z)'.
+const E = 1.18 * R, MISS = -1.32;  // 값 없는 곡은 그 축의 바닥(−쪽 끝 바깥)에 모은다
+const axisGeo = new THREE.BufferGeometry();
+const axisPos = new Float32Array(18);
+axisGeo.setAttribute("position", new THREE.BufferAttribute(axisPos, 3));
+const axisMat = new THREE.LineBasicMaterial({ transparent: true, opacity: 0.9 });
+const axisLines = new THREE.LineSegments(axisGeo, axisMat);
+scene.add(axisLines);
+const DIM = [["x", 0], ["z", 1], ["y", 2]];  // [상태 키, three 성분]: 가로=x, 높이=y, 깊이=z
+const axisLabels = [];
+function buildAxes() {
+  axisLabels.forEach(a => a.el.remove()); axisLabels.length = 0;
+  const o = [-E, -E, -E];
+  // 세 축이 모두 지형(텍스트·소리 UMAP)이면 축 자체에 뜻이 없으므로 틀을 숨긴다
+  framed = axisLines.visible = !["x", "y", "z"].every(key => VARS[S[key]].terrain || S[key] === "none");
+  let k = 0;
+  for (const [key, c] of DIM) {
+    const v = VARS[S[key]];
+    const end = o.slice(); end[c] = E;
+    axisPos.set(o, k * 6); axisPos.set(S[key] === "none" ? o : end, k * 6 + 3); k++;
+    if (S[key] === "none" || !axisLines.visible) continue;
+    const name = { x: "가로", y: "깊이", z: "높이" }[key];
+    const short = v.short ?? v.label;
+    const add = (at, html) => { const el = document.createElement("div"); el.className = "axl"; el.innerHTML = html; document.body.appendChild(el); axisLabels.push({ el, at: new THREE.Vector3(...at) }); };
+    const tip = end.slice(); tip[c] = E * 1.1;
+    add(tip, `<b>${esc(short)}</b> <span>${esc(name)}${v.ends ? ` · ${esc(v.ends[1])} →` : ""}</span>`);
+    if (v.step) for (let lv = 1, hi = v.hi || 5; lv <= hi; lv++) { const st = o.slice(); st[c] = (-1 + 2 * (lv - 1) / (hi - 1)) * R; add(st, `<b>${lv}</b>${lv === 1 && v.ends ? ` ${esc(v.ends[0])}` : ""}`); }
+    else if (v.ends) { const st = o.slice(); st[c] = -0.92 * R; add(st, esc(v.ends[0])); }
+    if (v.missing) { const st = o.slice(); st[c] = MISS * R - 6; add(st, `값 없음 ${v.missing}곡`); }
+  }
+  axisGeo.attributes.position.needsUpdate = true;
+}
+
+function layout(animate = true) {
+  const vx = VARS[S.x].norm, vy = VARS[S.z].norm, vz = VARS[S.y].norm;  // three: x=가로, y=높이, z=깊이
+  const pick = (arr, i, k) => arr[i] == null ? MISS + jit(i, k) * 0.04 : arr[i];
+  for (let i = 0; i < n; i++) {
+    dest[i * 3] = pick(vx, i, 1) * R; dest[i * 3 + 1] = pick(vy, i, 2) * R; dest[i * 3 + 2] = -pick(vz, i, 3) * R;
+  }
+  from.set(cur);
+  anim = animate ? { t0: performance.now(), dur: 750 } : null;
+  if (!animate) { cur.set(dest); geo.attributes.position.needsUpdate = true; geo.computeBoundingSphere(); }
+  buildAxes();
+  applyFilters();  // 소리 지형이면 오디오 없는 곡이 빠진다
+  updateStatus();
+}
+let anim = null;
+const ease = t => t < .5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+function stepAnim(now) {
+  if (!anim) return;
+  const t = Math.min(1, (now - anim.t0) / anim.dur), e = ease(t);
+  for (let j = 0; j < cur.length; j++) cur[j] = from[j] + (dest[j] - from[j]) * e;
+  geo.attributes.position.needsUpdate = true;
+  geo.computeBoundingSphere();
+  dirty = true;
+  if (t >= 1) anim = null;
+}
+
+// ---------------------------------------------------------------- 색칠
+let selected = -1, matches = null, hover = -1;
+const GHOST_A = 0.04;  // 조건 밖 곡: 아주 옅은 유령(누르기·이름표 대상 아님)
+const SEQ = ["#d7301f", "#ef6548", "#fc8d59", "#fdbb84", "#fdd49e"].map(c => new THREE.Color(c));
+function baseColorAt(p, i) {
+  const c = COLORS[S.color];
+  if (c) return new THREE.Color(c.pal[c.get(p) % c.pal.length]);
+  const t = VARS[S.color].norm[i];
+  return t == null ? new THREE.Color(css("--grey")) : rampAt((t + 1) / 2);
+}
+const baseColor = i => baseColorAt(P[i], i);
+// 곡 점은 서재 지도(약 770권)의 4배 넘게 많아 같은 크기면 앞쪽 점이 화면을 덮는다: 보통 점만 줄인다.
+// 선택·이웃·검색 일치 점의 하한(2.8·4)과 선택 표시는 서재 지도 크기 그대로라 수가 많아도 찾아진다.
+const DENSITY = Math.max(0.6, Math.min(1, Math.sqrt(800 / n)));
+const baseSize = i => DENSITY * baseSize0(i);
+function baseSize0(i) {
+  if (S.size === "none") return 2.4;
+  if (S.size === "l") return P[i].l ? 4.2 : 1.8;
+  if (S.size === "fav") return U() && U().fav(P[i].id) ? 4.4 : 1.8;
+  const t = VARS[S.size].norm[i];
+  return t == null ? 1.2 : 1.2 + 3.6 * Math.max(0, Math.min(1, (t + 1) / 2));
+}
+// 고른 곡의 이웃: 소리 지형에선 소리 이웃, 그 밖엔 설명 이웃
+const selNb = () => selected < 0 ? [] : (soundView() && P[selected].an && P[selected].an.length ? P[selected].an : P[selected].nn);
+// 선택 중 관련 없는 점: 밝기·불투명도는 거의 그대로, 채도만 75% 빼고(휘도로 mix) 배경 쪽으로 살짝.
+const FADE_DESAT = 0.75, FADE_BG = 0.12, FADE_ALPHA = 0.85;
+function faded(c, bg) {
+  const l = 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b;
+  return new THREE.Color(c.r + (l - c.r) * FADE_DESAT, c.g + (l - c.g) * FADE_DESAT, c.b + (l - c.b) * FADE_DESAT).lerp(bg, FADE_BG);
+}
+function paint() {
+  const k = S.k, grey = new THREE.Color(css("--grey")), acc = new THREE.Color(css("--acc")), bg = new THREE.Color(css("--bg"));
+  // 조건이 걸려 있으면 곡을 골라도 조건 안 곡은 원래 색 그대로(빛바래면 조건이 풀린 것처럼 보인다). 이웃은 테두리로만.
+  const fade = chips.length ? c => c : c => faded(c, bg);
+  const nb = new Map();
+  if (selected >= 0) selNb().slice(0, k).forEach((j, r) => nb.set(j, r));
+  for (let i = 0; i < n; i++) {
+    let c, s = baseSize(i), a = 0.92, hl = 0, rim = 0;
+    if (selected >= 0) {
+      if (i === selected) { c = acc; s = baseSize0(i) * 1.3; a = 1; hl = 1; }
+      else if (nb.has(i) && chips.length) { c = baseColor(i); s = Math.max(2.8, s); a = 1; rim = 1; }
+      else if (nb.has(i)) { c = SEQ[Math.min(4, Math.floor(nb.get(i) / k * 5))]; s = Math.max(2.8, s); a = 1; rim = 1; }
+      else { c = fade(baseColor(i)); a = chips.length ? 0.92 : FADE_ALPHA; }  // 조건 없을 때만 빛바랜 색: 크기 유지, 선택·이웃만 원래 채도
+    } else if (matches) {
+      if (matches.has(i)) { c = baseColor(i); s = Math.max(4, s * 1.4); a = 1; } else { c = grey; a = 0.3; s = Math.min(s, 1.8); }
+    } else c = baseColor(i);
+    // 바닥 층(조건 버블): 조건 밖이면 선택 여부와 상관없이 유령. 선택한 곡 자신만 예외.
+    if (!visible[i] && i !== selected) { c = grey; a = GHOST_A; s = Math.min(s, 1.6); rim = 0; }
+    if (i === hover) s *= 1.6;
+    abase[i] = a;
+    hlv[i] = hl; rimv[i] = rim;
+    col.set([c.r, c.g, c.b], i * 3); size[i] = s; alpha[i] = a;
+  }
+  geo.attributes.color.needsUpdate = geo.attributes.size.needsUpdate = geo.attributes.alpha.needsUpdate = true;
+  geo.attributes.hl.needsUpdate = geo.attributes.rim.needsUpdate = true;
+  dirty = true;
+  buildLabels();
+}
+
+// 이름표: 후보를 우선순위대로 화면에 놓고, 이미 놓인 것과 겹치면 숨긴다(매 프레임).
+// 1 큰 군집 이름 > 1 이웃·검색 일치 > 3 큰 점·좋아요 곡(아무것도 안 골랐을 때, 확대할수록 많이)
+// 선택한 곡 자신의 이름표는 띄우지 않는다(호버 툴팁으로 확인).
+const LBL = new Map();  // key → { el, w, h, cls, on }
+let cand = [];
+function buildLabels() {
+  dirty = true;
+  cand = [];
+  const seen = new Set();
+  const add = (key, tier, text, cls, i) => { if (!seen.has(key)) { seen.add(key); cand.push({ key, tier, text, cls, i }); } };
+  // 큰 군집 이름표는 맨 먼저 놓는다(누르면 그 군집 버블). 곡을 골라도 이웃 이름표에 밀려 사라지지 않게. 소리 지형에선 군집이 흩어져 뺀다.
+  if (!soundView()) D.coarse.forEach((c, g) => add("g" + g, 1, c.name, "lbl grp", -1 - g));
+  if (selected >= 0) selNb().slice(0, Math.min(S.k, 12)).filter(j => visible[j]).forEach(j => add("b" + j, 1, P[j].t, "lbl", j));
+  else if (matches) [...matches].filter(j => visible[j]).slice(0, 20).forEach(j => add("b" + j, 1, P[j].t, "lbl", j));
+  else if (chips.length) {  // 조건이 걸려 있으면 조건 안 곡 이름을 먼저
+    const inF = [];
+    for (let i = 0; i < n && inF.length < 25; i++) if (visible[i]) inF.push(i);
+    if (inF.length <= 24) inF.forEach(i => add("b" + i, 1, P[i].t, "lbl", i));
+  }
+  if (playing >= 0 && playing !== selected && visible[playing]) add("b" + playing, 1, "♪ " + P[playing].t, "lbl", playing);
+  if (selected < 0 && !matches) {
+    const order = [];
+    for (let i = 0; i < n; i++) if (visible[i]) order.push(i);
+    order.sort((a, b) => baseSize(b) - baseSize(a) || (P[b].l || 0) - (P[a].l || 0) || (P[b].nn.length) - (P[a].nn.length));
+    order.slice(0, 240).forEach(i => add("b" + i, 3, P[i].t, "lbl amb", i));
+  }
+}
+const v3 = new THREE.Vector3();
+// 깊이 범위: 지금 카메라에서 본 곡·파트 점의 앞(-mv.z) 최소~최대. 부드럽게 따라가며 셰이더에 넘긴다.
+const depthFwd = new THREE.Vector3(), depthTmp = new THREE.Vector3();
+let depthNear = 0, depthFar = 1, depthReady = false;
+const depthZs = new Float32Array(n);
+function updateDepthRange() {
+  if (!depthOn) { depthU.uDepthOn.value = 0; return; }
+  depthU.uDepthOn.value = 1;
+  camera.getWorldDirection(depthFwd);
+  // 서재 지도는 최소~최대를 쓰지만 곡은 가운데에 몰려 있고 일부 무리가 멀리 뻗어, 그 끝점에 범위가 끌려가면 모든 점이 같은 진하기가 된다.
+  // 5~95% 지점을 범위로 잡으면 서재 지도와 같은 앞뒤 차이(안개 세기 분포)가 난다.
+  let k = 0;
+  for (let i = 0; i < n; i++) {
+    depthTmp.fromArray(cur, i * 3).sub(camera.position);
+    const z = depthTmp.dot(depthFwd);
+    if (z >= 0.5) depthZs[k++] = z;
+  }
+  const zs = depthZs.subarray(0, k).sort();
+  let lo = k ? zs[Math.floor((k - 1) * 0.05)] : 0, hi = k ? zs[Math.floor((k - 1) * 0.95)] : 1;
+  if (!(hi > lo + 0.001)) { lo = 0; hi = 1; }
+  if (!depthReady) { depthNear = lo; depthFar = hi; depthReady = true; }
+  else { depthNear += (lo - depthNear) * 0.25; depthFar += (hi - depthFar) * 0.25; }
+  depthU.uNear.value = depthNear;
+  depthU.uFar.value = depthFar;
+}
+const smooth01 = (a, b, x) => { const t = Math.max(0, Math.min(1, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
+function depthAt(p) {  // 0(가까움)~1(멂)을 smoothstep(0.15,1) 한 값
+  if (!depthOn) return 0;
+  const span = depthU.uFar.value - depthU.uNear.value;
+  if (!(span > 0.001)) return 0;
+  const z = depthTmp.copy(p).sub(camera.position).dot(depthFwd);
+  return smooth01(0.15, 1, Math.max(0, Math.min(1, (z - depthU.uNear.value) / span)));
+}
+
+function placeAt(el, vec) {
+  vec.project(camera);
+  if (vec.z > 1 || Math.abs(vec.x) > 1.2 || Math.abs(vec.y) > 1.2) { el.style.display = "none"; return; }
+  el.style.display = "block";
+  el.style.left = ((vec.x + 1) / 2 * innerWidth) + "px"; el.style.top = ((1 - vec.y) / 2 * innerHeight) + "px";
+}
+const groupAt = D.coarse.map(() => new Float32Array(4));
+const placed = [];
+let frame = 0;
+function placeLabels() {
+  placed.length = 0;
+  axisLabels.forEach(a => {  // 축 이름표는 늘 보이고, 곡·분야 이름표가 피해 간다
+    placeAt(a.el, v3.copy(a.at));
+    if (a.el.style.display === "none") return;
+    if (!a.w) { a.w = a.el.offsetWidth; a.h = a.el.offsetHeight; }
+    const x = parseFloat(a.el.style.left), y = parseFloat(a.el.style.top);
+    placed.push([x - a.w / 2 - 2, y - a.h / 2 - 1, x + a.w / 2 + 2, y + a.h / 2 + 1]);
+  });
+  frame++;
+  groupAt.forEach(g => g.fill(0));
+  for (let i = 0; i < n; i++) { const g = groupAt[P[i].k1]; g[0] += cur[i * 3]; g[1] += cur[i * 3 + 1]; g[2] += cur[i * 3 + 2]; g[3]++; }
+  const dist = camera.position.distanceTo(controls.target);
+  const small = narrow() || innerHeight <= 500;  // 작은 화면: 이름표가 지도를 덮지 않게 적게
+  const ambCap = small ? Math.max(3, Math.min(24, Math.round(6 * (260 / dist) ** 2))) : Math.max(4, Math.min(70, Math.round(12 * (260 / dist) ** 2)));
+  const maxLbl = small ? 36 : 90;
+  // 같은 단계 안에서는 지난 프레임에 보이던 것을 먼저(깜빡임 줄이기)
+  const list = cand.map((c, r) => ({ c, r, on: LBL.has(c.key) ? LBL.get(c.key).on : 0 }))
+    .sort((a, b) => a.c.tier - b.c.tier || (a.c.tier === 3 ? b.on - a.on : 0) || a.r - b.r);
+  let amb = 0;
+  for (const { c } of list) {
+    if (placed.length >= maxLbl + axisLabels.length) break;
+    if (c.tier === 3 && amb >= ambCap) continue;
+    if (c.i >= 0) { if ((alpha[c.i] < 0.05 || !visible[c.i]) && c.tier) continue; v3.fromArray(cur, c.i * 3); }
+    else { const g = groupAt[-1 - c.i]; if (!g[3]) continue; v3.set(g[0] / g[3], g[1] / g[3], g[2] / g[3]); }
+    const dep = depthAt(v3);
+    v3.project(camera);
+    if (v3.z > 1 || Math.abs(v3.x) > 1.05 || Math.abs(v3.y) > 1.05) continue;
+    const x = (v3.x + 1) / 2 * innerWidth, y = (1 - v3.y) / 2 * innerHeight;
+    let L = LBL.get(c.key);
+    if (!L) { const el = document.createElement("div"); el.textContent = c.text; document.body.appendChild(el); L = { el, cls: "", on: 0 }; LBL.set(c.key, L); }
+    if (L.cls !== c.cls) { L.el.className = L.cls = c.cls; L.el.style.display = "block"; L.w = L.el.offsetWidth; L.h = L.el.offsetHeight; }
+    let left = c.cls === "lbl grp" ? x - L.w / 2 : x + 9, top = y - L.h / 2;
+    const box = [left - 2, top - 1, left + L.w + 2, top + L.h + 1];
+    if (c.tier && placed.some(q => box[0] < q[2] && box[2] > q[0] && box[1] < q[3] && box[3] > q[1])) continue;
+    placed.push(box);
+    if (c.tier === 3) amb++;
+    L.el.style.display = "block";
+    L.el.style.left = x + "px";
+    L.el.style.top = y + "px";
+    if (!depthOn) {
+      if (L.el.style.opacity) L.el.style.opacity = "";
+      if (L.el.style.transform) L.el.style.transform = "";
+    } else {
+      let op = (c.cls.includes("amb") ? 0.85 : 1) * (1 - 0.45 * dep), sc = 1 - 0.1 * dep;
+      if (c.cls === "lbl grp") op = Math.max(0.8, op);  // 분야 이름표는 항상 읽히게
+      if ((selected >= 0 && c.tier === 1) || L.el.classList.contains("hov")) { op = 1; sc = 1; }  // 선택 관련·호버는 예외
+      L.el.style.opacity = String(op);
+      L.el.style.transform = (c.cls === "lbl grp" ? "translate(-50%,-50%)" : "translate(9px,-50%)") + ` scale(${sc.toFixed(3)})`;
+    }
+    L.on = frame;
+  }
+  for (const L of LBL.values()) if (L.on !== frame && L.el.style.display !== "none") { L.el.style.display = "none"; L.on = 0; }
+}
+
+// 선택 표시를 매 프레임 갱신하고, 화면 밖이면 가장자리 화살표를 띄운다.
+const edgeBtn = $("edge");
+const sv = new THREE.Vector3(), sc = new THREE.Vector3(), sr = new THREE.Vector3(), su = new THREE.Vector3();
+const SEL_PERIOD = 1600;  // 숨쉬기 1.6초
+function updateSelectedOverlay(now) {
+  const calm = reduceMotion.matches;
+  const b = calm ? 1 : 1.125 - 0.125 * Math.cos(now / SEL_PERIOD * Math.PI * 2);  // 1.0 ↔ 1.25
+  mat.uniforms.uBreath.value = selDotMat.uniforms.uBreath.value = b;
+  haloMat.uniforms.uPulse.value = calm ? 0.6 : 0.5 - 0.5 * Math.cos(now / SEL_PERIOD * Math.PI * 2);
+  if (selected < 0) {
+    selDot.visible = selHalo.visible = false;
+    edgeBtn.classList.remove("on"); edgeBtn.hidden = true;
+    return;
+  }
+  selDotPos.set([cur[selected * 3], cur[selected * 3 + 1], cur[selected * 3 + 2]]);
+  selDotSize[0] = size[selected];
+  selDotGeo.attributes.position.needsUpdate = selDotGeo.attributes.hsize.needsUpdate = true;
+  selDot.visible = true;
+  haloPos.set([cur[selected * 3], cur[selected * 3 + 1], cur[selected * 3 + 2]]);
+  haloSize[0] = size[selected];
+  haloGeo.attributes.position.needsUpdate = haloGeo.attributes.hsize.needsUpdate = true;
+  haloGeo.setDrawRange(0, 1);
+  selHalo.visible = true;
+  sv.fromArray(cur, selected * 3).project(camera);
+  const front = sv.z <= 1;
+  // 정보 패널·하단 카드·미니 플레이어 밑에 숨은 것도 화면 밖으로 본다
+  const px = (sv.x + 1) / 2 * innerWidth, py = (1 - sv.y) / 2 * innerHeight;
+  const under = el => { if (!el || el.hidden || !el.offsetWidth) return false; const r = el.getBoundingClientRect(); return px >= r.left && px <= r.right && py >= r.top && py <= r.bottom; };
+  const covered = (panel.classList.contains("open") && under(panel)) || (card.classList.contains("open") && under(card)) || under($("mini"));
+  const off = !front || covered || Math.abs(sv.x) > 0.94 || Math.abs(sv.y) > 0.94;
+  if (!off) { edgeBtn.classList.remove("on"); edgeBtn.hidden = true; return; }
+  let dx, dy;
+  if (front) { dx = sv.x; dy = -sv.y; }
+  else {  // 카메라 뒤: 카메라 기준으로 돌아가야 할 방향
+    camera.getWorldDirection(sc);
+    sr.crossVectors(sc, camera.up).normalize();
+    su.crossVectors(sr, sc).normalize();
+    sv.fromArray(cur, selected * 3).sub(camera.position);
+    dx = sv.dot(sr); dy = -sv.dot(su);
+  }
+  const len = Math.hypot(dx, dy);
+  if (len < 1e-4) { dx = 0; dy = 1; } else { dx /= len; dy /= len; }
+  // 정보 패널·카드가 가리지 않는 영역의 가장자리에 놓는다.
+  let left = 0, top = 0, right = innerWidth, bottom = innerHeight;
+  if (panel.classList.contains("open")) {
+    const r = panel.getBoundingClientRect();
+    if (narrow()) bottom = Math.max(90, r.top - 8); else right = Math.max(140, r.left - 8);
+  } else if (card.classList.contains("open")) {
+    bottom = Math.max(90, card.getBoundingClientRect().top - 8);
+  }
+  const m = 46, cx = (left + right) / 2, cy = (top + bottom) / 2;
+  const tx = Math.abs(dx) < 1e-4 ? Infinity : (dx > 0 ? (right - m - cx) / dx : (left + m - cx) / dx);
+  const ty = Math.abs(dy) < 1e-4 ? Infinity : (dy > 0 ? (bottom - m - cy) / dy : (top + m - cy) / dy);
+  const t = Math.max(0, Math.min(tx, ty));
+  edgeBtn.hidden = false;
+  edgeBtn.classList.add("on");
+  edgeBtn.style.left = (cx + dx * t) + "px";
+  edgeBtn.style.top = (cy + dy * t) + "px";
+  edgeBtn.style.setProperty("--a", Math.atan2(dx, -dy) * 180 / Math.PI + "deg");
+}
+edgeBtn.addEventListener("click", () => {
+  if (selected < 0) return;
+  flyTo(selected); setRotate(false); dirty = true;
+});
+function updatePlayMark(now) {
+  if (playing < 0) { playDot.visible = false; return; }
+  playPos.set([cur[playing * 3], cur[playing * 3 + 1], cur[playing * 3 + 2]]);
+  playSize[0] = Math.max(2.4, size[playing]);
+  playGeo.attributes.position.needsUpdate = playGeo.attributes.hsize.needsUpdate = true;
+  // 재생 중이면 1.4초마다 퍼지고, 멈췄으면 고리만 가만히
+  playMat.uniforms.uT.value = playState === "playing" && !reduceMotion.matches ? (now % 1400) / 1400 : 0.35;
+  playDot.visible = true;
+}
+
+// ---------------------------------------------------------------- 이름표 누르기
+// 이름표는 pointer-events:none 이라 회전 드래그를 막지 않는다. 대신 뗄 때 좌표로 찾는다.
+function labelAt(cx, cy) {
+  let best = null, ba = Infinity;
+  for (const [key, L] of LBL) {
+    if (!L.on || L.el.style.display === "none") continue;
+    const r = L.el.getBoundingClientRect();
+    if (cx < r.left - 2 || cx > r.right + 2 || cy < r.top - 2 || cy > r.bottom + 2) continue;
+    const a = r.width * r.height;
+    if (a < ba) { ba = a; best = key; }
+  }
+  return best;
+}
+function centerOf(test) {
+  let x = 0, y = 0, z = 0, k = 0;
+  for (let i = 0; i < n; i++) if (test(P[i], i)) { x += dest[i * 3]; y += dest[i * 3 + 1]; z += dest[i * 3 + 2]; k++; }
+  return k ? new THREE.Vector3(x / k, y / k, z / k) : null;
+}
+function flyToCenter(test) {  // 군집·장르 버블이 생길 때 한 번만 맞춘다(그 뒤 카메라는 자유)
+  const c = centerOf(test);
+  if (c) {
+    const off = camera.position.clone().sub(controls.target);
+    off.setLength(Math.min(off.length(), 160));
+    fly = { t: c, c: c.clone().add(off) };
+  }
+  setRotate(false);
+}
+const flyToGroup = g => flyToCenter(p => p.k1 === g);
+const flyToGenre = g => flyToCenter(p => COLORS.g.get(p) === g);
+function activateLabel(key) {
+  if (key[0] === "g") { setCluster(+key.slice(1)); return; }
+  const i = +key.slice(1);
+  if (i >= 0 && i < n) select(i);
+}
+
+// ---------------------------------------------------------------- 정보 패널
+const panel = $("panel");
+const swatch = (key, i) => { const c = COLORS[key]; return c.pal[c.get(P[i]) % c.pal.length]; };
+const chipBtn = (k, v, text, cls = "") => `<button type="button" class="chip cb2 ${cls}" data-ck="${k}" data-cv='${esc(JSON.stringify(v))}' title="이 조건 버블 더하기">${text}</button>`;
+function playLabel(i) {
+  const pl = player();
+  if (!pl || pl.current() !== i) return ["▶ 재생", false];
+  return pl.playing(i) ? ["⏸ 일시정지", true] : ["▶ 이어 듣기", true];
+}
+function showPanel(i) {
+  const p = P[i];
+  const score = (label, v, l, r) => v ? `<div class="score"><span>${label}</span><i><b style="width:${v / 5 * 100}%"></b></i><span>${v}</span>${l ? `<small><span>${l}</span><span>${r}</span></small>` : ""}</div>` : "";
+  const li = (j, r, sc) => `<li class="nb${j === playing ? " now" : ""}" data-j="${j}"><i class="dot" style="background:${swatch("g", j)}"></i><span>${j === playing ? "♪ " : ""}${esc(P[j].t)}<small>${esc(P[j].a || "")}</small></span>${sc != null ? `<em>${sc.toFixed(2)}</em>` : ""}</li>`;
+  const nbText = p.nn.slice(0, Math.max(S.k, 10)).map((j, r) => li(j, r, p.ns[r])).join("");
+  const nbSound = (p.an || []).slice(0, Math.max(S.k, 10)).map((j, r) => li(j, r, null)).join("");
+  const [pl, on] = playLabel(i);
+  const g = COLORS.g.get(p);
+  const meta = [p.c && p.c !== p.a ? ["작곡가", p.c] : null, p.w ? ["작품", p.w] : null, p.al ? ["앨범", p.al] : null,
+    p.in && p.in.length ? ["악기", p.in.slice(0, 6).join(", ")] : null, ["의사표시", COLORS.pr.names[COLORS.pr.get(p)]]]
+    .filter(Boolean).map(([k, v]) => `<dt>${k}</dt><dd>${esc(v)}</dd>`).join("");
+  panel.innerHTML = `<button class="grab" aria-label="크게/작게"></button><button class="x" title="닫기" aria-label="닫기">×</button>
+    ${navBar()}
+    <button class="pthumb" type="button" data-play title="${on ? "재생 중" : "재생"}"><img src="${thumbUrl(p.id)}" alt="" loading="lazy">${on ? `<i class="on">♪ 재생 중</i>` : ""}</button>
+    <div class="pbtns"><button class="pp${on ? " on" : ""}" type="button" data-play>${pl}</button><a class="yt" href="${ytUrl(p.id)}" target="_blank" rel="noopener">유튜브 ↗</a></div>
+    <div class="mine"></div>
+    <h2>${esc(p.t || "제목 없음")}</h2>
+    <div class="au">${esc(p.a) || "아티스트 미상"}${p.y ? ` · ${p.y}` : ""}${p.rg ? ` · ${esc(p.rg)}` : ""}</div>
+    <div class="chips"><button type="button" class="chip gb" data-genre="${g}" title="이 장르만 보기(버블)"><i class="dot" style="background:${swatch("g", i)}"></i>${esc(GENRES[g])}</button>${p.sg ? chipBtn("sg", p.sg, esc(p.sg)) : ""}${decadeOf(p) ? chipBtn("e", decadeOf(p), esc(decadeOf(p))) : ""}${chipBtn("c1", p.k1, "◎ " + esc(D.coarse[p.k1].name))}</div>
+    ${(p.m || []).length ? `<div class="chips">${p.m.map(m => chipBtn("m", m, "~ " + esc(m))).join("")}</div>` : ""}
+    ${p.ct ? `<p>${esc(p.ct)}</p>` : ""}
+    ${p.s && Object.keys(p.s).length ? `<h3>곡 성격</h3>${score("에너지", p.s.energy, "잔잔", "격렬")}${score("밝기", p.s.valence, "어두움", "밝음")}${score("어쿠스틱", p.s.acoustic, "전자", "어쿠스틱")}${score("보컬", p.s.vocal, "연주곡", "보컬")}` : ""}
+    <dl class="meta">${meta}</dl>
+    <h3>담긴 재생목록</h3><div class="chips">${(p.pl || []).map(t => chipBtn("pl", t, "▤ " + esc(t), "pl")).join("") || '<span class="mut">재생목록 없음(좋아요만)</span>'}</div>
+    <h3>소리 태그</h3><div class="chips">${(p.st || []).map(t => chipBtn("st", t, "♪ " + esc(t), "snd")).join("") || '<span class="mut">오디오 없음</span>'}</div>
+    <h3>소리가 비슷한 곡${nbSound ? `<button type="button" class="h3b" data-nbonly="na">이웃만 보기</button>` : ""}</h3>${nbSound ? `<ul>${nbSound}</ul>` : '<p class="mut">아직 오디오가 없어요</p>'}
+    <h3>설명이 비슷한 곡<button type="button" class="h3b" data-nbonly="nb">이웃만 보기</button></h3><ul>${nbText}</ul>`;
+  panel.classList.add("open");
+  panel.scrollTop = 0;
+  setSheet();
+  dispatchEvent(new CustomEvent("songpanel", { detail: i }));  // user.js 가 .mine 을 채운다
+}
+function hidePanel() { panel.classList.remove("open", "full"); setSheet(); }
+function syncPlayUI() {  // 재생 상태가 바뀌면 패널 버튼·카드 ▶ 만 고친다(패널 전체를 다시 그리지 않음)
+  if (selected < 0) return;
+  const [pl, on] = playLabel(selected);
+  const b = panel.querySelector(".pp");
+  if (b && panel.classList.contains("open")) { b.textContent = pl; b.classList.toggle("on", on); }
+  const tb = panel.querySelector(".pthumb");
+  if (tb) { const i = tb.querySelector("i"); if (on && !i) tb.insertAdjacentHTML("beforeend", `<i class="on">♪ 재생 중</i>`); else if (!on && i) i.remove(); }
+  const cp = card.querySelector(".play");
+  cp.textContent = player() && player().playing(selected) ? "⏸" : "▶";
+  cp.classList.toggle("on", !!(player() && player().current() === selected));
+}
+function playOrToggle(i) {
+  const pl = player();
+  if (!pl) { window.open(ytUrl(P[i].id), "_blank", "noopener"); return; }
+  if (pl.current() === i) pl.toggle(); else pl.play(i);
+}
+panel.addEventListener("click", e => {
+  const nvb = e.target.closest("[data-nav]");
+  if (nvb) { if (!nvb.disabled) goNav(+nvb.dataset.nav); return; }
+  const crumb = e.target.closest("[data-at]");
+  if (crumb) {
+    const at = +crumb.dataset.at;
+    if (at >= 0 && at < nav.items.length) { nav.at = at; nav.away = false; saveNav(); jumpNav(at); }
+    return;
+  }
+  if (e.target.closest(".x")) { if (mobile() && selected >= 0) closeDetail(); else select(-1); return; }
+  if (e.target.closest(".grab")) { panel.classList.toggle("full"); return; }
+  if (e.target.closest("[data-play]")) { if (selected >= 0) playOrToggle(selected); return; }
+  const ck = e.target.closest("[data-ck]");
+  if (ck) { addChip({ k: ck.dataset.ck, v: JSON.parse(ck.dataset.cv) }); return; }
+  const gb = e.target.closest("[data-genre]");
+  if (gb) { setGroup(+gb.dataset.genre); return; }
+  const only = e.target.closest("[data-nbonly]");
+  if (only) { addNeighbors(selected, only.dataset.nbonly); return; }
+  const li = e.target.closest("li.nb");
+  if (li) select(+li.dataset.j, true, true);
+});
+
+// 터치: 점을 누르면 아래 작은 카드만(제목·아티스트 · ♥ · ▶ · 상세). '상세' 를 눌러야 정보 패널(시트)이 열린다.
+const card = $("card");
+function showCard(i) {
+  const p = P[i];
+  card.querySelector("b").textContent = p.t || "제목 없음";
+  card.querySelector("small").textContent = (p.a || "아티스트 미상") + (p.y ? ` · ${p.y}` : "") + (p.g ? ` · ${p.g}` : "");
+  card.classList.add("open");
+  setSheet();
+  syncPlayUI();
+  dispatchEvent(new CustomEvent("songcard", { detail: i }));  // user.js 가 ♥ 를 붙인다
+}
+function hideCard() { card.classList.remove("open"); setSheet(); }
+function closeDetail() { hidePanel(); showCard(selected); }
+card.querySelector(".bk").addEventListener("click", () => goNav(-1));
+card.querySelector("button.det").addEventListener("click", () => { if (selected >= 0) { hideCard(); showPanel(selected); } });
+card.querySelector("button.play").addEventListener("click", () => { if (selected >= 0) playOrToggle(selected); });
+
+// (예전) 정보 패널·검색 목록·하단 카드가 가리지 않는 영역의 가운데로 3D 화면 중심을 옮겼다 — 지금은 지도를 고정한다.
+function shiftView() {
+  const W = innerWidth, H = innerHeight;
+  let ox = 0, oy = 0;
+  if (narrow()) {  // 폰: 아래 카드·시트가 가린 높이의 절반만큼 화면 중심을 위로
+    let cover = 0;
+    if (panel.classList.contains("open")) cover = Math.max(cover, panel.offsetHeight);
+    if (card.classList.contains("open")) cover = Math.max(cover, card.offsetHeight + 12);
+    oy = cover > 0 ? cover / 2 : 0;
+  } else {  // 데스크톱: 정보 패널(오른쪽)·검색 결과(왼쪽)를 뺀 가운데로
+    const rl = $("results");
+    const left = rl.classList.contains("on") && !rl.classList.contains("fold") ? Math.max(0, rl.getBoundingClientRect().right) : 0;
+    const pleft = panel.classList.contains("open") ? W - 16 - panel.offsetWidth : W;  // 열리는 애니메이션 중에도 실제 폭으로
+    const right = Math.max(left, pleft);
+    ox = W / 2 - (left + right) / 2;
+  }
+  // 지도는 패널·목록이 열리고 닫혀도 움직이지 않는다(사용자 요청). ox·oy 는 계산만 하고 쓰지 않는다.
+  void ox; void oy;
+  camera.clearViewOffset();
+  camera.updateProjectionMatrix();
+  dirty = true;
+}
+function setSheet() {
+  document.body.classList.toggle("cardup", card.classList.contains("open"));
+  document.body.classList.toggle("popen", panel.classList.contains("open"));
+  document.body.classList.toggle("sheet", panel.classList.contains("open") || card.classList.contains("open") || (narrow() && $("ctl").classList.contains("open")));
+  shiftView();
+}
+
+// ---------------------------------------------------------------- 곡 탐색 기록(뒤로/앞으로)
+// 점·이름표·비슷한 곡·검색 결과로 곡을 고를 때마다 쌓는다. 브라우저처럼 뒤로 간 뒤 새 곡을 고르면 앞쪽은 버린다.
+const NAV_MAX = 50;
+// 저장은 영상 ID 로 한다(점 번호는 지도를 다시 지으면 다른 곡을 가리킨다). 예전 점 번호 기록·지도에서 빠진 곡은 버린다.
+const nav = (() => {
+  const saved = store.get("musicmap-nav", null), raw = saved && Array.isArray(saved.items) ? saved.items : [];
+  let at = saved && Number.isInteger(saved.at) ? saved.at : raw.length - 1, items = [];
+  raw.forEach((id, k) => { if (typeof id === "string" && pointOf.has(id)) items.push(pointOf.get(id)); else if (k <= at) at--; });
+  if (items.length > NAV_MAX) { const cut = items.length - NAV_MAX; items = items.slice(cut); at -= cut; }
+  if (at >= items.length) at = items.length - 1;
+  if (at < 0) at = -1;
+  return { items, at, away: true };  // away: 지금은 아무 곡도 고르지 않은 상태(← 로 마지막 곡으로 돌아간다)
+})();
+const canBack = () => nav.away ? nav.items.length > 0 : nav.at > 0;
+const canFwd = () => !nav.away && nav.at < nav.items.length - 1;
+function saveNav() { store.set("musicmap-nav", { items: nav.items.map(i => P[i].id), at: nav.at }); }
+function recordNav(i) {
+  if (!(i >= 0 && i < n)) return;
+  if (nav.items[nav.at] === i) { nav.away = false; saveNav(); return; }
+  if (nav.at < nav.items.length - 1) nav.items = nav.items.slice(0, nav.at + 1);  // 뒤로 간 뒤 새 곡 → 앞쪽 기록 버림
+  nav.items.push(i);
+  if (nav.items.length > NAV_MAX) nav.items.splice(0, nav.items.length - NAV_MAX);
+  nav.at = nav.items.length - 1;
+  nav.away = false;
+  saveNav();
+}
+let navJump = false;
+function jumpNav(at) {
+  const i = nav.items[at];
+  if (i == null) return;
+  navJump = true;  // 기록 이동은 다시 기록하지 않는다
+  try { select(i, true); } finally { navJump = false; }
+}
+function goNav(d) {
+  if (d < 0) {
+    if (nav.away) { if (!nav.items.length) return; nav.away = false; saveNav(); jumpNav(Math.max(0, nav.at)); }
+    else if (nav.at > 0) { nav.at--; saveNav(); jumpNav(nav.at); }
+  } else if (!nav.away && nav.at < nav.items.length - 1) { nav.at++; saveNav(); jumpNav(nav.at); }
+}
+function crumbHTML() {
+  const end = nav.at < 0 ? 0 : nav.at + 1, start = Math.max(0, end - 5);
+  const parts = [];
+  if (start > 0) parts.push(`<span class="sep">…</span>`);
+  for (let a = start; a < end; a++) {
+    const i = nav.items[a];
+    parts.push(`<button class="crm${!nav.away && a === nav.at ? " on" : ""}" type="button" data-at="${a}" title="${esc(P[i].t)}">${esc(P[i].t)}</button>`);
+  }
+  return parts.join(`<span class="sep">›</span>`);
+}
+function navBar() {
+  const total = nav.items.length, pos = nav.at + 1;
+  return `<div class="navh">
+    <button class="nvb" type="button" data-nav="-1" title="이전 곡 (Alt+←)" aria-label="이전 곡"${canBack() ? "" : " disabled"}>←</button>
+    <button class="nvb" type="button" data-nav="1" title="다음 곡 (Alt+→)" aria-label="다음 곡"${canFwd() ? "" : " disabled"}>→</button>
+    <span class="nvc">${total ? `${pos}/${total}` : "0/0"}</span>
+    <div class="navt">${crumbHTML()}</div>
+  </div>`;
+}
+function syncNavCard() { const bk = card.querySelector(".bk"); if (bk) bk.hidden = !canBack(); }
+
+// ---------------------------------------------------------------- 선택·카메라 이동
+let fly = null;
+function flyTo(i) {
+  const t = new THREE.Vector3().fromArray(dest, i * 3);
+  const off = camera.position.clone().sub(controls.target);
+  off.setLength(Math.min(off.length(), 150));
+  // 지도는 패널이 열려도 움직이지 않으므로, 날아갈 때만 고른 점이 패널을 뺀 영역 가운데 오게 카메라 중심을 옆으로 민다(데스크톱)
+  if (!narrow() && panel.classList.contains("open")) {
+    const px = (innerWidth - 16 - panel.offsetWidth) / 2 - innerWidth / 2;  // 화면 가운데 → 빈 영역 가운데(px, 음수 = 왼쪽)
+    const perPx = 2 * off.length() * Math.tan(camera.fov * Math.PI / 360) / innerHeight;
+    const right = new THREE.Vector3().crossVectors(camera.up, off).normalize();  // off 는 점→카메라: up×off = 화면 오른쪽
+    t.addScaledVector(right, -px * perPx);
+  }
+  fly = { t, c: t.clone().add(off) };
+}
+function select(i, focus = false, detail = false) {
+  if (!navJump) { if (i >= 0) recordNav(i); else if (i < 0) { nav.away = true; saveNav(); } }
+  selected = i;
+  if (i < 0) { hidePanel(); hideCard(); }
+  else {
+    if (narrow()) $("ctl").classList.remove("open"), $("toggle").classList.remove("on");
+    if (mobile() && !detail) { hidePanel(); showCard(i); } else { hideCard(); showPanel(i); }
+    setRotate(false); if (focus) flyTo(i);
+  }
+  paint();
+  syncNavCard();
+  saveURL();
+  dispatchEvent(new CustomEvent("songselect", { detail: i }));
+}
+window.select = select;  // search.js·player.js 가 부른다
+window.musicMapSelect = (i, fly = true) => select(i, fly);  // user.js(최근 들은 곡) 옛 이름
+
+const ray = new THREE.Raycaster();
+const mouse = new THREE.Vector2();
+function pickAt(cx, cy) {
+  mouse.set(cx / innerWidth * 2 - 1, -(cy / innerHeight) * 2 + 1);
+  ray.setFromCamera(mouse, camera);
+  ray.params.Points.threshold = camera.position.distanceTo(controls.target) * (isTouch ? 0.03 : 0.014);
+  const hits = ray.intersectObjects([cloud]).filter(h => (alpha[h.index] > 0.01 && visible[h.index]) || h.index === selected);
+  if (!hits.length) return -1;
+  hits.sort((a, b) => a.distanceToRay - b.distanceToRay || a.distance - b.distance);
+  return hits[0].index;
+}
+// 손가락: 화면에서 반경 r(px) 안의 가장 가까운 점(겹치면 앞쪽)
+function pickNear(cx, cy, r = 24) {
+  let best = -1, bd = r * r, bz = 2;
+  const test = (i, x, y, z) => {
+    const dx = (x + 1) / 2 * innerWidth - cx, dy = (1 - y) / 2 * innerHeight - cy, d = dx * dx + dy * dy;
+    if (d < bd - 4 || (d <= bd + 4 && z < bz)) { best = i; bd = Math.min(bd, d); bz = z; }
+  };
+  for (let i = 0; i < n; i++) {
+    if ((alpha[i] <= 0.01 || !visible[i]) && i !== selected) continue;
+    v3.fromArray(cur, i * 3).project(camera);
+    if (v3.z <= 1) test(i, v3.x, v3.y, v3.z);
+  }
+  return best;
+}
+// 두 번 탭: 그 자리로 확대(점이 있으면 그 점, 없으면 손가락 밑 방향)
+function zoomAt(cx, cy, i) {
+  const t = controls.target.clone(), off = camera.position.clone().sub(t);
+  let p;
+  if (i >= 0) p = new THREE.Vector3().fromArray(cur, i * 3);
+  else {
+    mouse.set(cx / innerWidth * 2 - 1, -(cy / innerHeight) * 2 + 1);
+    ray.setFromCamera(mouse, camera);
+    p = ray.ray.at(off.length(), new THREE.Vector3());
+  }
+  t.lerp(p, i >= 0 ? 1 : 0.5);
+  off.setLength(Math.max(controls.minDistance * 2, off.length() * 0.5));
+  fly = { t, c: t.clone().add(off) };
+}
+const tip = $("tip");
+function showTip(x, y, i) {
+  tip.innerHTML = `<b>${esc(P[i].t)}</b><small>${esc(P[i].a) || "아티스트 미상"}${i === playing ? " · ♪ 재생 중" : ""}</small>`;
+  tip.style.display = "block";
+  tip.style.left = Math.min(x + 14, innerWidth - tip.offsetWidth - 8) + "px";
+  tip.style.top = (y + 16) + "px";
+}
+const hideTip = () => { tip.style.display = "none"; };
+let down = null, lastTap = null;
+const fingers = new Set();
+renderer.domElement.addEventListener("pointerdown", e => {
+  if (e.pointerType !== "mouse") fingers.add(e.pointerId);
+  // 두 손가락(핀치·이동)이 섞인 동작은 탭이 아니다
+  down = fingers.size > 1 ? null : { x: e.clientX, y: e.clientY, t: performance.now() }; setRotate(false); fly = null;
+  if (narrow() && $("ctl").classList.contains("open")) { $("ctl").classList.remove("open"); $("toggle").classList.remove("on"); setSheet(); down = null; }  // 폰: 지도를 누르면 설정 시트를 닫는다
+});
+const lift = e => fingers.delete(e.pointerId);
+addEventListener("pointerup", lift); addEventListener("pointercancel", lift);  // 캔버스 밖에서 뗀 손가락
+renderer.domElement.addEventListener("pointercancel", e => { lift(e); down = null; });
+renderer.domElement.addEventListener("pointerup", e => {
+  lift(e);
+  if (e.pointerType === "mouse") {
+    // 이름표에서 시작해 짧게(10px·350ms) 누르면 선택, 끌었으면 회전만
+    if (down && e.button === 0 && performance.now() - down.t <= 350 && Math.hypot(e.clientX - down.x, e.clientY - down.y) <= 10) {
+      const key = labelAt(e.clientX, e.clientY);
+      if (key) { down = null; hideTip(); activateLabel(key); return; }  // 이름표는 늘 이름표가 이긴다(분야 이름표가 점에 밀리면 그룹을 못 고른다)
+    }
+    if (!down || Math.hypot(e.clientX - down.x, e.clientY - down.y) > 6 || e.button !== 0) return;
+    const i = pickAt(e.clientX, e.clientY);
+    if (i >= 0 || selected >= 0) select(i);
+    return;
+  }
+  // 터치: 10px·350ms 안이어야 탭(회전하려고 끈 것은 선택하지 않음)
+  const d = down; down = null;
+  if (!d || fingers.size || Math.hypot(e.clientX - d.x, e.clientY - d.y) > 10 || performance.now() - d.t > 350) return;
+  const key = labelAt(e.clientX, e.clientY);
+  if (key) { lastTap = null; hideTip(); activateLabel(key); return; }
+  const i = pickNear(e.clientX, e.clientY);
+  const now = performance.now();
+  if (lastTap && now - lastTap.t < 320 && Math.hypot(e.clientX - lastTap.x, e.clientY - lastTap.y) < 30) { lastTap = null; zoomAt(e.clientX, e.clientY, i); return; }
+  lastTap = { x: e.clientX, y: e.clientY, t: now };
+  if (i >= 0 || selected >= 0) select(i);
+});
+let hoverLbl = null;
+function setHoverLbl(key) {
+  if (key === hoverLbl) return;
+  if (hoverLbl) { const L = LBL.get(hoverLbl); if (L) L.el.classList.remove("hov"); }
+  hoverLbl = key;
+  if (key) { const L = LBL.get(key); if (L) L.el.classList.add("hov"); }
+}
+renderer.domElement.addEventListener("pointermove", e => {
+  if (e.pointerType !== "mouse" || e.buttons) return;
+  const key = labelAt(e.clientX, e.clientY);
+  setHoverLbl(key);
+  if (key) {
+    if (hover !== -1) { hover = -1; paint(); }
+    hideTip(); renderer.domElement.style.cursor = "pointer";
+    return;
+  }
+  const i = pickAt(e.clientX, e.clientY);
+  if (i !== hover) { hover = i; paint(); }
+  if (i >= 0) showTip(e.clientX, e.clientY, i); else hideTip();
+  renderer.domElement.style.cursor = i >= 0 ? "pointer" : "";
+});
+renderer.domElement.addEventListener("pointerleave", () => { setHoverLbl(null); hideTip(); });
+
+// 내 ♥ 곡·평점(user.js): ♥ 점 번호 목록을 받아 테두리 표시, 내 평점 색·크기·버블을 다시 계산
+addEventListener("songmarks", e => {
+  mark.fill(0);
+  for (const i of e.detail || []) if (i >= 0 && i < n) mark[i] = 1;
+  geo.attributes.mark.needsUpdate = true;
+  computeVar("rt", VARS.rt);
+  if (chips.some(c => c.k === "fav" || c.k === "r")) { refreshSets(); chipsChanged(false); }
+  else if (S.color === "fav" || S.color === "rt" || S.size === "fav" || S.size === "rt") { legend(); paint(); }
+  dirty = true;
+});
+
+// 검색(search.js): 결과 상위 점을 강조
+window.addEventListener("musicsearch", e => {
+  const pts = e.detail && e.detail.filter(i => i >= 0 && i < n);
+  matches = pts && pts.length ? new Set(pts) : null;
+  const qc = chips.find(c => c.k === "q"), ls = window.lastSearch;
+  // 검색어 버블의 결과 집합. 바뀔 때만 다시 거른다(search.js 는 chipschange 마다 목록을 다시 그리며 이 이벤트를 또 보내므로 같으면 멈춘다)
+  if (qc && ls && ls.q === qc.v && (ls.pts.length !== qSet.size || ls.pts.some(i => !qSet.has(i)))) { qSet = new Set(ls.pts); chipsChanged(false); return; }
+  if (selected < 0) paint(); else buildLabels();
+  chipsUI();
+});
+
+// 미니 플레이어(player.js): 재생 중인 점에 맥박, 패널·카드의 재생 버튼
+addEventListener("playerstate", e => {
+  const d = e.detail || {};
+  const was = playing;
+  playing = d.i >= 0 ? d.i : -1; playState = d.state || "idle";
+  if (was !== playing) { buildLabels(); if (selected >= 0 && panel.classList.contains("open")) panel.querySelectorAll("li.nb").forEach(li => { const j = +li.dataset.j; li.classList.toggle("now", j === playing); }); }
+  syncPlayUI();
+  dirty = true;
+});
+
+// ---------------------------------------------------------------- 조건 버블 UI
+const chipsEl = $("chips"), addEl = $("addmenu"), tagsEl = $("tags");
+const visCount = () => visible.reduce((a, b) => a + b, 0);
+function chipsChanged(save = true) {
+  applyFilters();
+  if (save) saveURL();
+  chipsUI(); legend(); updateStatus(); paint();
+  if (addEl.classList.contains("open")) addUI();
+  if (tagsEl.classList.contains("open")) tagsUI();
+  dispatchEvent(new CustomEvent("chipschange", { detail: chips }));  // user.js(내 음악 '지도에서 보기')·search.js(목록 위치)
+}
+function refreshSets() {  // 바깥(user.js)에서 오는 점 집합
+  const u = U(), r = chips.find(c => c.k === "r");
+  favSet = new Set(chips.some(c => c.k === "fav") && u ? u.favPoints() : []);
+  rateSet = new Set(r && u ? u.ratedPoints(r.v) : []);
+}
+const SINGLE = new Set(["sg", "e", "pl", "pr", "c1", "en", "va", "fav", "r", "q", "nb", "na"]);
+// 버블 더하기: 분위기·소리 태그는 같은 것이 있으면 무시(AND 로 여럿), 장르는 바꾸기, 나머지 종류는 하나만(새 값으로 바꿈).
+function addChip(c, opts = {}) {
+  if (MULTI[c.k]) { if (chips.some(x => x.k === c.k && x.v === c.v)) return; chips.push(c); }
+  else if (c.k === "g" || SINGLE.has(c.k)) {
+    const at = chips.findIndex(x => x.k === c.k);
+    if (at >= 0) chips[at] = c; else chips.push(c);
+  } else chips.push(c);
+  if (c.k === "q") { const ls = window.lastSearch; qSet = new Set(ls && ls.q === c.v ? ls.pts : []); }
+  refreshSets();
+  if (c.k === "g" && !opts.noFly && !soundView()) flyToGenre(c.v[c.v.length - 1]);
+  if (c.k === "c1" && !opts.noFly && !soundView()) flyToGroup(c.v);
+  chipsChanged();
+}
+function setGroup(g) {  // 장르 = 배타적: 다른 장르를 누르면 바꾸기(같은 것이면 그대로 두고 알려 준다)
+  const c = chips.find(x => x.k === "g");
+  if (c && c.v.length === 1 && c.v[0] === g) { flyToGenre(g); toast(`이미 '${GENRES[g]}' 조건이 걸려 있어요`); return; }
+  addChip({ k: "g", v: [g] });
+}
+function setCluster(g) {  // 지도 큰 군집 이름표를 누르면
+  const c = chips.find(x => x.k === "c1");
+  if (c && c.v === g) { flyToGroup(g); toast(`이미 '${D.coarse[g].name}' 조건이 걸려 있어요`); return; }
+  addChip({ k: "c1", v: g });
+}
+function addGroupOr(g) {  // '+ 장르' 드롭다운: 같은 버블 안에서 OR
+  const c = chips.find(x => x.k === "g");
+  if (!c) return setGroup(g);
+  if (!c.v.includes(g)) { c.v = [...c.v, g]; flyToGenre(g); chipsChanged(); }
+}
+// 버블 지우기는 늘 되돌릴 수 있다: 지우기 전 버블 목록을 기억하고 토스트(되돌리기·Ctrl+Z)를 띄운다.
+let undoChips = null, toastT = 0;
+const undoEl = $("undo");
+function toast(msg, undo = null) {
+  undoChips = undo;
+  undoEl.querySelector("span").textContent = msg;
+  undoEl.querySelector("button").hidden = !undo;
+  undoEl.classList.add("on");
+  clearTimeout(toastT);
+  toastT = setTimeout(() => { undoEl.classList.remove("on"); undoChips = null; }, undo ? 6000 : 2200);
+}
+function undoRemove() {
+  if (!undoChips) return false;
+  chips = undoChips.map(c => ({ ...c, v: Array.isArray(c.v) ? c.v.slice() : c.v }));
+  undoChips = null; clearTimeout(toastT); undoEl.classList.remove("on");
+  if (chips.some(c => c.k === "q")) { const qc = chips.find(c => c.k === "q"), ls = window.lastSearch; qSet = new Set(ls && ls.q === qc.v ? ls.pts : []); }
+  refreshSets();
+  chipsChanged();
+  return true;
+}
+undoEl.querySelector("button").addEventListener("click", undoRemove);
+function removeChip(at) {
+  if (at < 0 || at >= chips.length) return;
+  const before = chips.map(c => ({ ...c })), text = chipText(chips[at]);
+  chips.splice(at, 1);
+  refreshSets();
+  chipsChanged();
+  toast(`조건 '${text}' 뺐어요`, before);
+}
+function clearChips() {
+  if (!chips.length) return;
+  const before = chips.map(c => ({ ...c }));
+  chips = []; refreshSets(); chipsChanged();
+  toast(`조건 ${before.length}개를 모두 뺐어요`, before);
+}
+window.chips = {  // search.js·user.js 가 쓴다
+  setGroup,
+  set: c => addChip(c),
+  remove: k => { const at = chips.findIndex(x => x.k === k); if (at >= 0) removeChip(at); },  // 내 음악 '지도에서 보기' 끄기 등 명시적 끄기(되돌리기 토스트)
+  get: k => chips.find(x => x.k === k) || null,
+  has: (k, v) => chips.some(x => x.k === k && (v === undefined || x.v === v)),
+  list: () => chips.slice(),
+};
+function chipsUI() {
+  const vis = visCount();
+  const groupAdd = c => {
+    const rest = GENRES.map((nm, g) => [nm, g]).filter(([, g]) => !c.v.includes(g));
+    return rest.length ? `<select data-gor aria-label="장르 더하기(또는)" title="장르 더하기(또는)"><option value="">+ 장르</option>${rest.map(([nm, g]) => `<option value="${g}">${esc(nm)}</option>`).join("")}</select>` : "";
+  };
+  const html = chips.map((c, at) => `<span class="bub" title="${esc(chipText(c))}"><span>${esc(chipText(c))}</span>${c.k === "g" ? groupAdd(c) : ""}`
+    + `<button class="bx" type="button" data-x="${at}" aria-label="${esc(chipText(c))} 조건 빼기">✕</button></span>`).join("");
+  const total = soundView() ? `${(D.counts || {}).audio || 0}곡(소리)` : `${n}곡`;
+  chipsEl.innerHTML = html
+    + (chips.length || soundView() ? `<span class="cnt">보이는 곡 <b>${vis}</b> <small>/ ${n}</small></span>${chips.length ? `<button class="clr" type="button" data-clear>모두 지우기</button>` : ""}` : `<span class="cnt all">조건 없음 · 전체 <b>${total}</b></span>`)
+    + `<button class="add" type="button" data-add aria-expanded="${addEl.classList.contains("open")}">＋ 조건</button>`;
+  document.body.classList.toggle("haschips", chips.length > 0);
+  placeBelow();
+}
+chipsEl.addEventListener("click", e => {
+  const x = e.target.closest("[data-x]");
+  if (x) { removeChip(+x.dataset.x); return; }
+  if (e.target.closest("[data-clear]")) { clearChips(); return; }
+  if (e.target.closest("[data-add]")) setPane(addEl, !addEl.classList.contains("open"));
+});
+chipsEl.addEventListener("change", e => { const s = e.target.closest("[data-gor]"); if (s && s.value !== "") addGroupOr(+s.value); });
+addEventListener("hashchange", () => {
+  // 폰 뒤로가기 표식(syncGuard)을 되돌릴 때도 해시가 바뀐다: 지금 상태와 같으면 아무것도 안 한다(버블이 풀리지 않게)
+  if (location.hash.replace(/^#/, "") === hashNow()) return;
+  chips = chipsFromHash(location.hash); refreshSets(); chipsChanged(false);
+  openFromHash();
+});
+// 검색 결과·내 서재 패널·태그 창이 버블 줄 아래에 붙도록 그 높이를 CSS 변수로
+function placeBelow() {
+  const r = (!chipsEl.offsetHeight ? $("top") : chipsEl).getBoundingClientRect();
+  document.documentElement.style.setProperty("--below", Math.round(r.bottom + 6) + "px");
+}
+if (window.ResizeObserver) new ResizeObserver(() => placeBelow()).observe($("ctl"));  // 로그인 버튼이 붙어 줄이 늘어도 결과창이 안 가리게
+
+// 버블 패널(조건 더하기 · 분위기/소리 태그): 한 번에 하나, 내 기록 시트·내 음악 패널과 겹치지 않게
+function setPane(el, open) {
+  for (const o of [addEl, tagsEl]) if (o !== el) o.classList.remove("open");
+  el.classList.toggle("open", open);
+  if (open) {
+    if (narrow()) dispatchEvent(new Event("searchfold"));
+    if ($("ctl").classList.contains("open")) $("toggle").click();
+    dispatchEvent(new Event("panesopen"));  // user.js: 내 음악 패널 닫기
+    (el === addEl ? addUI : tagsUI)();
+  }
+  $("tagbtn").classList.toggle("on", tagsEl.classList.contains("open"));
+  chipsUI();
+}
+function closePanes() {
+  const was = addEl.classList.contains("open") || tagsEl.classList.contains("open");
+  if (was) { addEl.classList.remove("open"); tagsEl.classList.remove("open"); $("tagbtn").classList.remove("on"); chipsUI(); }
+  return was;
+}
+$("tagbtn").addEventListener("click", () => setPane(tagsEl, !tagsEl.classList.contains("open")));
+addEventListener("click", e => { if (e.target.closest && e.target.closest("#mymusic-btn,#toggle")) { addEl.classList.remove("open"); tagsEl.classList.remove("open"); $("tagbtn").classList.remove("on"); } }, true);
+
+function addUI() {
+  const cur = k => chips.find(c => c.k === k);
+  const on = (k, v) => { const c = cur(k); return c && JSON.stringify(c.v) === JSON.stringify(v) ? " on" : ""; };
+  const btn = (k, v, label) => `<button type="button" data-ck="${k}" data-cv='${esc(JSON.stringify(v))}' class="${on(k, v).trim()}">${esc(label)}</button>`;
+  const grp = (title, body, hint = "") => `<div class="fgrp"><b>${title}</b><div class="seg">${body}</div>${hint ? `<div class="fhint">${hint}</div>` : ""}</div>`;
+  const g = cur("g"), u = U();
+  const qnow = window.lastSearch && window.lastSearch.q;
+  const has = (k, v) => chips.some(c => c.k === k && c.v === v);
+  addEl.innerHTML = `<div class="fh"><b>조건 더하기</b><button class="fx" type="button" data-close aria-label="닫기">×</button></div><div class="fb">`
+    + grp("장르", GENRES.map((nm, k) => `<button type="button" data-grp="${k}" class="${g && g.v.includes(k) ? "on" : ""}">${esc(nm)}</button>`).join(""),
+      "다른 장르를 누르면 바꾼다. 여럿을 함께 보려면 버블의 '+ 장르'.")
+    + grp("시대", ERAS.slice(0, 16).map(([nm]) => btn("e", nm, nm)).join(""))
+    + grp("분위기", MOODS.slice(0, 18).map(([nm]) => `<button type="button" data-ck="m" data-cv='${esc(JSON.stringify(nm))}' class="${has("m", nm) ? "on" : ""}">${esc(nm)}</button>`).join("") + `<button type="button" data-open-tags># 전체 목록</button>`, "버블마다 AND(모두 갖춘 곡)")
+    + grp("에너지", btn("en", [1, 2], "잔잔한 곡") + btn("en", [3, 3], "보통") + btn("en", [4, 5], "격렬한 곡"))
+    + grp("밝기", btn("va", [1, 2], "어두운 곡") + btn("va", [3, 3], "보통") + btn("va", [4, 5], "밝은 곡"))
+    + grp("재생목록", PLAYLISTS.slice(0, 12).map(([nm, c]) => btn("pl", nm, `${nm} ${c}`)).join(""))
+    + grp("의사표시", COLORS.pr.names.map((nm, k) => btn("pr", k, nm)).join(""))
+    + grp("내 기록", btn("fav", 1, "♥ 즐겨찾기만") + btn("r", 4, "★ 내 평점 4+") + btn("r", 5, "★ 5"), u ? "" : "내 기록을 불러오는 중")
+    + (SOUNDS.length ? grp("소리 태그", SOUNDS.slice(0, 14).map(([nm]) => `<button type="button" data-ck="st" data-cv='${esc(JSON.stringify(nm))}' class="${has("st", nm) ? "on" : ""}">${esc(nm)}</button>`).join(""), `오디오가 있는 ${(D.counts || {}).audio || 0}곡만 태그가 있다`) : "")
+    + grp("큰 군집", ENUMS.c1[1].map((nm, k) => btn("c1", k, nm)).join(""), "지도 위 큰 이름표를 눌러도 된다")
+    + grp("이웃·검색", `<button type="button" data-nb${selected < 0 ? " disabled" : ""}>고른 곡의 설명 이웃만</button><button type="button" data-na${selected < 0 || !(P[selected].an || []).length ? " disabled" : ""}>소리 이웃만</button><button type="button" data-qpin${qnow ? "" : " disabled"}>${qnow ? `검색 '${esc(qnow)}' 결과만` : "검색 결과만(검색 먼저)"}</button>`)
+    + `</div>`;
+}
+addEl.addEventListener("click", e => {
+  const t = e.target.closest("button");
+  if (!t || t.disabled) return;
+  if (t.dataset.close != null) { setPane(addEl, false); return; }
+  if (t.dataset.grp != null) { setGroup(+t.dataset.grp); return; }
+  if (t.dataset.openTags != null) { setPane(tagsEl, true); return; }
+  if (t.dataset.nb != null) { addNeighbors(selected, "nb"); return; }
+  if (t.dataset.na != null) { addNeighbors(selected, "na"); return; }
+  if (t.dataset.qpin != null) { const ls = window.lastSearch; if (ls && ls.q) addChip({ k: "q", v: ls.q }); return; }
+  if (t.dataset.ck) {
+    const k = t.dataset.ck, v = JSON.parse(t.dataset.cv), c = chips.find(x => x.k === k && (!MULTI[k] || x.v === v));
+    if (!(c && JSON.stringify(c.v) === JSON.stringify(v))) addChip({ k, v });  // 켜진 것을 다시 눌러도 그대로(지우기는 버블 ✕)
+  }
+});
+function addNeighbors(i, k = "nb") { if (i >= 0) addChip({ k, v: P[i].id }); }
+
+// '#' 분위기·소리 태그 창(서재 지도의 주제 태그 트리 자리): 곡 수(조건 안/전체), 찾기, 누르면 버블(AND)
+let tagQuery = "";
+function tagsUI() {
+  const active = new Set(chips.filter(c => MULTI[c.k]).map(c => c.k + ":" + c.v));
+  const q = tagQuery.trim().toLowerCase();
+  const rows = (k, list) => {
+    const get = MULTI[k][1];
+    return list.filter(([nm]) => !q || nm.toLowerCase().includes(q)).map(([nm, total]) => {
+      let inF = null;
+      if (chips.length) { inF = 0; for (let i = 0; i < n; i++) if (visible[i] && get(P[i]).includes(nm)) inF++; }
+      return `<div class="tr${active.has(k + ":" + nm) ? " on" : ""}"><button type="button" class="tw leaf" tabindex="-1" aria-hidden="true"></button>`
+        + `<button type="button" class="tn" data-tk="${k}" data-tag="${esc(nm)}" title="${esc(nm)} — 버블로 더하기">${MULTI[k][2]}${esc(nm)}</button>`
+        + `<span class="tc" title="${inF != null ? "조건 안 / 전체" : "곡 수"}">${inF != null ? `${inF}/` : ""}${total}</span></div>`;
+    }).join("");
+  };
+  const box = tagsEl.querySelector(".fb"), y = box ? box.scrollTop : 0, had = tagsEl.querySelector(".tq");
+  if (!had) {
+    tagsEl.innerHTML = `<div class="fh"><b># 분위기·소리 태그</b><button class="fx" type="button" data-close aria-label="닫기">×</button></div>`
+      + `<div class="fb"><input class="tq" type="search" placeholder="태그 찾기" autocomplete="off"><div class="tlist"></div></div>`
+      + `<div class="tfoot"><span>누르면 AND 로 더함</span><button class="btn" type="button" data-more>＋ 다른 조건</button></div>`;
+  }
+  const m = rows("m", MOODS), s = rows("st", SOUNDS);
+  tagsEl.querySelector(".tlist").innerHTML = (m ? `<div class="tsec">분위기 (카드)</div>${m}` : "") + (s ? `<div class="tsec">소리 태그 (오디오)</div>${s}` : "")
+    || `<div class="tnone">맞는 태그가 없습니다.</div>`;
+  tagsEl.querySelector(".fb").scrollTop = y;
+}
+tagsEl.addEventListener("click", e => {
+  const t = e.target.closest("button");
+  if (!t) return;
+  if (t.dataset.close != null) { setPane(tagsEl, false); return; }
+  if (t.dataset.more != null) { setPane(addEl, true); return; }
+  if (t.dataset.tag) { addChip({ k: t.dataset.tk, v: t.dataset.tag }); if (narrow()) setPane(tagsEl, false); }
+});
+tagsEl.addEventListener("input", e => { if (e.target.classList.contains("tq")) { tagQuery = e.target.value; tagsUI(); } });
+
+// ---------------------------------------------------------------- 컨트롤(보는 방식 상태 바꾸기). 화면 UI 는 아래 명령 팔레트.
+function setRotate(on) { controls.autoRotate = on; }
+// '내 기록' 시트(#more: 저장 위치·검색 기록). user.js 가 숨은 #toggle 을 눌러 연다.
+$("toggle").addEventListener("click", () => {
+  const open = !$("ctl").classList.contains("open");
+  $("ctl").classList.toggle("open", open); $("toggle").classList.toggle("on", open);
+  if (open) { closePal(true); if (narrow()) hidePanel(); if (narrow()) dispatchEvent(new Event("searchfold")); }  // 폰: 펼친 결과 시트가 새 시트를 덮지 않게 접는다
+  setSheet();
+});
+const presetOf = () => (Object.entries(PRESETS).find(([, p]) => p.x === S.x && p.y === S.y && p.z === S.z) || [null])[0];
+function setPreset(k, fin = true) {  // 축만 바꾼다(고른 색·크기는 지킨다)
+  const p = PRESETS[k];
+  if (!p || (S.x === p.x && S.y === p.y && S.z === p.z)) return;
+  Object.assign(S, { x: p.x, y: p.y, z: p.z });
+  changed(true);
+  if (fin && selected < 0) fly = { t: new THREE.Vector3(), c: home() };
+}
+function setColor(k) { if (S.color !== k) { S.color = k; changed(false); } }
+function setSize(k) { if (S.size !== k) { S.size = k; changed(false); } }
+function setAxis(a, k) { if (S[a] !== k) { S[a] = k; changed(true); } }
+function changed(moved) {
+  if (moved) layout(true);
+  saveURL(); legend(); chipsUI();
+  paint();
+}
+function setDepth(on) {
+  const v = on ? 1 : 0;
+  if (v === depthOn) return;
+  depthOn = v;
+  try { localStorage.setItem("musicmap-depth", String(depthOn)); } catch (_) { /* 저장 불가 */ }
+  depthU.uDepthOn.value = depthOn;
+  dirty = true;
+}
+function setK(v) {
+  S.k = v;
+  if (selected >= 0) showPanel(selected);
+  if (chips.some(c => c.k === "nb" || c.k === "na")) chipsChanged(false); else paint();
+}
+function resetView() {
+  select(-1);
+  fly = { t: new THREE.Vector3(), c: home() };
+  setRotate(!mobile());
+}
+function applyTheme(t) {
+  if (t) document.documentElement.dataset.theme = t; else delete document.documentElement.dataset.theme;
+  renderer.setClearColor(new THREE.Color(css("--bg")));
+  depthU.uBg.value.set(css("--bg"));
+  axisMat.color = new THREE.Color(css("--axis"));
+  const acc = css("--acc"), dark = css("--bg") !== "#fafaf9";
+  mat.uniforms.uAcc.value.set(acc);
+  selDotMat.uniforms.uColor.value.set(acc);
+  haloMat.uniforms.uColor.value.set(acc);
+  haloMat.uniforms.uStr.value = dark ? 0.68 : 0.34;  // 라이트에선 발광을 옅게
+  playMat.uniforms.uColor.value.set(css("--play"));
+  paint();
+}
+function toggleTheme() {
+  const t = css("--bg") !== "#fafaf9" ? "light" : "dark";
+  try { localStorage.setItem("musicmap-theme", t); } catch (_) { /* 저장 불가 */ }
+  applyTheme(t);
+}
+matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => applyTheme(document.documentElement.dataset.theme));
+
+// ---------------------------------------------------------------- 명령 팔레트(시안 D): Ctrl+K · ⌘ 버튼
+// 글자(초성도: ㅅㄹ)로 찾고 ↑↓ 로 옮기면 보는 방식(배치·색·크기·축)은 지도에 바로 미리 보인다.
+// Enter 확정, Esc·바깥 = 미리 보기만 되돌리고 닫기. 조건 버블은 Enter/클릭으로만 더하고, 팔레트를 닫아도 그대로다.
+const pal = $("pal"), palIn = pal.querySelector("input"), palList = pal.querySelector(".pd-list"), palCrumb = pal.querySelector(".pd-crumb");
+const CHO = "ㄱㄲㄴㄷㄸㄹㅁㅂㅃㅅㅆㅇㅈㅉㅊㅋㅌㅍㅎ";
+const cho = s => [...s].map(c => { const k = c.charCodeAt(0) - 0xac00; return k >= 0 && k < 11172 ? CHO[Math.floor(k / 588)] : c; }).join("");
+const normQ = s => String(s).toLowerCase().replace(/\s+/g, "");
+const COLOR_KEYS = ["g", "sg", "e", "pl", "pr", "k1", "k2", "fav", ...COLOR_NUM];
+const colorLabel = k => (COLORS[k] && COLORS[k].label) || (VARS[k] && VARS[k].label) || k;
+const colorSwatch = k => COLORS[k] ? COLORS[k].pal.slice(0, 4).map(x => `<i style="background:${x}"></i>`).join("") : `<i class="ramp" style="background:linear-gradient(90deg,${RAMP.join(",")})"></i>`;
+const SIZE_LABEL = { none: "균일", l: "좋아요 크게", fav: "즐겨찾기 크게", rt: "내 평점 크게", en: "에너지 클수록 크게" };
+const sizeLabel = k => SIZE_LABEL[k] || VARS[k].label;
+const PRESET_SUB = { terrain: "설명이 비슷한 곡끼리 모여요", era: "오른쪽이 최근, 위로 갈수록 격렬", sound: `소리가 비슷한 곡끼리 (오디오 ${(D.counts || {}).audio || 0}곡)` };
+const AXES = [["x", "가로"], ["y", "깊이"], ["z", "높이"]];
+const clickU = a => {  // user.js 는 문서 전체에서 [data-u] 클릭을 받는다
+  const b = document.createElement("button");
+  b.type = "button"; b.dataset.u = a; b.hidden = true;
+  document.body.appendChild(b); b.click(); b.remove();
+};
+function openMore(sec) {
+  if (!$("ctl").classList.contains("open")) $("toggle").click();
+  const el = sec && $(sec);
+  if (el) el.scrollIntoView({ block: "nearest", behavior: "smooth" });
+}
+function palCommands() {
+  const C = [], pre = presetOf(), pl = player();
+  for (const [k, p] of Object.entries(PRESETS)) C.push({ g: "배치", label: p.label, sub: PRESET_SUB[k], ic: "▦", on: pre === k, pv: true, run: fin => setPreset(k, fin), kw: "프리셋 배치 지도 기준" });
+  for (const k of COLOR_KEYS) C.push({ g: "점 색", label: colorLabel(k), right: colorSwatch(k), on: S.color === k, pv: true, run: () => setColor(k), kw: "색 색깔 칠하기 color" });
+  for (const k of SIZE_KEYS) C.push({ g: "점 크기", label: sizeLabel(k), ic: "●", on: S.size === k, pv: true, run: () => setSize(k), kw: "크기 점크기 size" });
+  if (pl) {
+    const cur = pl.current();
+    if (selected >= 0 && cur !== selected) C.push({ g: "재생", label: `‘${P[selected].t}’ 재생`, ic: "▶", run: () => pl.play(selected), kw: "재생 듣기 play" });
+    if (cur >= 0) {
+      C.push({ g: "재생", label: pl.playing(cur) ? "일시정지" : "이어 듣기", sub: P[cur].t, ic: pl.playing(cur) ? "⏸" : "▶", run: () => pl.toggle(), kw: "재생 일시정지 멈춤 pause play" });
+      C.push({ g: "재생", label: "다음 곡", sub: "소리 이웃 중 안 들은 곡", ic: "⏭", run: () => pl.next(), kw: "다음 next skip" });
+      C.push({ g: "재생", label: "정지", sub: "미니 플레이어 닫기", ic: "■", run: () => pl.stop(), kw: "정지 멈춤 끄기 stop" });
+    }
+    C.push({ g: "재생", label: `연속 재생: ${pl.auto() ? "켬" : "끔"}`, sub: "곡이 끝나면 소리 이웃으로", ic: "⟳", on: pl.auto(), run: () => pl.setAuto(!pl.auto()), kw: "연속 자동 재생 autoplay" });
+  }
+  // 조건(버블): 늘 보이는 몇 개 + 글자를 치면 장르·시대·분위기 등 값이 '조건: …'으로 뜬다
+  const has = (k, v) => chips.some(c => c.k === k && JSON.stringify(c.v) === JSON.stringify(v));
+  C.push({ g: "조건(버블)", label: "＋ 조건 고르기…", sub: "장르·시대·분위기·재생목록…", ic: "＋", run: () => setPane(addEl, true), kw: "필터 조건 버블 걸러" });
+  C.push({ g: "조건(버블)", label: "# 분위기·소리 태그 목록", sub: "태그에서 고르기", ic: "#", run: () => setPane(tagsEl, true), kw: "태그 분위기 소리 필터" });
+  C.push({ g: "조건(버블)", label: "♥ 즐겨찾기만", sub: has("fav", 1) ? "켜짐 · 버블 ✕로 풀기" : "♥ 누른 곡만 남기기", on: has("fav", 1), run: () => addChip({ k: "fav", v: 1 }), kw: "즐겨찾기 하트 좋아하는 필터" });
+  C.push({ g: "조건(버블)", label: "고른 곡의 이웃만", sub: selected >= 0 ? `‘${P[selected].t}’과 설명이 가까운 ${S.k}곡` : "먼저 지도에서 곡을 고르세요", dis: selected < 0, run: () => addNeighbors(selected, "nb"), kw: "이웃 비슷한 필터" });
+  C.push({ g: "조건(버블)", label: "고른 곡의 소리 이웃만", sub: selected >= 0 && (P[selected].an || []).length ? `소리가 가까운 ${S.k}곡` : "오디오가 있는 곡을 먼저 고르세요", dis: selected < 0 || !(P[selected].an || []).length, run: () => addNeighbors(selected, "na"), kw: "소리 이웃 비슷한 필터" });
+  const qnow = window.lastSearch && window.lastSearch.q;
+  if (qnow) C.push({ g: "조건(버블)", label: `검색 ‘${qnow}’ 결과만`, ic: "🔍", on: has("q", qnow), run: () => addChip({ k: "q", v: qnow }), kw: "검색 결과 필터" });
+  const cond = (label, sub, k, v) => C.push({ g: "조건(버블)", label: `조건: ${label}`, sub, on: has(k, v), cond: true, run: () => addChip({ k, v }), kw: `필터 조건 ${sub}` });
+  GENRES.forEach((nm, g) => C.push({ g: "조건(버블)", label: `조건: ${nm}`, sub: "장르", on: has("g", [g]), cond: true, run: () => setGroup(g), kw: "필터 조건 장르" }));
+  SUBGENRES.forEach(([nm, c]) => cond(nm, `하위장르 · ${c}곡`, "sg", nm));
+  ERAS.forEach(([nm, c]) => cond(nm, `시대 · ${c}곡`, "e", nm));
+  MOODS.forEach(([nm, c]) => cond(`~ ${nm}`, `분위기 · ${c}곡`, "m", nm));
+  SOUNDS.forEach(([nm, c]) => cond(`♪ ${nm}`, `소리 태그 · ${c}곡`, "st", nm));
+  PLAYLISTS.forEach(([nm, c]) => cond(`▤ ${nm}`, `재생목록 · ${c}곡`, "pl", nm));
+  [[[1, 2], "잔잔한 곡"], [[3, 3], "에너지 보통"], [[4, 5], "격렬한 곡"]].forEach(([v, nm]) => cond(nm, "에너지", "en", v));
+  [[[1, 2], "어두운 곡"], [[3, 3], "밝기 보통"], [[4, 5], "밝은 곡"]].forEach(([v, nm]) => cond(nm, "밝기", "va", v));
+  for (const [k, [lab, names]] of Object.entries(ENUMS)) names.forEach((nm, v) => cond(nm, lab, k, v));
+  [3, 4, 5].forEach(v => cond(`★ 내 평점 ${v}${v < 5 ? "+" : ""}`, "내 기록", "r", v));
+  C.push({ g: "보기", label: "자동 회전", right: controls.autoRotate ? "켜짐" : "꺼짐", ic: "↻", run: () => setRotate(!controls.autoRotate), kw: "회전 돌리기" });
+  C.push({ g: "보기", label: "처음 보기", sub: "카메라를 처음 자리로", ic: "⌂", run: () => resetView(), kw: "리셋 초기화 카메라" });
+  C.push({ g: "보기", label: "밝게/어둡게", sub: "테마", ic: "◐", run: () => toggleTheme(), kw: "테마 다크 라이트 어둡게 밝게" });
+  C.push({ g: "보기", label: `깊이감: ${depthOn ? "켬" : "끔"}`, sub: "앞은 선명하게, 뒤는 배경 쪽으로 흐리게", ic: "◍", on: !!depthOn, run: () => setDepth(!depthOn), kw: "깊이 깊이감 원근 안개 대기 fog depth" });
+  C.push({ g: "보기", label: "이웃 수…", right: `${S.k}곡`, ic: "⋯", keep: true, run: () => palDrill({ k: "k", lab: "이웃 수" }), kw: "이웃 개수 비슷한" });
+  C.push({ g: "내 것", label: "♥ 내 음악 열기", sub: "즐겨찾기·평점·최근 들은 곡", ic: "♥", run: () => clickU("mymusic"), kw: "내음악 즐겨찾기 하트 평점 최근 들은 기록" });
+  C.push({ g: "내 것", label: "내 기록·저장 위치 보기", sub: "서버/이 브라우저 · 검색 기록", ic: "🗂", run: () => openMore("user-sec"), kw: "기록 저장 설정 계정" });
+  for (const [a, lab] of AXES) C.push({ g: "축", label: `${lab} 축 바꾸기…`, right: esc(VARS[S[a]].short ?? VARS[S[a]].label), ic: "⤢", keep: true, run: () => palDrill({ k: a, lab: `${lab} 축` }), kw: "축 고급 직접" });
+  return C;
+}
+function drillCommands(d) {
+  if (d.k === "k") return [5, 10, 15, 20, 30].map(v => ({ g: "이웃 수", label: `${v}곡`, on: S.k === v, pv: true, run: () => setK(v) }));
+  return AXIS_KEYS.filter(k => d.k !== "x" || k !== "none").map(k => ({ g: VARS[k].group || "기타", label: VARS[k].label, on: S[d.k] === k, pv: true, run: () => setAxis(d.k, k) }));
+}
+let advOpen = false;
+try { advOpen = localStorage.getItem("musicmap-adv") === "1"; } catch (_) { /* 저장 불가 */ }
+let palItems = [], palAt = 0, palScope = null, palD = null, palSnap = null;
+function palFilter(all, q) {
+  const toks = q.trim().split(/\s+/).filter(Boolean).map(normQ);
+  if (!toks.length) return all;
+  return all.filter(c => {
+    const hay = normQ(`${c.g} ${c.label} ${c.sub || ""} ${c.kw || ""}`), hc = cho(hay);
+    return toks.every(t => hay.includes(t) || hc.includes(t));
+  });
+}
+function palRender() {
+  const q = palIn.value;
+  let all = palD ? drillCommands(palD) : palCommands();
+  if (palScope && !q) all = all.filter(c => c.g === palScope);
+  // 조건 값 목록은 글자를 쳤을 때만. 글자 없이 열면 '고급'(축 바꾸기)은 접어 두고 펼침 여부를 기억한다.
+  if (!q.trim() && !palD && !palScope) {
+    const BASIC = new Set(["배치", "점 색", "점 크기"]);  // 기본은 프리셋·색·크기만, 나머지(재생·조건·보기·내 것·축)는 「고급」 안
+    const basic = all.filter(c => !c.cond && BASIC.has(c.g)), more = all.filter(c => !c.cond && !BASIC.has(c.g));
+    all = [...basic, { g: "고급", label: advOpen ? "고급 접기" : "고급 펼치기…", sub: "재생·조건·보기(깊이감·테마)·내 음악·축", ic: advOpen ? "▾" : "▸", keep: true, run: () => { advOpen = !advOpen; try { localStorage.setItem("musicmap-adv", advOpen ? "1" : "0"); } catch (_) { /* 저장 불가 */ } palRender(); }, kw: "고급 더보기" },
+      ...(advOpen ? more.map(c => ({ ...c, g: `고급 · ${c.g}` })) : [])];
+  }
+  // 글자를 쳤을 때: 보기·재생 같은 명령을 조건 값('조건: ~ 깊이감' 같은 분위기 태그)보다 먼저
+  palItems = palFilter(all, q).map((c, i) => [c, i]).sort((a, b) => (!!a[0].cond - !!b[0].cond) || a[1] - b[1]).map(x => x[0]).slice(0, 120);
+  if (q.trim() && !palD) palItems.push({ g: "곡 찾기", label: `‘${q.trim()}’ 곡 검색`, ic: "🔍", run: () => { const box = $("q"); box.value = q.trim(); box.dispatchEvent(new Event("input", { bubbles: true })); box.focus(); } });
+  palAt = Math.max(0, Math.min(palAt, palItems.length - 1));
+  let last = "";
+  palList.innerHTML = palItems.map((c, i) => {
+    const head = c.g !== last ? `<div class="pd-gh">${esc(c.g)}</div>` : ""; last = c.g;
+    return `${head}<button type="button" class="pd-it${i === palAt ? " act" : ""}${c.on ? " on" : ""}${c.dis ? " dis" : ""}" data-i="${i}" role="option" aria-selected="${i === palAt}">`
+      + `<span class="ic">${c.on ? "✓" : esc(c.ic || "")}</span><span class="tx"><b>${esc(c.label)}</b>${c.sub ? `<small>${esc(c.sub)}</small>` : ""}</span><span class="rt">${c.right || ""}</span></button>`;
+  }).join("") || `<div class="pd-none">맞는 명령이 없어요</div>`;
+  palCrumb.hidden = !palD && !palScope;
+  palCrumb.innerHTML = palD ? `<button type="button" data-back>← 전체</button> ${esc(palD.lab)} 고르기` : palScope ? `<button type="button" data-back>← 전체</button> ${esc(palScope)}만 보는 중` : "";
+  const a = palList.querySelector(".pd-it.act"); if (a) a.scrollIntoView({ block: "nearest" });
+}
+function palRestore() {  // 미리 보기만 되돌린다(버블은 건드리지 않음)
+  if (!palSnap) return;
+  if (["x", "y", "z"].some(k => S[k] !== palSnap[k])) { Object.assign(S, { x: palSnap.x, y: palSnap.y, z: palSnap.z }); changed(true); }
+  setColor(palSnap.color); setSize(palSnap.size);
+  if (S.k !== palSnap.k) setK(palSnap.k);
+}
+function openPal(scope = null) {
+  if ($("ctl").classList.contains("open")) $("toggle").click();
+  closePanes();
+  palSnap = { x: S.x, y: S.y, z: S.z, color: S.color, size: S.size, k: S.k };
+  palScope = scope; palD = null; palIn.value = ""; palAt = 0;
+  pal.hidden = false;
+  palRender();
+  if (!isTouch) setTimeout(() => palIn.focus(), 20);  // 폰은 키보드가 시트를 가리므로 입력창을 눌러야 연다
+}
+function closePal(revert) {
+  if (pal.hidden) return false;
+  if (revert) palRestore();
+  palSnap = null; pal.hidden = true;
+  if (document.activeElement === palIn) palIn.blur();
+  document.body.classList.remove("pkb");
+  return true;
+}
+function palChoose(i) {
+  const c = palItems[i];
+  if (!c) return;
+  if (c.dis) { toast(c.sub || "지금은 쓸 수 없어요"); return; }
+  if (c.keep) { c.run(); return; }
+  palSnap = null;
+  closePal(false);
+  c.run(true);
+}
+function palDrill(d) { palD = d; palIn.value = ""; palAt = Math.max(0, drillCommands(d).findIndex(c => c.on)); palRender(); if (!isTouch) palIn.focus(); }
+palIn.addEventListener("input", () => { palAt = 0; palRender(); });
+palIn.addEventListener("focus", () => document.body.classList.toggle("pkb", narrow()));  // 폰 키보드: 시트를 보이는 영역 위로
+palIn.addEventListener("blur", () => document.body.classList.remove("pkb"));
+palIn.addEventListener("keydown", e => {
+  if (e.isComposing) return;
+  if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+    e.preventDefault();
+    if (!palItems.length) return;
+    palAt = (palAt + (e.key === "ArrowDown" ? 1 : -1) + palItems.length) % palItems.length;
+    const c = palItems[palAt];
+    if (c && c.pv && !c.dis) c.run(false);  // 지도에 미리 보기
+    palRender();
+  } else if (e.key === "Enter") { e.preventDefault(); palChoose(palAt); }
+  else if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); closePal(true); }
+  else if (e.key === "Backspace" && !palIn.value && (palD || palScope)) { palD = null; palScope = null; palRender(); }
+});
+palList.addEventListener("click", e => { const b = e.target.closest(".pd-it"); if (b) palChoose(+b.dataset.i); });
+palList.addEventListener("pointermove", e => {
+  if (e.pointerType !== "mouse") return;
+  const b = e.target.closest(".pd-it");
+  if (b && +b.dataset.i !== palAt) { palAt = +b.dataset.i; palList.querySelectorAll(".pd-it").forEach(x => x.classList.toggle("act", x === b)); }
+});
+palCrumb.addEventListener("click", e => { if (e.target.closest("[data-back]")) { palD = null; palScope = null; palRender(); if (!isTouch) palIn.focus(); } });
+pal.addEventListener("pointerdown", e => { if (e.target === pal) closePal(true); });
+pal.querySelector(".pd-esc").addEventListener("click", () => closePal(true));
+$("cmdk").addEventListener("click", () => (pal.hidden ? openPal() : closePal(true)));
+addEventListener("keydown", e => {
+  const mod = e.ctrlKey || e.metaKey;
+  if (mod && !e.altKey && e.key.toLowerCase() === "k") { e.preventDefault(); pal.hidden ? openPal() : closePal(true); return; }
+  if (mod && !e.shiftKey && e.key.toLowerCase() === "z" && undoChips) {
+    const t = e.target;
+    if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
+    e.preventDefault(); undoRemove();
+  }
+});
+addEventListener("playerstate", () => { if (!pal.hidden) palRender(); });
+// ESC: 팔레트 → 열린 메뉴 → 내 기록 시트 → 곡 선택 해제. 조건 버블은 절대 지우지 않는다(✕ 로만).
+addEventListener("keydown", e => {
+  if (e.key !== "Escape") return;
+  if (closePal(true)) return;
+  const t = e.target;
+  if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.tagName === "SELECT")) return;
+  if (closePanes()) return;
+  if ($("ctl").classList.contains("open")) { $("toggle").click(); return; }
+  if (selected >= 0) select(-1);
+});
+// 곡 탐색 기록: Alt+←/→ 또는 [ / ]. 입력창에 포커스가 있으면 무시한다.
+addEventListener("keydown", e => {
+  const t = e.target;
+  if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.tagName === "SELECT" || t.isContentEditable)) return;
+  const plain = !e.ctrlKey && !e.metaKey;
+  if (!pal.hidden) return;
+  if ((plain && e.key === "ArrowLeft") || (plain && !e.altKey && e.key === "[")) { e.preventDefault(); goNav(-1); }
+  else if ((plain && e.key === "ArrowRight") || (plain && !e.altKey && e.key === "]")) { e.preventDefault(); goNav(1); }
+});
+
+let legendFold = isTouch;
+try { const f = localStorage.getItem("musicmap-legend"); if (f != null) legendFold = f === "1"; } catch (_) { /* 저장 불가 */ }
+function legend() {
+  const c = COLORS[S.color];
+  let body;
+  if (c) {
+    const counts = new Array(c.names.length).fill(0);
+    for (let i = 0; i < n; i++) if (visible[i]) counts[c.get(P[i])]++;
+    body = c.names.map((nm, k) => counts[k] ? `<span class="it"><i style="background:${c.pal[k % c.pal.length]}"></i>${esc(nm)} <span style="opacity:.7">${counts[k]}</span></span>` : "").join("");
+  } else {
+    const v = VARS[S.color];
+    body = `<div class="ramp"><span>${esc(v.label)}</span><span>${esc(v.ends ? v.ends[0] : "")}</span><i style="background:linear-gradient(90deg,${RAMP.join(",")})"></i><span>${esc(v.ends ? v.ends[1] : "")}</span>${v.missing ? `<span>· 값 없음 ${v.missing}</span>` : ""}</div>`;
+  }
+  $("legend").innerHTML = `<button class="lt" type="button" aria-expanded="${!legendFold}">범례 ${legendFold ? "▸" : "▾"}</button><div class="lb">${body}</div>`;
+  $("legend").classList.toggle("fold", legendFold);
+}
+$("legend").addEventListener("click", e => { if (e.target.closest(".lt")) { legendFold = !legendFold; try { localStorage.setItem("musicmap-legend", legendFold ? "1" : "0"); } catch (_) { /* 저장 불가 */ } legend(); } });
+function updateStatus() {
+  const vis = visible.reduce((a, b) => a + b, 0);
+  $("status").textContent = vis === n ? `${n}곡` : `${vis} / ${n}곡`;
+}
+
+function resize() {
+  renderer.setSize(innerWidth, innerHeight);
+  camera.aspect = innerWidth / innerHeight;
+  shiftView();
+  const pr = Math.min(devicePixelRatio, 2);
+  mat.uniforms.scale.value = pr * Math.min(1, innerHeight / 800) * 0.9;
+  selDotMat.uniforms.scale.value = haloMat.uniforms.scale.value = playMat.uniforms.scale.value = mat.uniforms.scale.value;
+  depthU.uMaxPx.value = 28 * pr;
+  if (typeof placeBelow === "function") placeBelow();
+  dirty = true;
+}
+addEventListener("resize", resize);
+
+// 폰 뒤로가기: 상세 시트·설정 시트·검색 목록·카드가 열려 있으면 페이지를 떠나지 않고 하나씩 닫는다.
+// 열린 게 있는 동안 history 에 표식 하나를 두고, 다 닫히면 그 표식을 되돌린다.
+const resultsEl = $("results");
+const layersOpen = () => mobile() && (!pal.hidden || panel.classList.contains("open") || $("ctl").classList.contains("open")
+  || (resultsEl.classList.contains("on") && !resultsEl.classList.contains("fold")) || card.classList.contains("open"));
+let guard = false, skipPop = 0, guardBase = null;  // guardBase: 표식을 놓을 때의 해시(뒤로가기로 돌아온 것인지 가린다)
+function syncGuard() {
+  const want = layersOpen();
+  try {
+    if (want && !guard) { guardBase = location.hash; history.pushState({ bookmapLayer: 1 }, "", location.href); guard = true; }
+    else if (!want && guard) { guard = false; skipPop++; history.back(); }
+  } catch (_) { /* 미리보기 등 */ }
+}
+function closeTop() {
+  if (closePal(true)) return;
+  if (panel.classList.contains("open")) { if (selected >= 0) closeDetail(); else hidePanel(); }
+  else if ($("ctl").classList.contains("open")) { $("ctl").classList.remove("open"); $("toggle").classList.remove("on"); setSheet(); }
+  else if (resultsEl.classList.contains("on") && !resultsEl.classList.contains("fold")) dispatchEvent(new Event("searchfold"));
+  else if (card.classList.contains("open")) select(-1);
+}
+addEventListener("popstate", () => {
+  // 주소창·링크로 해시만 바꾼 경우(뒤로가기 표식이 아님): 그 해시의 조건·곡을 따른다(아래 saveURL 이 옛 상태로 덮지 않게)
+  if (!skipPop && !(guard && location.hash === guardBase) && location.hash.replace(/^#/, "") !== hashNow()) {
+    chips = chipsFromHash(location.hash); refreshSets(); chipsChanged(false); openFromHash();
+    return;
+  }
+  if (skipPop) skipPop--;
+  else { guard = false; closeTop(); syncGuard(); }
+  saveURL();  // 표식 위에서 바뀐 보기 설정을 지금 항목에 다시 적는다
+});
+const layerWatch = new MutationObserver(syncGuard);
+for (const el of [panel, $("ctl"), resultsEl, card]) layerWatch.observe(el, { attributes: true, attributeFilter: ["class"] });
+layerWatch.observe(pal, { attributes: true, attributeFilter: ["hidden"] });
+new MutationObserver(() => shiftView()).observe(resultsEl, { attributes: true, attributeFilter: ["class"] });  // 검색 목록 폭까지 반영
+
+// 키보드: 보이는 영역(visualViewport)에 맞춰 검색 결과를 검색창 밑으로
+const vv = window.visualViewport;
+function vvSync() {
+  if (!vv) return;
+  document.documentElement.style.setProperty("--vvh", vv.height + "px");
+  document.documentElement.style.setProperty("--vvt", vv.offsetTop + "px");
+}
+if (vv) { vv.addEventListener("resize", vvSync); vv.addEventListener("scroll", vvSync); vvSync(); }
+$("q").addEventListener("focus", () => document.body.classList.toggle("kb", narrow()));
+$("q").addEventListener("blur", () => document.body.classList.remove("kb"));
+document.addEventListener("gesturestart", e => e.preventDefault());  // iOS: 페이지 핀치 확대 막기(지도 핀치는 three 가)
+
+function openFromHash() {
+  const id = parseVideoHash(location.hash);
+  if (!id || (selected >= 0 && P[selected].id === id)) return;
+  const i = pointOf.has(id) ? pointOf.get(id) : -1;
+  if (i >= 0) select(i, true);
+}
+let savedTheme = null;
+try { savedTheme = localStorage.getItem("musicmap-theme"); } catch (_) { /* 저장 불가 */ }
+chips = chipsFromHash(location.hash);
+refreshSets(); applyFilters(); chipsUI(); legend();
+setRotate(!mobile());
+layout(false);
+resize();
+{ const g = chips.find(c => c.k === "g"); if (g && !soundView()) flyToGenre(g.v[0]); }
+{ const g = chips.find(c => c.k === "c1"); if (g && !soundView()) flyToGroup(g.v); }
+{ const qc = chips.find(c => c.k === "q"); if (qc && !$("q").value) { $("q").value = qc.v; $("q").dispatchEvent(new Event("input")); } }
+applyTheme(savedTheme === "light" || savedTheme === "dark" ? savedTheme : null);
+openFromHash();
+renderer.setAnimationLoop(now => {
+  stepAnim(now);
+  if (fly) {
+    controls.target.lerp(fly.t, 0.1); camera.position.lerp(fly.c, 0.1);
+    dirty = true;
+    if (controls.target.distanceTo(fly.t) < 0.05 && camera.position.distanceTo(fly.c) < 0.05) fly = null;
+  }
+  const moved = controls.update();
+  if ((selected >= 0 || playing >= 0) && !reduceMotion.matches) dirty = true;  // 선택 표시의 숨쉬기·발광, 재생 맥박
+  updateSelectedOverlay(now);
+  updatePlayMark(now);
+  if (mobile() && !moved && !dirty && !anim && !fly) return;  // 멈춘 화면은 다시 그리지 않는다(배터리)
+  dirty = false;
+  updateDepthRange();
+  renderer.render(scene, camera);
+  placeLabels();
+});
+if (document.fonts) document.fonts.ready.then(() => { dirty = true; });
+window.dispatchEvent(new Event("mapready"));
+</script>
+<script src="search.js"></script>
+<script src="player.js"></script>
+<script src="user.js"></script>
+</body>
+</html>

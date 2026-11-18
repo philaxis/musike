@@ -1,0 +1,10 @@
+[Unit]
+Description=Musike 취향 분석 매일 06:50 (06:30 곡 상자 동기화 뒤)
+
+[Timer]
+OnCalendar=*-*-* 06:50:00
+Persistent=true
+Unit=musike-analysis.service
+
+[Install]
+WantedBy=timers.target

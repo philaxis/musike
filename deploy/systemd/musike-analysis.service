@@ -1,0 +1,17 @@
+[Unit]
+Description=Musike 취향 분석 (새 곡만: 카드·소리/글 벡터·소리 묶음·지도, #26)
+After=network-online.target mnt-backup8t.mount musike.service
+Wants=network-online.target
+RequiresMountsFor=/mnt/backup8t
+
+[Service]
+Type=oneshot
+WorkingDirectory=%h/projects/musike/analysis
+Environment=PATH=%h/.local/bin:/usr/local/bin:/usr/bin:/bin
+Environment=MUSIKE_URL=http://127.0.0.1:4180
+ExecStart=%h/.local/bin/uv run --frozen --no-dev python -m musike_analysis update --max-cost 1
+# 75 = 다른 분석이 이미 도는 중
+SuccessExitStatus=75
+TimeoutStartSec=3h
+Nice=10
+IOSchedulingClass=idle
