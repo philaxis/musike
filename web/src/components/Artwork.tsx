@@ -1,5 +1,5 @@
 import { MusicNotesIcon } from "@phosphor-icons/react";
-import { useCallback, useState } from "react";
+import { useState } from "react";
 import { cn } from "../lib/format";
 
 interface Props {
@@ -9,6 +9,21 @@ interface Props {
   alt?: string;
   className?: string;
   iconSize?: number;
+}
+
+/** Big YouTube thumbnail sizes that older videos lack. */
+const YT_BIG = /^(https:\/\/i\.ytimg\.com\/vi\/[A-Za-z0-9_-]{11}\/)(hq720|maxresdefault|sddefault)\.jpg/;
+
+/** For a missing size YouTube sends a 120×90 grey "no thumbnail" picture with HTTP 404, which browsers still show. */
+function isYoutubePlaceholder(img: HTMLImageElement): boolean {
+  return img.naturalWidth === 120 && img.naturalHeight === 90 && img.src.includes("i.ytimg.com/");
+}
+
+/** What to try after `current` failed: the given fallback, else the always-present mqdefault of a big YouTube size. */
+function nextSource(current: string | undefined, fallback: string | undefined): string | undefined {
+  if (fallback && current !== fallback) return fallback;
+  const big = current ? YT_BIG.exec(current) : null;
+  return big ? `${big[1]}mqdefault.jpg` : undefined;
 }
 
 export function Artwork(props: Props) {
@@ -21,10 +36,18 @@ function ArtworkImage({ src, fallback, alt = "", className, iconSize = 20 }: Pro
   const [current, setCurrent] = useState(src || fallback);
   const [state, setState] = useState<"loading" | "ok" | "error">(src || fallback ? "loading" : "error");
 
+  const fail = () => {
+    const next = nextSource(current, fallback);
+    if (next) setCurrent(next);
+    else setState("error");
+  };
+
   // Images served from cache can be complete before React attaches onLoad.
-  const imgRef = useCallback((img: HTMLImageElement | null) => {
-    if (img?.complete && img.naturalWidth > 0) setState("ok");
-  }, []);
+  const imgRef = (img: HTMLImageElement | null) => {
+    if (!img?.complete || img.naturalWidth === 0) return;
+    if (isYoutubePlaceholder(img)) fail();
+    else setState("ok");
+  };
 
   return (
     <div className={cn("relative shrink-0 overflow-hidden bg-surface-3", className)}>
@@ -37,11 +60,8 @@ function ArtworkImage({ src, fallback, alt = "", className, iconSize = 20 }: Pro
           decoding="async"
           draggable={false}
           referrerPolicy="no-referrer"
-          onLoad={() => setState("ok")}
-          onError={() => {
-            if (fallback && current !== fallback) setCurrent(fallback);
-            else setState("error");
-          }}
+          onLoad={(e) => (isYoutubePlaceholder(e.currentTarget) ? fail() : setState("ok"))}
+          onError={fail}
           className={cn(
             "h-full w-full object-cover transition-opacity duration-300 ease-out-expo",
             state === "ok" ? "opacity-100" : "opacity-0",
