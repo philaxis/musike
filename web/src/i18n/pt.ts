@@ -9,6 +9,8 @@ export const pt: Messages = {
     close: "Fechar",
     back: "Voltar",
     cancel: "Cancelar",
+    newVersion: "Nova versão do Musike disponível",
+    reload: "Recarregar",
     retry: "Tentar de novo",
     loading: "Carregando",
     play: "Tocar",

@@ -56,7 +56,8 @@ export default defineConfig(({ mode }) => {
       native
         ? nativeBackend()
         : VitePWA({
-            registerType: "autoUpdate",
+            // "prompt": main.tsx decides when to switch, so a new version never cuts off a song that is playing.
+            registerType: "prompt",
             includeAssets: ["favicon.svg", "apple-touch-icon.png"],
             manifest: {
               name: "Musike",

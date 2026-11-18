@@ -9,6 +9,8 @@ export const ko: Messages = {
     close: "닫기",
     back: "뒤로",
     cancel: "취소",
+    newVersion: "Musike 새 버전이 나왔어요",
+    reload: "새로 고침",
     retry: "다시 해 보기",
     loading: "불러오는 중",
     play: "재생",
