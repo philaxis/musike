@@ -22,6 +22,10 @@ import { FavoriteButton, ModeSwitch, Scrubber, Transport } from "./Controls";
 import { IconButton } from "./IconButton";
 import { QueueList } from "./Queue";
 import { SLOT, VideoSlot } from "./Video";
+import { menuTrigger, NO_CALLOUT } from "./menuTrigger";
+
+/** Right-click or long press on what is playing: the same menu as its row. */
+const currentMenu = (track: Track) => menuTrigger(() => ({ kind: "track", track }));
 
 /** Artwork or the live video, with a soft ambient glow from the cover behind it. */
 function Stage({ track, slot, className }: { track: Track; slot: number; className?: string }) {
@@ -114,8 +118,10 @@ function PanelBody({ tab, slot }: { tab: PanelTab; slot: number }) {
   const nextUp = queue[index + 1];
   return (
     <div className="flex flex-col gap-5 px-1 pb-4">
-      <Stage track={track} slot={slot} />
-      <TrackHeading track={track} />
+      <div {...currentMenu(track)} className={cn("flex flex-col gap-5", NO_CALLOUT)}>
+        <Stage track={track} slot={slot} />
+        <TrackHeading track={track} />
+      </div>
       <ModeSwitch />
       {!isLocal(track) && (
         <button
@@ -301,11 +307,20 @@ export function NowPlayingSheet({ open, onClose }: { open: boolean; onClose: () 
               </div>
             ) : (
               <div className="flex flex-1 flex-col justify-evenly gap-4 pb-[calc(16px+env(safe-area-inset-bottom))]">
-                <div className="touch-none" onPointerDown={(e) => drag.start(e)}>
+                <div
+                  className={cn("touch-none", NO_CALLOUT)}
+                  onContextMenu={currentMenu(track).onContextMenu}
+                  onPointerDown={(e) => {
+                    currentMenu(track).onPointerDown(e);
+                    drag.start(e);
+                  }}
+                >
                   <Stage track={track} slot={SLOT.sheet} className="max-w-[min(100%,46dvh)]" />
                 </div>
                 <div className="flex flex-col gap-4">
-                  <TrackHeading track={track} large />
+                  <div {...currentMenu(track)} className={NO_CALLOUT}>
+                    <TrackHeading track={track} large />
+                  </div>
                   <Scrubber touch />
                   <Transport big />
                   <ModeSwitch className="justify-center" />

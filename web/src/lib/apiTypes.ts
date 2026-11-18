@@ -89,8 +89,10 @@ export interface MusikeApi {
   createPlaylist(name: string, tracks?: Track[]): Promise<Playlist>;
   renamePlaylist(id: string, name: string): Promise<Playlist>;
   deletePlaylist(id: string): Promise<void>;
-  addToPlaylist(id: string, t: Track | Track[]): Promise<Playlist>;
-  removeFromPlaylist(id: string, trackId: string): Promise<Playlist>;
+  /** Appends tracks; ones already in the playlist are skipped unless `duplicates`. */
+  addToPlaylist(id: string, tracks: Track[], duplicates?: boolean): Promise<Playlist>;
+  /** Removes the rows at `at`; `ids[k]` is the track expected at `at[k]` (refused when the list changed). */
+  removeRows(id: string, at: number[], ids: string[]): Promise<Playlist>;
   importLibrary(backup: unknown, mode: "merge" | "replace"): Promise<ImportResult>;
 
   system(): Promise<SystemInfo>;

@@ -131,6 +131,8 @@ export const server = {
     request<{ album: LocalAlbum; tracks: Track[] }>(`/api/local/album${q({ root, key, hidden: shown(showHidden) })}`, { signal }),
   searchLocal: (text: string, limit: number, signal?: AbortSignal) =>
     request<{ tracks: Track[] }>(`/api/local${q({ q: text, limit })}`, { signal }).then((r) => r.tracks),
+  /** Every (shown) track of one music folder, in folder order: what 「전체 재생」 of a folder plays. */
+  rootTracks: (root: string) => request<{ tracks: Track[] }>(`/api/local${q({ root, limit: 5000 })}`).then((r) => r.tracks),
   hiddenItems: () => request<{ ids: string[]; roots: string[] }>("/api/local/hidden"),
   hide: (target: HideTarget) => request<unknown>("/api/local/hidden", { method: "POST", json: target }),
   unhide: (target: HideTarget) => request<unknown>("/api/local/hidden", { method: "DELETE", json: target }),

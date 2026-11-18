@@ -1,3 +1,4 @@
+import type { Icon } from "@phosphor-icons/react";
 import { create } from "zustand";
 import { desktop } from "../lib/desktop";
 import type { Track } from "../lib/types";
@@ -14,13 +15,48 @@ export interface Toast {
   action?: ToastAction;
 }
 
-export interface TrackMenuState {
-  track: Track;
-  /** Anchor point for the desktop popover. Mobile renders a bottom sheet instead. */
-  x: number;
-  y: number;
-  playlistId?: string;
+/** An extra entry of a group menu: hide an album, rename or delete a playlist. */
+export interface MenuExtra {
+  label: string;
+  icon: Icon;
+  run: () => void;
+  danger?: boolean;
 }
+
+/** What a context menu (right-click, long press or ⋯) is about. */
+export type MenuTarget =
+  | {
+      kind: "track";
+      track: Track;
+      /** The row on a playlist page, for 「이 재생목록에서 빼기」. */
+      row?: { playlistId: string; at: number };
+      /** The row's entries in the queue (a bundle is several), for 「대기열에서 빼기」. */
+      queued?: { at: number; count: number };
+      /** Starts picking several tracks of this list, from this row. */
+      select?: () => void;
+    }
+  | {
+      /** The tracks picked in a list. */
+      kind: "tracks";
+      tracks: Track[];
+      rows?: { playlistId: string; at: number[] };
+      /** Empties the selection (after the tracks left the playlist). */
+      clear?: () => void;
+    }
+  | {
+      /** An album, playlist or folder: its tracks are fetched when an entry is picked. */
+      kind: "group";
+      title: string;
+      sub?: string;
+      thumb?: string;
+      load: () => Promise<Track[]>;
+      extras?: MenuExtra[];
+    };
+
+/** Anchor point for the desktop popover. Mobile renders a bottom sheet instead. */
+export type MenuState = MenuTarget & { x: number; y: number };
+
+export type DuplicateChoice = "skip" | "all";
 
 type Theme = "dark" | "light";
 export type PanelTab = "playing" | "queue";
@@ -31,9 +67,13 @@ interface UiState {
   drawerOpen: boolean;
   panelTab: PanelTab;
   toasts: Toast[];
-  menu: TrackMenuState | null;
-  /** Tracks waiting for the "add to playlist" dialog: one from a track menu, many from the list search. */
+  menu: MenuState | null;
+  /** Tracks waiting for the "add to playlist" dialog: one from a track menu, many from a selection or album. */
   addToPlaylist: Track[] | null;
+  /** Adding tracks a playlist already has: asks whether to leave those out (components/Dialogs.tsx). */
+  duplicates: { name: string; dupes: number; total: number; answer: (c: DuplicateChoice | null) => void } | null;
+  /** A playlist being renamed or about to be deleted from any menu. */
+  playlistEdit: { kind: "rename" | "delete"; id: string } | null;
   /** The track whose tags are being edited, and the one whose other versions are shown (components/Tags.tsx). */
   tagsFor: Track | null;
   versionsFor: Track | null;
@@ -50,9 +90,11 @@ interface UiState {
   closePanel: () => void;
   toast: (message: string, tone?: Toast["tone"], action?: ToastAction) => void;
   dismissToast: (id: number) => void;
-  openMenu: (m: TrackMenuState) => void;
+  openMenu: (m: MenuState) => void;
   closeMenu: () => void;
   openAddToPlaylist: (tracks: Track[] | null) => void;
+  askDuplicates: (name: string, dupes: number, total: number) => Promise<DuplicateChoice | null>;
+  setPlaylistEdit: (edit: UiState["playlistEdit"]) => void;
   openTags: (track: Track | null) => void;
   openVersions: (track: Track | null) => void;
   setShortcutsOpen: (open: boolean) => void;
@@ -79,6 +121,8 @@ export const useUi = create<UiState>((set, get) => ({
   toasts: [],
   menu: null,
   addToPlaylist: null,
+  duplicates: null,
+  playlistEdit: null,
   tagsFor: null,
   versionsFor: null,
   shortcutsOpen: false,
@@ -137,6 +181,23 @@ export const useUi = create<UiState>((set, get) => ({
   openMenu: (menu) => set({ menu }),
   closeMenu: () => set({ menu: null }),
   openAddToPlaylist: (addToPlaylist) => set({ addToPlaylist, menu: null }),
+  askDuplicates: (name, dupes, total) =>
+    new Promise((resolve) => {
+      // A question still open is answered "never mind" before the new one replaces it.
+      get().duplicates?.answer(null);
+      set({
+        duplicates: {
+          name,
+          dupes,
+          total,
+          answer: (c) => {
+            set({ duplicates: null });
+            resolve(c);
+          },
+        },
+      });
+    }),
+  setPlaylistEdit: (playlistEdit) => set({ playlistEdit, menu: null }),
   openTags: (tagsFor) => set({ tagsFor, menu: null }),
   openVersions: (versionsFor) => set({ versionsFor, menu: null }),
   setShortcutsOpen: (shortcutsOpen) => set({ shortcutsOpen }),

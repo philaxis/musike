@@ -1,26 +1,48 @@
+import { DotsThreeIcon } from "@phosphor-icons/react";
 import { Link } from "react-router";
+import { useT } from "../i18n";
 import { cn } from "../lib/format";
 import { paths } from "../lib/routes";
 import type { AlbumCard } from "../lib/types";
 import { Artwork } from "./Artwork";
+import { menuTrigger, NO_CALLOUT, openMenuFromButton } from "./menuTrigger";
+import { youtubeAlbumMenu } from "./menus";
 
-/** An album cover with its title; opens the album. */
+/** An album cover with its title; opens the album. Right-click, long press or ⋯: play, queue or save it whole. */
 export function AlbumTile({ album, className }: { album: AlbumCard; className?: string }) {
+  const t = useT();
   const sub = [album.artist, album.year].filter(Boolean).join(" · ");
   return (
-    <Link to={paths.album(album.id)} state={{ name: album.title }} className={cn("group flex flex-col gap-2", className)}>
-      <span className="block overflow-hidden rounded-[14px]">
-        <Artwork
-          src={album.art}
-          fallback={album.thumb}
-          className="aspect-square w-full transition-transform duration-300 ease-out-expo group-hover:scale-[1.04]"
-        />
-      </span>
-      <span className="min-w-0">
-        <span className="block truncate text-sm font-semibold">{album.title}</span>
-        {sub && <span className="block truncate text-xs text-fg-2">{sub}</span>}
-      </span>
-    </Link>
+    <div className={cn("group relative", className)}>
+      <Link
+        to={paths.album(album.id)}
+        state={{ name: album.title }}
+        {...menuTrigger(() => youtubeAlbumMenu(album))}
+        draggable={false}
+        className={cn("flex flex-col gap-2", NO_CALLOUT)}
+      >
+        <span className="block overflow-hidden rounded-[14px]">
+          <Artwork
+            src={album.art}
+            fallback={album.thumb}
+            className="aspect-square w-full transition-transform duration-300 ease-out-expo group-hover:scale-[1.04]"
+          />
+        </span>
+        <span className="min-w-0">
+          <span className="block truncate text-sm font-semibold">{album.title}</span>
+          {sub && <span className="block truncate text-xs text-fg-2">{sub}</span>}
+        </span>
+      </Link>
+      <button
+        type="button"
+        onClick={(e) => openMenuFromButton(e, youtubeAlbumMenu(album))}
+        aria-label={t.basics.menuFor(album.title)}
+        title={t.trackList.more}
+        className="absolute top-1.5 right-1.5 grid size-9 place-items-center rounded-full bg-black/45 text-white backdrop-blur-sm transition-opacity hover:bg-black/65 focus-visible:opacity-100 md:opacity-0 md:group-hover:opacity-100 pointer-coarse:opacity-100"
+      >
+        <DotsThreeIcon size={20} weight="bold" />
+      </button>
+    </div>
   );
 }
 

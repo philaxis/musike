@@ -1,25 +1,28 @@
-import { FolderOpenIcon, WarningCircleIcon } from "@phosphor-icons/react";
+import { DotsThreeIcon, FolderOpenIcon, PlayIcon, ShuffleIcon, WarningCircleIcon } from "@phosphor-icons/react";
 import { useEffect } from "react";
 import { Link, useParams } from "react-router";
 import { Artwork } from "../components/Artwork";
-import { HideMenu, ShowHiddenToggle } from "../components/HideControls";
+import { ShowHiddenToggle } from "../components/HideControls";
+import { IconButton, PlayDisc } from "../components/IconButton";
+import { menuTrigger, NO_CALLOUT, openMenuFromButton } from "../components/menuTrigger";
+import { localAlbumMenu, localRootMenu } from "../components/menus";
 import { BackButton, EmptyState, PageHeader } from "../components/Page";
 import { useRemote } from "../hooks/useRemote";
 import { useT } from "../i18n";
-import { cn } from "../lib/format";
+import { cn, shuffled } from "../lib/format";
 import { server } from "../lib/server";
 import { paths } from "../lib/routes";
-import type { LocalAlbum } from "../lib/types";
+import type { LocalAlbum, LocalRoot as Root } from "../lib/types";
+import { usePlayer } from "../player/player";
 import { useLocal } from "../stores/local";
 import { toast } from "../stores/ui";
 import { isTvMode } from "../tv/tvMode";
 
-/** Hides an album, or shows it again: every one of its tracks. */
-async function setAlbumHidden(a: LocalAlbum, hide: boolean) {
+/** Plays every track of a music folder, in order or shuffled. */
+async function playRoot(root: string, shuffle: boolean) {
   try {
-    const { tracks } = await server.album(a.root, a.key, true);
-    const target = { ids: tracks.map((x) => x.id) };
-    await (hide ? useLocal.getState().hide(target) : useLocal.getState().unhide(target));
+    const tracks = await server.rootTracks(root);
+    if (tracks.length) usePlayer.getState().playList(shuffle ? shuffled(tracks) : tracks, 0);
   } catch (e) {
     toast((e as Error).message, "error");
   }
@@ -44,6 +47,8 @@ export default function LocalRoot() {
   }, [loadRoots]);
 
   const albums = page.status === "ok" ? page.data : [];
+  // The folder's menu works before the folder list has loaded, with what the address says.
+  const rootInfo: Root = info ?? { name: root, path: "", online: true, albums: albums.length, tracks: 0 };
 
   return (
     <div className="pb-8">
@@ -61,18 +66,18 @@ export default function LocalRoot() {
             </p>
           )}
         </div>
-        {!tv && (
-          <div className="flex shrink-0 items-center gap-1">
-            {(anyHidden || showHidden) && <ShowHiddenToggle />}
-            <HideMenu
-              name={root}
-              hidden={!!info?.hidden}
-              hideLabel={t.hide.hideFolder}
-              onHide={() => void useLocal.getState().hide({ root })}
-              onUnhide={() => void useLocal.getState().unhide({ root })}
-            />
-          </div>
-        )}
+        <div className="flex shrink-0 items-center gap-1">
+          {!tv && (anyHidden || showHidden) && <ShowHiddenToggle />}
+          <IconButton label={t.basics.shuffle} onClick={() => void playRoot(root, true)}>
+            <ShuffleIcon size={20} />
+          </IconButton>
+          <IconButton label={t.basics.menuFor(root)} onClick={(e) => openMenuFromButton(e, localRootMenu(rootInfo))}>
+            <DotsThreeIcon size={22} weight="bold" />
+          </IconButton>
+          <PlayDisc label={t.basics.playAll} px={48} onClick={() => void playRoot(root, false)}>
+            <PlayIcon size={22} weight="fill" />
+          </PlayDisc>
+        </div>
       </div>
 
       {info && !info.online && (
@@ -120,7 +125,9 @@ export default function LocalRoot() {
               <Link
                 to={paths.localAlbum(a.root, a.key)}
                 state={{ name: a.name }}
-                className={cn("group flex flex-col gap-2", a.hidden && "opacity-50")}
+                {...menuTrigger(() => localAlbumMenu(a, !!info?.hidden))}
+                draggable={false}
+                className={cn("group flex flex-col gap-2", NO_CALLOUT, a.hidden && "opacity-50")}
               >
                 <span className="block overflow-hidden rounded-[14px]">
                   <Artwork
@@ -137,17 +144,13 @@ export default function LocalRoot() {
                   </span>
                 </span>
               </Link>
-              {/* A hidden folder is shown again as a whole (above), not album by album. */}
-              {!tv && !info?.hidden && (
-                <HideMenu
-                  name={a.name}
-                  hidden={!!a.hidden}
-                  hideLabel={t.hide.hide}
-                  onHide={() => void setAlbumHidden(a, true)}
-                  onUnhide={() => void setAlbumHidden(a, false)}
-                  className="absolute! top-1.5 right-1.5 bg-black/45 text-white! backdrop-blur-sm hover:bg-black/65!"
-                />
-              )}
+              <IconButton
+                label={t.basics.menuFor(a.name)}
+                onClick={(e) => openMenuFromButton(e, localAlbumMenu(a, !!info?.hidden))}
+                className="absolute! top-1.5 right-1.5 bg-black/45 text-white! backdrop-blur-sm hover:bg-black/65!"
+              >
+                <DotsThreeIcon size={22} weight="bold" />
+              </IconButton>
             </li>
           ))}
         </ul>

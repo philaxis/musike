@@ -3,8 +3,8 @@ import { useState, type ReactNode } from "react";
 import { Link, useLocation, useParams, useSearchParams } from "react-router";
 import { Artwork } from "../components/Artwork";
 import { BackButton, EmptyState, PageHeader } from "../components/Page";
-import { SelectableTrackList, Short } from "../components/Selection";
-import { TrackListSkeleton } from "../components/TrackList";
+import { Short } from "../components/Selection";
+import { TrackList, TrackListSkeleton } from "../components/TrackList";
 import { useRemote } from "../hooks/useRemote";
 import { api } from "../lib/api";
 import { useI18n, useT, type Lang } from "../i18n";
@@ -168,7 +168,9 @@ function GenreBody({ id, lang }: { id: string; lang: Lang }) {
 
       {page.status === "ok" && view === "tracks" && (
         page.data.tracks.length ? (
-          <SelectableTrackList key={id} tracks={page.data.tracks} />
+          <div className="px-2 md:px-3">
+            <TrackList key={id} tracks={page.data.tracks} header={false} alwaysBar />
+          </div>
         ) : (
           <EmptyState icon={<MusicNotesIcon size={28} />} title={t.genre.noSongs} body={t.genre.noSongsBody} />
         )

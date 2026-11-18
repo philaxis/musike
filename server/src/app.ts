@@ -207,9 +207,13 @@ export async function startServer(opts: StartOptions = {}): Promise<RunningServe
 
   app.post("/api/history", async (req) => ({ history: await library.pushHistory(library.sanitizeTrack(req.body)) }));
 
-  app.post("/api/playlists", async (req) => {
+  // A whole music folder can go into a playlist at once: up to 5000 tracks, so more than the default 1 MB body.
+  const MANY = { bodyLimit: 8 * 1024 * 1024 };
+  const MANY_TRACKS = 5000;
+
+  app.post("/api/playlists", MANY, async (req) => {
     const body = (req.body ?? {}) as { name?: unknown; tracks?: unknown };
-    const tracks = Array.isArray(body.tracks) ? body.tracks.slice(0, 500).map(library.sanitizeTrack) : [];
+    const tracks = Array.isArray(body.tracks) ? body.tracks.slice(0, MANY_TRACKS).map(library.sanitizeTrack) : [];
     return library.createPlaylist(typeof body.name === "string" ? body.name : "", tracks);
   });
 
@@ -224,19 +228,25 @@ export async function startServer(opts: StartOptions = {}): Promise<RunningServe
     return reply.code(204).send();
   });
 
-  /** One track, or `{ tracks: [...] }` to add many at once. */
-  app.post("/api/playlists/:pid/tracks", async (req) => {
-    const body = (req.body ?? {}) as { tracks?: unknown };
-    const tracks = Array.isArray(body.tracks) ? body.tracks.slice(0, 500).map(library.sanitizeTrack) : library.sanitizeTrack(req.body);
-    return library.addToPlaylist((req.params as { pid: string }).pid, tracks);
+  /** One track, or `{ tracks: [...] }` to add many at once; `duplicates: true` also adds those already in it. */
+  app.post("/api/playlists/:pid/tracks", MANY, async (req) => {
+    const body = (req.body ?? {}) as { tracks?: unknown; duplicates?: unknown };
+    const tracks = Array.isArray(body.tracks) ? body.tracks.slice(0, MANY_TRACKS).map(library.sanitizeTrack) : library.sanitizeTrack(req.body);
+    return library.addToPlaylist((req.params as { pid: string }).pid, tracks, { duplicates: body.duplicates === true });
   });
 
   app.delete("/api/playlists/:pid/tracks/:id", async (req) =>
     library.removeFromPlaylist((req.params as { pid: string }).pid, trackId(req.params)),
   );
 
-  /** Reorders a whole playlist: `{ ids }` must hold every current track ID exactly once. */
-  app.put("/api/playlists/:pid/tracks", async (req) =>
+  /** Removes rows by position: `{ at, ids }`, `ids[k]` being the track at `at[k]` (409 when the list changed). */
+  app.delete("/api/playlists/:pid/tracks", async (req) => {
+    const { at, ids } = (req.body ?? {}) as { at?: unknown; ids?: unknown };
+    return library.removePositions((req.params as { pid: string }).pid, at, ids);
+  });
+
+  /** Reorders a whole playlist: `{ ids }` must hold every current track ID (as many times as it is there). */
+  app.put("/api/playlists/:pid/tracks", MANY, async (req) =>
     library.reorderPlaylist((req.params as { pid: string }).pid, ((req.body ?? {}) as { ids?: unknown }).ids),
   );
 

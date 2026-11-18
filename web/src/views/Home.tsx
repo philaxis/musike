@@ -3,6 +3,8 @@ import type { ReactNode } from "react";
 import { Link, useNavigate } from "react-router";
 import { Artwork } from "../components/Artwork";
 import { LogoMark } from "../components/Brand";
+import { menuTrigger, NO_CALLOUT } from "../components/menuTrigger";
+import { favoritesMenu, historyMenu, playlistMenu } from "../components/menus";
 import { PageHeader, Section } from "../components/Page";
 import { TrackList, TrackListSkeleton } from "../components/TrackList";
 import { useT } from "../i18n";
@@ -11,13 +13,17 @@ import type { Track } from "../lib/types";
 import { usePlayer } from "../player/player";
 import { useAppearance } from "../stores/appearance";
 import { useLibrary } from "../stores/library";
+import type { MenuTarget } from "../stores/ui";
 
-function Shortcut({ to, label, tracks, cover }: { to: string; label: string; tracks: Track[]; cover: ReactNode }) {
+function Shortcut({ to, label, tracks, cover, menu }: { to: string; label: string; tracks: Track[]; cover: ReactNode; menu: () => MenuTarget }) {
   const playList = usePlayer((s) => s.playList);
   const t = useT();
   return (
-    <div className="group relative flex h-14 items-center gap-3 overflow-hidden rounded-[12px] bg-surface-2 pr-2 transition-colors hover:bg-surface-3 md:h-16">
-      <Link to={to} className="absolute inset-0" aria-label={label} />
+    <div
+      {...menuTrigger(menu)}
+      className={`group relative flex h-14 items-center gap-3 overflow-hidden rounded-[12px] bg-surface-2 pr-2 transition-colors hover:bg-surface-3 md:h-16 ${NO_CALLOUT}`}
+    >
+      <Link to={to} className="absolute inset-0" aria-label={label} draggable={false} />
       <span className="pointer-events-none size-14 shrink-0 overflow-hidden md:size-16">{cover}</span>
       <span className="pointer-events-none min-w-0 flex-1 truncate text-[13px] font-semibold md:text-sm">{label}</span>
       {tracks.length > 0 && (
@@ -36,7 +42,12 @@ function Shortcut({ to, label, tracks, cover }: { to: string; label: string; tra
 
 function RecentCard({ track, onPlay }: { track: Track; onPlay: () => void }) {
   return (
-    <button type="button" onClick={onPlay} className="group flex w-36 shrink-0 snap-start flex-col gap-2 text-left md:w-44">
+    <button
+      type="button"
+      onClick={onPlay}
+      {...menuTrigger(() => ({ kind: "track", track }))}
+      className={`group flex w-36 shrink-0 snap-start flex-col gap-2 text-left md:w-44 ${NO_CALLOUT}`}
+    >
       <span className="relative block">
         <Artwork src={track.art} fallback={track.thumb} className="aspect-square w-full rounded-[14px]" />
         <span className="absolute right-2 bottom-2 grid size-11 translate-y-1 place-items-center rounded-full bg-accent text-accent-ink opacity-0 shadow-[0_8px_20px_rgb(0_0_0/0.4)] transition-[opacity,transform] duration-200 ease-out-expo group-hover:translate-y-0 group-hover:opacity-100 group-focus-visible:opacity-100">
@@ -100,6 +111,7 @@ export default function Home() {
                   <HeartIcon size={24} weight="fill" />
                 </span>
               }
+              menu={favoritesMenu}
             />
             <Shortcut
               to={paths.history}
@@ -110,6 +122,7 @@ export default function Home() {
                   <ClockCounterClockwiseIcon size={24} />
                 </span>
               }
+              menu={historyMenu}
             />
             {playlists.slice(0, 6).map((p) => (
               <Shortcut
@@ -118,6 +131,7 @@ export default function Home() {
                 label={p.name}
                 tracks={p.tracks}
                 cover={<Artwork src={p.tracks[0]?.thumb} className="size-full" />}
+                menu={() => playlistMenu(p)}
               />
             ))}
           </div>}
@@ -149,7 +163,7 @@ export default function Home() {
               }
             >
               <div className="px-2 md:px-3">
-                <TrackList tracks={favorites.slice(0, 5)} context={favorites} header={false} showAlbum={false} />
+                <TrackList tracks={favorites.slice(0, 5)} context={favorites} header={false} showAlbum={false} selectable={false} />
               </div>
             </Section>
           )}

@@ -28,7 +28,8 @@
 | POST | `/api/local/rescan` | 폴더 다시 읽기 (`data/segments.json`도) |
 | GET | `/api/local/:id/cover` | 표지 |
 | GET | `/api/track/:id` | 곡 하나(로컬·유튜브) |
-| PUT | `/api/playlists/:pid/tracks` `{ids}` | 순서 통째로 바꾸기(지금 곡 번호의 순열만) |
+| PUT | `/api/playlists/:pid/tracks` `{ids}` | 순서 통째로 바꾸기(지금 곡 번호의 순열만, 두 번 든 곡은 두 번) |
+| POST/DELETE | `/api/playlists/:pid/tracks` `{tracks, duplicates?}` · `DELETE {at, ids}` | 넣기(이미 있는 곡은 빼고, `duplicates: true`면 모두, 5000곡까지) · 자리로 빼기(`ids[k]`가 `at[k]` 곡이어야, 아니면 409) |
 | GET/POST | `/api/import/youtube/preview?url=` · `/api/import/youtube {url,name?}` | 유튜브 재생목록 미리 보기 · 가져오기 |
 | GET/POST/DELETE | `/api/keep` · `/api/keep/:id` | 유튜브 곡 서버에 받아 두기 |
 | GET/POST | `/api/box?filter=all\|untagged&source=&tag=&q=&cursor=` · `/api/box/sources` · `POST /api/box {tracks, source}` | 곡 상자(아는 곡 전부 + 출처, 200줄씩) · 출처 목록 · 곡 넣기(같은 곡이면 출처만 더함) |

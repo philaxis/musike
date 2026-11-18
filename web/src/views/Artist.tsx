@@ -4,8 +4,7 @@ import { useLocation, useParams } from "react-router";
 import { AlbumRow } from "../components/AlbumTiles";
 import { Artwork } from "../components/Artwork";
 import { BackButton, EmptyState, PageHeader } from "../components/Page";
-import { SelectableTrackList } from "../components/Selection";
-import { TrackListSkeleton } from "../components/TrackList";
+import { TrackList, TrackListSkeleton } from "../components/TrackList";
 import { useRemote } from "../hooks/useRemote";
 import { useI18n, useT } from "../i18n";
 import { api } from "../lib/api";
@@ -79,7 +78,9 @@ export default function Artist() {
 
       {page.status === "ok" &&
         (page.data.tracks.length ? (
-          <SelectableTrackList key={id} tracks={page.data.tracks} numbered />
+          <div className="px-2 md:px-3">
+            <TrackList key={id} tracks={page.data.tracks} showAlbum={false} header={false} alwaysBar />
+          </div>
         ) : (
           <EmptyState icon={<MusicNotesIcon size={28} />} title={t.artist.noHits} body={t.artist.noHitsBody} />
         ))}

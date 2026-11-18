@@ -1,9 +1,17 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { isPermutation, sanitizeTrack } from "../src/library.ts";
+import {
+  addToPlaylist,
+  createPlaylist,
+  isPermutation,
+  removePositions,
+  reorderPlaylist,
+  sanitizeTrack,
+  useLibraryStorage,
+} from "../src/library.ts";
 import { albumFolderName, cleanName, localId, mediaFiles, nameTrack, parseFileName, parseRoots, relInRoot } from "../src/localNames.ts";
 import { parsePlaylistLink } from "../src/playlistImport.ts";
-import { HttpError, TRACK_ID, VIDEO_ID } from "../src/types.ts";
+import { HttpError, TRACK_ID, VIDEO_ID, type Track } from "../src/types.ts";
 
 describe("TRACK_ID", () => {
   it("accepts YouTube IDs and local IDs", () => {
@@ -153,5 +161,33 @@ describe("reorder", () => {
     assert.ok(!isPermutation(current, ["a", "b", "x"]));
     assert.ok(!isPermutation(current, ["a", "b", 3]));
     assert.ok(!isPermutation(current, "a,b,c"));
+  });
+  it("counts a track added twice as two rows", () => {
+    assert.ok(isPermutation(["a", "b", "a"], ["a", "a", "b"]));
+    assert.ok(!isPermutation(["a", "b", "a"], ["a", "b", "b"]));
+  });
+});
+
+describe("playlist rows", () => {
+  const memory = () => {
+    let json: string | null = null;
+    return { read: async () => json, write: async (s: string) => void (json = s) };
+  };
+  const track = (id: string): Track => ({ id, title: id, artist: "", duration: 1, thumb: "" });
+  const ids = (p: { tracks: Track[] }) => p.tracks.map((t) => t.id);
+
+  it("skips tracks already there unless duplicates are asked for", async () => {
+    useLibraryStorage(memory());
+    const p = await createPlaylist("x", [track("a")]);
+    assert.deepEqual(ids(await addToPlaylist(p.id, [track("a"), track("b"), track("b")])), ["a", "b"]);
+    assert.deepEqual(ids(await addToPlaylist(p.id, [track("a")], { duplicates: true })), ["a", "b", "a"]);
+  });
+
+  it("removes one copy by position and refuses stale positions", async () => {
+    useLibraryStorage(memory());
+    const p = await createPlaylist("x", [track("a"), track("b"), track("a")]);
+    assert.deepEqual(ids(await removePositions(p.id, [2], ["a"])), ["a", "b"]);
+    await assert.rejects(removePositions(p.id, [1], ["a"]), (e: HttpError) => e.status === 409);
+    assert.deepEqual(ids(await reorderPlaylist(p.id, ["b", "a"])), ["b", "a"]);
   });
 });

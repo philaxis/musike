@@ -1,14 +1,25 @@
 import { CaretDownIcon, QueueIcon, XIcon } from "@phosphor-icons/react";
-import { useState } from "react";
+import { useState, type CSSProperties, type PointerEvent } from "react";
 import { useT } from "../i18n";
 import { queueRows, trackTitle } from "../lib/bundles";
 import { cn, formatTime } from "../lib/format";
 import { usePlayer } from "../player/player";
+import type { MenuTarget } from "../stores/ui";
+import { isTvMode } from "../tv/tvMode";
 import { Artwork } from "./Artwork";
 import { Equalizer } from "./Brand";
+import { menuTrigger, NO_CALLOUT, openMenu } from "./menuTrigger";
+import { useDragReorder } from "./reorder";
+
+/** Drag handlers, position and menu of an upcoming row. */
+interface RowDrag {
+  onPointerDown?: (e: PointerEvent) => void;
+  style?: CSSProperties;
+  menu: () => MenuTarget;
+}
 
 /** Upcoming parts of one bundle as one row, like the bundle row in a playlist; the caret shows the parts. */
-function BundleRow({ start, end }: { start: number; end: number }) {
+function BundleRow({ start, end, drag }: { start: number; end: number; drag: RowDrag }) {
   const t = useT();
   const parts = usePlayer((s) => s.queue).slice(start, end);
   const jumpTo = usePlayer((s) => s.jumpTo);
@@ -19,8 +30,8 @@ function BundleRow({ start, end }: { start: number; end: number }) {
   const title = first.part.title;
 
   return (
-    <li>
-      <div className="group relative flex items-center gap-3 rounded-xl px-2 py-1.5 hover:bg-surface-3">
+    <li onPointerDown={drag.onPointerDown} onContextMenu={menuTrigger(drag.menu).onContextMenu} style={drag.style} className={NO_CALLOUT}>
+      <div className={cn("group relative flex items-center gap-3 rounded-xl px-2 py-1.5 hover:bg-surface-3", drag.style?.zIndex && "bg-surface-3")}>
         <button type="button" onClick={() => jumpTo(start)} className="absolute inset-0 rounded-xl" aria-label={t.common.playX(title)} />
         <Artwork src={first.thumb} className="pointer-events-none size-10 rounded-[8px]" />
         <div className="pointer-events-none min-w-0 flex-1">
@@ -52,7 +63,7 @@ function BundleRow({ start, end }: { start: number; end: number }) {
         </button>
       </div>
       {open && (
-        <ol className="flex flex-col pl-12">
+        <ol className="flex flex-col pl-12" onPointerDown={(e) => e.stopPropagation()}>
           {parts.map((part, k) => (
             <li key={`${part.id}-${k}`}>
               <button
@@ -85,6 +96,21 @@ export function QueueList({ compact = false }: { compact?: boolean }) {
   const current = queue[index];
   // What comes next, row by row: the rest of a bundle is one row.
   const upcoming = queueRows(queue.slice(index + 1)).map((r) => ({ start: r.start + index + 1, end: r.end + index + 1 }));
+  const menuAt = (r: { start: number; end: number }): MenuTarget => ({
+    kind: "track",
+    track: queue[r.start],
+    queued: { at: r.start, count: r.end - r.start },
+  });
+  // Upcoming rows drag into a new order (TV mode only plays); a row held still on touch opens its menu.
+  const reorder = useDragReorder(
+    !isTvMode(),
+    (from, to) => {
+      const moved = upcoming[from];
+      const target = upcoming[to];
+      if (moved && target) usePlayer.getState().moveRange(moved.start, moved.end, to > from ? target.end : target.start);
+    },
+    { onHold: (i, x, y) => upcoming[i] && openMenu(menuAt(upcoming[i]), x, y) },
+  );
 
   if (!current) {
     return (
@@ -98,11 +124,23 @@ export function QueueList({ compact = false }: { compact?: boolean }) {
     );
   }
 
-  const row = (i: number, isCurrent: boolean) => {
+  const row = (i: number, isCurrent: boolean, drag?: RowDrag) => {
     const track = queue[i];
     const title = trackTitle(track);
+    const menu = drag?.menu ?? ((): MenuTarget => ({ kind: "track", track }));
     return (
-      <li key={`${track.id}-${i}`} className="group relative flex items-center gap-3 rounded-xl px-2 py-1.5 hover:bg-surface-3">
+      <li
+        key={`${track.id}-${i}`}
+        onPointerDown={drag?.onPointerDown ?? menuTrigger(menu).onPointerDown}
+        onContextMenu={menuTrigger(menu).onContextMenu}
+        style={drag?.style}
+        title={drag ? t.basics.reorderQueue : undefined}
+        className={cn(
+          "group relative flex items-center gap-3 rounded-xl px-2 py-1.5 hover:bg-surface-3",
+          NO_CALLOUT,
+          drag?.style?.zIndex && "bg-surface-3",
+        )}
+      >
         <button type="button" onClick={() => jumpTo(i)} className="absolute inset-0 rounded-xl" aria-label={t.common.playX(title)} />
         <Artwork src={track.thumb} className="pointer-events-none size-10 rounded-[8px]" />
         <div className="pointer-events-none min-w-0 flex-1">
@@ -150,10 +188,15 @@ export function QueueList({ compact = false }: { compact?: boolean }) {
           )}
         </div>
         {upcoming.length ? (
-          <ul>
-            {upcoming.map((r) =>
-              queue[r.start].part ? <BundleRow key={`${queue[r.start].part!.run}-${r.start}`} start={r.start} end={r.end} /> : row(r.start, false),
-            )}
+          <ul ref={reorder.list}>
+            {upcoming.map((r, k) => {
+              const drag: RowDrag = { onPointerDown: reorder.start(k), style: reorder.styleFor(k), menu: () => menuAt(r) };
+              return queue[r.start].part ? (
+                <BundleRow key={`${queue[r.start].part!.run}-${r.start}`} start={r.start} end={r.end} drag={drag} />
+              ) : (
+                row(r.start, false, drag)
+              );
+            })}
           </ul>
         ) : (
           <p className="px-2 text-sm text-fg-2">

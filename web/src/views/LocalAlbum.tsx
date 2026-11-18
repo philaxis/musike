@@ -1,7 +1,9 @@
-import { MusicNotesIcon, PauseIcon, PlayIcon, PlaylistIcon, ShuffleIcon, WarningCircleIcon } from "@phosphor-icons/react";
+import { DotsThreeIcon, MusicNotesIcon, PauseIcon, PlayIcon, PlaylistIcon, ShuffleIcon, WarningCircleIcon } from "@phosphor-icons/react";
 import { useLocation, useParams, useSearchParams } from "react-router";
 import { Artwork } from "../components/Artwork";
 import { IconButton, PlayDisc } from "../components/IconButton";
+import { openMenuFromButton } from "../components/menuTrigger";
+import { localAlbumMenu } from "../components/menus";
 import { BackButton, EmptyState, PageHeader } from "../components/Page";
 import { TrackList, TrackListSkeleton } from "../components/TrackList";
 import { useRemote } from "../hooks/useRemote";
@@ -82,6 +84,11 @@ export default function LocalAlbum() {
           {!isTvMode() && (
             <IconButton label={t.local.addToPlaylist} size="lg" onClick={() => openAddToPlaylist(tracks)}>
               <PlaylistIcon size={24} />
+            </IconButton>
+          )}
+          {album && (
+            <IconButton label={t.basics.menuFor(title)} size="lg" onClick={(e) => openMenuFromButton(e, localAlbumMenu(album))}>
+              <DotsThreeIcon size={26} weight="bold" />
             </IconButton>
           )}
         </div>
