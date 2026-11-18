@@ -242,12 +242,15 @@ export const ko: Messages = {
     clearRecent: "지우기",
     idleTitle: "오늘은 뭘 들을까요?",
     idleBody:
-      "노래, 아티스트, 앨범을 찾아보세요. 뮤직비디오나 라이브는 영상 탭에 있어요. YouTube 링크나 재생목록 링크를 붙여 넣어도 돼요.",
+      "들여온 곡에서 노래, 아티스트, 앨범을 찾아요. 새 곡은 「유튜브」를 눌러 찾고, 유튜브 링크나 재생목록 링크를 붙여 넣어도 돼요.",
     exploreGenres: "장르별로 둘러보기",
     albums: "앨범",
-    myMusic: "내 음악",
-    showAll: (n) => `${n}곡 모두 보기`,
-    showLess: "접기",
+    scope: "찾을 곳",
+    mine: "내 곡",
+    youtube: "유튜브",
+    searchYoutube: "유튜브에서 찾기",
+    notInMine: (query) => `들여온 곡 중에 「${query}」가 없어요.`,
+    mineCount: (n) => `들여온 곡에서 ${n}곡`,
   },
 
   batch: {

@@ -251,9 +251,12 @@ export const en = {
       "Search for a song, artist or album. For music videos and live performances, use the Videos tab. You can also paste a YouTube link.",
     exploreGenres: "Browse by genre",
     albums: "Albums",
-    myMusic: "My music",
-    showAll: (n: number) => `Show all ${n}`,
-    showLess: "Show less",
+    scope: "Where to search",
+    mine: "My songs",
+    youtube: "YouTube",
+    searchYoutube: "Search YouTube",
+    notInMine: (query: string) => `Nothing for "${query}" among your songs.`,
+    mineCount: (n: number) => `${n} of your songs`,
   },
 
   batch: {
