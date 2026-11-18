@@ -95,6 +95,7 @@ export function QueueList({ compact = false }: { compact?: boolean }) {
   const clearUpcoming = usePlayer((s) => s.clearUpcoming);
   const autoRadio = usePlayer((s) => s.autoRadio);
   const setAutoRadio = usePlayer((s) => s.setAutoRadio);
+  const unplayable = usePlayer((s) => s.unplayable);
 
   const current = queue[index];
   // What comes next, row by row: the rest of a bundle is one row.
@@ -135,6 +136,8 @@ export function QueueList({ compact = false }: { compact?: boolean }) {
   const row = (i: number, isCurrent: boolean, drag?: RowDrag, past = false) => {
     const track = queue[i];
     const title = trackTitle(track);
+    // Won't play here (the server's mark, or found ahead of time): skipped when its turn comes.
+    const blocked = track.blocked ?? unplayable[track.id];
     const menu = drag?.menu ?? ((): MenuTarget => ({ kind: "track", track }));
     return (
       <li
@@ -147,14 +150,22 @@ export function QueueList({ compact = false }: { compact?: boolean }) {
           "group relative flex items-center gap-3 rounded-xl px-2 py-1.5 hover:bg-surface-3",
           NO_CALLOUT,
           drag?.style?.zIndex && "bg-surface-3",
-          past && "opacity-55 hover:opacity-100",
+          past && !blocked && "opacity-55 hover:opacity-100",
+          blocked && "opacity-45",
         )}
       >
         <button type="button" onClick={() => jumpTo(i)} className="absolute inset-0 rounded-xl" aria-label={t.common.playX(title)} />
         <Artwork src={track.thumb} className="pointer-events-none size-10 rounded-[8px]" />
         <div className="pointer-events-none min-w-0 flex-1">
           <p className={cn("truncate text-sm font-medium", isCurrent ? "text-accent-text" : "text-fg")}>{title}</p>
-          <p className="truncate text-xs text-fg-2">{track.part ? `${track.part.title} · ${track.artist}` : track.artist}</p>
+          <p className="truncate text-xs text-fg-2">
+            {blocked && (
+              <span className="text-danger">
+                {t.aside.cantPlay} · {t.aside.reason[blocked]} ·{" "}
+              </span>
+            )}
+            {track.part ? `${track.part.title} · ${track.artist}` : track.artist}
+          </p>
         </div>
         {isCurrent ? (
           <Equalizer live={live} className="mr-2" />

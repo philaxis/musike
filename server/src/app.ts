@@ -3,9 +3,9 @@ import { createServer } from "node:net";
 import fastifyStatic from "@fastify/static";
 import Fastify from "fastify";
 import { ALBUM_ID, album, ARTIST_ID, artist, GENRE_ID, genre, genreArtists, genres, searchAlbums } from "./browse.js";
-import { useBoxStorage } from "./box.js";
+import { annotator as boxAnnotator, markBlocked, useBoxStorage } from "./box.js";
 import { registerBoxRoutes } from "./boxRoutes.js";
-import { registerGoogleRoutes } from "./google.js";
+import { checkBoxOnce, registerGoogleRoutes } from "./google.js";
 import { config } from "./config.js";
 import * as library from "./library.js";
 import { fileStorage } from "./libraryFile.js";
@@ -62,7 +62,8 @@ export async function startServer(opts: StartOptions = {}): Promise<RunningServe
     if (status >= 500) app.log.error(e);
     // Musike's own errors are translated into the language the app asked for.
     const error = e instanceof HttpError ? tr(langOf(req), e.text) : e.message;
-    if (!reply.sent) reply.code(status).send({ error, code: e instanceof HttpError ? e.code : undefined });
+    const body = e instanceof HttpError ? { error, code: e.code, reason: e.reason } : { error, code: undefined };
+    if (!reply.sent) reply.code(status).send(body);
   });
 
   app.get("/api/health", async () => ({ ok: true }));
@@ -147,7 +148,11 @@ export async function startServer(opts: StartOptions = {}): Promise<RunningServe
     }
     const kept = local.keptFile(id) && local.keptTrack(id);
     if (kept) return { id, title: kept.title, duration: kept.duration, hasSdVideo: false, audioMode: "range" };
-    const r = await resolveStreams(id);
+    const r = await resolveStreams(id).catch(async (e: unknown) => {
+      // What yt-dlp says won't play shows in the song box too, without waiting for the next check.
+      if (e instanceof HttpError && e.reason) await markBlocked(id, e.reason);
+      throw e;
+    });
     return { id: r.id, title: r.title, duration: r.duration, hasSdVideo: !!r.video, audioMode: "range" };
   });
 
@@ -172,14 +177,15 @@ export async function startServer(opts: StartOptions = {}): Promise<RunningServe
   // Library
 
   app.get("/api/library", async () => {
-    // Flags for the app: local files that are gone/offline, YouTube tracks with a kept copy.
+    // Flags for the app: local files that are gone/offline, YouTube tracks with a kept copy or that won't play.
     const lib = await library.getLibrary();
+    const annotate = await boxAnnotator();
     return {
-      favorites: lib.favorites.map(local.annotate),
-      playlists: lib.playlists.map((p) => ({ ...p, tracks: p.tracks.map(local.annotate) })),
-      history: lib.history.map(local.annotate),
+      favorites: lib.favorites.map(annotate),
+      playlists: lib.playlists.map((p) => ({ ...p, tracks: p.tracks.map(annotate) })),
+      history: lib.history.map(annotate),
       // Bundle rows elsewhere are references; the app expands them from here.
-      bundles: (lib.bundles ?? []).map((b) => ({ ...b, parts: b.parts.map(local.annotate) })),
+      bundles: (lib.bundles ?? []).map((b) => ({ ...b, parts: b.parts.map(annotate) })),
     };
   });
 
@@ -279,6 +285,8 @@ export async function startServer(opts: StartOptions = {}): Promise<RunningServe
   await app.listen({ port, host });
 
   pruneCache().catch(() => {});
+  // Which song-box tracks won't play here: once, when it was never checked (later with each account sync).
+  checkBoxOnce().catch((e: unknown) => app.log.warn(e));
   return {
     port,
     tools: found,

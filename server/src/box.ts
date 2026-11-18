@@ -1,7 +1,7 @@
 import * as library from "./library.js";
 import type { LibraryStorage } from "./library.js";
 import * as local from "./local.js";
-import { isBundleId, isLocalId, VIDEO_ID, type Track } from "./types.js";
+import { isBundleId, isLocalId, VIDEO_ID, type Track, type Unplayable } from "./types.js";
 
 // The song box: every YouTube track Musike has brought in (pasted playlist links, the connected account, links and
 // searches added by the agent), with where each came from and its tags. It is not something to listen to in order;
@@ -19,6 +19,14 @@ export interface BoxSource {
   name: string;
   /** When it first came from here (ms). */
   at: number;
+  /** The video this source brought in, when the entry's track was replaced by another version of it (see `replaceEntry`). */
+  was?: string;
+}
+
+/** Why a box track won't play here, and when that was found out (ms; 0 for marks older than the check). */
+export interface Blocked {
+  reason: Unplayable;
+  at: number;
 }
 
 export interface BoxEntry {
@@ -26,8 +34,8 @@ export interface BoxEntry {
   sources: BoxSource[];
   tags: string[];
   addedAt: number;
-  /** Deleted or made private on YouTube. Never removed from the box for that. */
-  gone?: true;
+  /** Won't play here: blocked in this country, deleted, private, age-restricted. Never removed from the box for that. */
+  blocked?: Blocked;
 }
 
 interface BoxData {
@@ -35,6 +43,8 @@ interface BoxData {
   entries: BoxEntry[];
   /** Tags of local tracks, by track ID. */
   localTags: Record<string, string[]>;
+  /** When every YouTube track was last checked for whether it plays here (ms); absent until the first check. */
+  checkedAt?: number;
 }
 
 const PAGE = 200;
@@ -55,7 +65,13 @@ async function load(): Promise<BoxData> {
   if (!storage) throw new Error("Box storage not configured");
   const json = await storage.read();
   const data = (json ? JSON.parse(json) : {}) as Partial<BoxData>;
-  state = { entries: data.entries ?? [], localTags: data.localTags ?? {} };
+  state = { entries: data.entries ?? [], localTags: data.localTags ?? {}, checkedAt: data.checkedAt };
+  // Boxes saved before `blocked` marked deleted and private videos `gone: true`.
+  for (const e of state.entries as (BoxEntry & { gone?: true })[]) {
+    if (!e.gone) continue;
+    delete e.gone;
+    e.blocked ??= { reason: "gone", at: 0 };
+  }
   byId = new Map(state.entries.map((e) => [e.track.id, e]));
   return state;
 }
@@ -68,25 +84,28 @@ function persist(): Promise<void> {
 
 /**
  * Puts `tracks` into `entries` (newest first, in the given order), one entry per track ID. A track already there gets
- * the source added (or its name refreshed) and loses its `gone` mark. `merged` counts entries that got a new source.
+ * the source added (or its name refreshed); back in a live list, it loses a deleted/private mark. A track that was
+ * replaced by another version (a source's `was`) goes to that entry. `merged` counts entries that got a new source.
  */
 export function mergeTracks(entries: BoxEntry[], tracks: Track[], source: BoxSource): { entries: BoxEntry[]; added: BoxEntry[]; merged: number } {
   const index = new Map(entries.map((e) => [e.track.id, e]));
+  const replaced = new Map(entries.flatMap((e) => e.sources.filter((s) => s.was).map((s) => [s.was!, e] as const)));
   const added: BoxEntry[] = [];
   let merged = 0;
   for (const track of tracks) {
-    const have = index.get(track.id);
+    const have = index.get(track.id) ?? replaced.get(track.id);
     if (!have) {
       const entry: BoxEntry = { track, sources: [{ ...source }], tags: [], addedAt: source.at };
       index.set(track.id, entry);
       added.push(entry);
       continue;
     }
-    delete have.gone;
+    const was = have.track.id === track.id ? undefined : track.id;
+    if (!was && (have.blocked?.reason === "gone" || have.blocked?.reason === "private")) delete have.blocked;
     const same = have.sources.find((s) => s.kind === source.kind && s.ref === source.ref);
     if (same) same.name = source.name;
     else {
-      have.sources.push({ ...source });
+      have.sources.push(was ? { ...source, was } : { ...source });
       merged++;
     }
   }
@@ -94,7 +113,7 @@ export function mergeTracks(entries: BoxEntry[], tracks: Track[], source: BoxSou
 }
 
 export interface BoxQuery {
-  /** "untagged": no tags yet (not sorted by the agent); "gone": gone from YouTube. */
+  /** "untagged": no tags yet (not sorted by the agent); "blocked": won't play here (see `Blocked`). */
   filter?: string;
   /** A source kind ("youtube-liked") or kind:ref ("youtube-playlist:PL…", "local:카시오페아"). */
   source?: string;
@@ -106,9 +125,12 @@ const sourceKey = (s: BoxSource) => `${s.kind}:${s.ref}`;
 
 export function filterItems(items: BoxEntry[], query: BoxQuery): BoxEntry[] {
   const words = (query.q ?? "").toLocaleLowerCase().split(/\s+/).filter(Boolean);
+  const aside = query.filter === "blocked";
   return items.filter((it) => {
+    // Box tracks that won't play here (and have no kept copy, see `present`) are put aside: every listing leaves
+    // them out, and only the "blocked" filter shows them.
+    if (!!it.track.blocked !== aside) return false;
     if (query.filter === "untagged" && it.tags.length) return false;
-    if (query.filter === "gone" && !it.gone) return false;
     if (query.source && !it.sources.some((s) => s.kind === query.source || sourceKey(s) === query.source)) return false;
     if (query.tag && !it.tags.includes(query.tag)) return false;
     if (words.length) {
@@ -147,7 +169,7 @@ function localItems(tags: Record<string, string[]>): BoxEntry[] {
 /** Box entries (newest first) then the local folders' tracks. */
 async function allItems(): Promise<BoxEntry[]> {
   const data = await load();
-  const box = data.entries.map((e) => ({ ...e, track: local.annotate(e.track) }));
+  const box = data.entries.map((e) => ({ ...e, track: present(e.track) }));
   return [...box, ...localItems(data.localTags)];
 }
 
@@ -155,11 +177,21 @@ export async function listBox(query: BoxQuery & { cursor?: string }) {
   return pageItems(filterItems(await allItems(), query), query.cursor);
 }
 
-/** Every source with how many tracks came from it, most tracks first, and how many tracks the box holds (a track with two sources counts once). */
+/**
+ * Every source with how many tracks came from it, most tracks first, how many tracks the box holds (a track with two
+ * sources counts once) and how many are put aside, by reason. Tracks put aside count only there.
+ */
 export async function boxSources() {
   const items = await allItems();
   const counts = new Map<string, { kind: SourceKind; ref: string; name: string; count: number }>();
+  const aside: Partial<Record<Unplayable, number>> = {};
+  let total = 0;
   for (const it of items) {
+    if (it.track.blocked) {
+      aside[it.track.blocked] = (aside[it.track.blocked] ?? 0) + 1;
+      continue;
+    }
+    total++;
     for (const s of it.sources) {
       const key = sourceKey(s);
       const c = counts.get(key) ?? { kind: s.kind, ref: s.ref, name: s.name, count: 0 };
@@ -167,7 +199,7 @@ export async function boxSources() {
       counts.set(key, c);
     }
   }
-  return { sources: [...counts.values()].sort((a, b) => b.count - a.count), total: items.length };
+  return { sources: [...counts.values()].sort((a, b) => b.count - a.count), total, aside };
 }
 
 /** Adds YouTube tracks from one source; local tracks and bundles are not box entries and are skipped. */
@@ -186,19 +218,150 @@ export async function boxEntry(id: string): Promise<BoxEntry | null> {
   return byId.get(id) ?? null;
 }
 
-/** Marks box tracks as gone from YouTube; returns how many were not marked yet. */
-export async function markGone(ids: Iterable<string>): Promise<number> {
+/**
+ * A track as listings send it: local files' and kept copies' flags, and why it won't play when the box knows (not
+ * when a copy is kept on the server: that plays).
+ */
+function present(t: Track): Track {
+  const flagged = local.annotate(t);
+  const blocked = flagged.kept ? undefined : byId.get(t.id)?.blocked?.reason;
+  return blocked ? { ...flagged, blocked } : flagged;
+}
+
+/** `present` for listings outside the box (playlists, favorites): reads the box first. */
+export async function annotator(): Promise<(t: Track) => Track> {
   await load();
+  return present;
+}
+
+/**
+ * Stores a check of whether box tracks play here: `results` maps track IDs to why one won't, or null when it plays.
+ * Returns how many tracks are newly marked. Marks the whole box as checked when `complete`.
+ */
+export async function applyChecks(results: Map<string, Unplayable | null>, at: number, complete = true): Promise<number> {
+  const data = await load();
   let n = 0;
-  for (const id of ids) {
+  for (const [id, reason] of results) {
     const e = byId.get(id);
-    if (e && !e.gone) {
-      e.gone = true;
-      n++;
-    }
+    if (!e) continue;
+    if (!reason) delete e.blocked;
+    else if (e.blocked?.reason !== reason) {
+      if (!e.blocked) n++;
+      e.blocked = { reason, at };
+    } else e.blocked.at = at;
   }
-  if (n) await persist();
+  if (complete) data.checkedAt = at;
+  await persist();
   return n;
+}
+
+/** One track found not to play (yt-dlp said so while preparing it); nothing when it isn't in the box. */
+export async function markBlocked(id: string, reason: Unplayable): Promise<void> {
+  await load();
+  const e = byId.get(id);
+  if (e && e.blocked?.reason !== reason) await applyChecks(new Map([[id, reason]]), Date.now(), false);
+}
+
+/** When the whole box was last checked; undefined before the first check. */
+export async function checkedAt(): Promise<number | undefined> {
+  return (await load()).checkedAt;
+}
+
+/** The box's YouTube track IDs, for the check. */
+export async function youtubeIds(): Promise<string[]> {
+  return (await load()).entries.map((e) => e.track.id);
+}
+
+/**
+ * Puts `track` in place of the entry of `oldId` (another version of a track that won't play): sources, tags and the
+ * date it came in stay, and each source remembers `oldId` as `was` so a later sync doesn't bring it back. When the
+ * box has `track` already, that entry takes the sources and tags and the old one goes.
+ */
+export function replaceEntry(entries: BoxEntry[], oldId: string, track: Track): BoxEntry[] {
+  const old = entries.find((e) => e.track.id === oldId);
+  if (!old) return entries;
+  const sources = old.sources.map((s) => ({ ...s, was: s.was ?? oldId }));
+  const existing = entries.find((e) => e.track.id === track.id);
+  if (!existing) {
+    const entry: BoxEntry = { ...old, track, sources };
+    delete entry.blocked;
+    return entries.map((e) => (e === old ? entry : e));
+  }
+  for (const s of sources) if (!existing.sources.some((x) => x.kind === s.kind && x.ref === s.ref)) existing.sources.push(s);
+  existing.tags = library.cleanTags([...existing.tags, ...old.tags]);
+  return entries.filter((e) => e !== old);
+}
+
+/** `replaceEntry` in the stored box (nothing changes there when `oldId` isn't a box track). */
+export async function replaceTrack(oldId: string, track: Track): Promise<void> {
+  const data = await load();
+  if (!byId.has(oldId)) return;
+  data.entries = replaceEntry(data.entries, oldId, track);
+  byId = new Map(data.entries.map((e) => [e.track.id, e]));
+  await persist();
+}
+
+/**
+ * A title as words to compare: without a leading track number, bracketed notes (【…】, […]) and upload noise
+ * (OST, HQ, 1080p, official…), lowercased. Also what a search for other versions asks for (joined).
+ */
+export function titleWords(title: string): string[] {
+  const clean = title
+    .normalize("NFKC")
+    .toLocaleLowerCase()
+    .replace(/^\s*\d+\s*[.)-]\s*/, "")
+    .replace(/【[^】]*】|\[[^\]]*\]/g, " ");
+  return (clean.match(/[\p{L}\p{N}]+/gu) ?? []).filter((w) => !NOISE.has(w));
+}
+const NOISE = new Set(["ost", "official", "audio", "video", "mv", "hq", "hd", "1080p", "720p", "lyrics", "lyric", "full", "version", "ver", "the", "a"]);
+
+/** Character pairs of the words run together, for titles written without spaces (Japanese, Chinese). */
+const pairs = (words: string[]) => {
+  const s = words.join("");
+  return new Set(Array.from({ length: Math.max(0, s.length - 1) }, (_, i) => s.slice(i, i + 2)));
+};
+
+/** How alike two titles are, 0–1: the share of the original's words the other has, or of its character pairs (Dice). */
+export function titleLikeness(original: string, other: string): number {
+  const a = titleWords(original);
+  const b = new Set(titleWords(other));
+  if (!a.length || !b.size) return 0;
+  const words = a.filter((w) => b.has(w)).length / a.length;
+  const pa = pairs(a);
+  const pb = pairs([...b]);
+  const shared = [...pa].filter((p) => pb.has(p)).length;
+  const dice = pa.size + pb.size ? (2 * shared) / (pa.size + pb.size) : 0;
+  return Math.max(words, dice);
+}
+
+/** Below this a search result is another song, not another version (Road Taken → "Good Luck, Babe!"). */
+export const LIKE_ENOUGH = 0.6;
+
+export interface Alternative {
+  track: Track;
+  /** Why it is offered: the same title (bar track numbers and notes), the same artist (channel). */
+  sameTitle: boolean;
+  sameArtist: boolean;
+}
+
+const artistKey = (a: string) => a.normalize("NFKC").toLocaleLowerCase().replace(/\s*-\s*topic$/, "").replace(/[^\p{L}\p{N}]+/gu, "");
+
+/**
+ * Other versions of `original`: search results that are another video, play here (`blocked` says when one doesn't)
+ * and have a title alike enough, closest in length first (search order among equals), at most `count`.
+ */
+export function pickAlternatives(original: Track, found: Track[], blocked: (t: Track) => boolean, count = 5): Alternative[] {
+  const title = titleWords(original.title).join(" ");
+  const artist = artistKey(original.artist);
+  return found
+    .filter((t) => t.id !== original.id && !blocked(t) && titleLikeness(original.title, t.title) >= LIKE_ENOUGH)
+    .map((t, i) => ({ t, i, off: original.duration && t.duration ? Math.abs(t.duration - original.duration) : Number.MAX_SAFE_INTEGER }))
+    .sort((a, b) => a.off - b.off || a.i - b.i)
+    .slice(0, count)
+    .map(({ t }) => {
+      const other = artistKey(t.artist);
+      return { track: t, sameTitle: titleWords(t.title).join(" ") === title, sameArtist: !!artist && !!other && (other.includes(artist) || artist.includes(other)) };
+    });
 }
 
 /** A track by ID from the box, the local folders or the library, without response-only flags. */
@@ -251,7 +414,11 @@ export interface Tagged {
 async function tagged(): Promise<Tagged[]> {
   const data = await load();
   const lib = await library.getLibrary();
-  const out: Tagged[] = data.entries.filter((e) => e.tags.length).map((e) => ({ track: local.annotate(e.track), tags: e.tags }));
+  // Tracks put aside (won't play here) are left out, as in the box listings.
+  const out: Tagged[] = data.entries
+    .filter((e) => e.tags.length)
+    .map((e) => ({ track: present(e.track), tags: e.tags }))
+    .filter((it) => !it.track.blocked);
   for (const [id, tags] of Object.entries(data.localTags)) {
     const track = local.localTrack(id);
     if (track) out.push({ track, tags });

@@ -17,6 +17,8 @@ export interface Track {
   kept?: boolean;
   /** Response-only: a local track left out of "내 음악" (hidden.ts); only in listings asked to include hidden items. */
   hidden?: boolean;
+  /** Response-only: why this YouTube track can't play here (the song box's last check, see google.ts `unplayable`). */
+  blocked?: Unplayable;
 }
 
 export interface Playlist {
@@ -57,7 +59,11 @@ export const isLocalId = (id: string) => LOCAL_ID.test(id);
 export const isBundleId = (id: string) => BUNDLE_ID.test(id);
 
 /** Machine-readable reason so the web app can offer the right fix (e.g. "update yt-dlp", "connect Google again"). */
-export type ErrorCode = "tool_missing" | "maybe_outdated" | "bot_check" | "google_login";
+export type ErrorCode = "tool_missing" | "maybe_outdated" | "bot_check" | "google_login" | "unplayable";
+
+/** Why a YouTube video can't play on this server: blocked in its country, deleted (or rejected), private, age-restricted. */
+export type Unplayable = "region" | "gone" | "private" | "age";
+export const UNPLAYABLE: Unplayable[] = ["region", "gone", "private", "age"];
 
 /** An error for the person using the app: its text is translated into each request's language when sent. */
 export class HttpError extends Error {
@@ -65,7 +71,12 @@ export class HttpError extends Error {
     public status: number,
     public text: Text,
     public code?: ErrorCode,
+    /** With code "unplayable": why. */
+    public reason?: Unplayable,
   ) {
     super(tr("en", text));
   }
 }
+
+/** A video that won't play here, whatever is tried: skipped by the app instead of retried. */
+export const unplayableError = (reason: Unplayable, text: Text) => new HttpError(reason === "age" ? 403 : 404, text, "unplayable", reason);

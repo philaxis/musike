@@ -7,7 +7,7 @@ import { config } from "./config.js";
 import { DEFAULT_CLIENTS, directAudio, fetchRemoteClients } from "./directAudio.js";
 import { tools } from "./tools.js";
 import { msg } from "./i18n.js";
-import { HttpError } from "./types.js";
+import { HttpError, unplayableError } from "./types.js";
 
 export interface StreamFormat {
   formatId: string;
@@ -86,15 +86,14 @@ const OUTDATED = /nsig|signature|n challenge|JavaScript runtime|Unable to extrac
 
 export function toHttpError(stderr: string): HttpError {
   const line = stderr.split("\n").find((l) => l.includes("ERROR")) ?? stderr.trim().split("\n").pop() ?? "";
+  // Videos that won't play here whatever is tried; the app skips them (age first: its message also says "Sign in to confirm").
+  if (/age-restricted|inappropriate|confirm your age/i.test(line)) return unplayableError("age", msg("ageRestricted"));
   if (/confirm you.re not a bot|Sign in to confirm/i.test(line)) {
     return new HttpError(503, msg("botCheck"), "bot_check");
   }
-  if (/Video unavailable|video is unavailable|Private video|removed/i.test(line)) {
-    return new HttpError(404, msg("videoUnavailable"));
-  }
-  if (/age-restricted|inappropriate|confirm your age/i.test(line)) {
-    return new HttpError(403, msg("ageRestricted"));
-  }
+  if (/in your country|claimed content|copyright grounds/i.test(line)) return unplayableError("region", msg("videoRegion"));
+  if (/Private video/i.test(line)) return unplayableError("private", msg("videoPrivate"));
+  if (/Video unavailable|video is unavailable|removed/i.test(line)) return unplayableError("gone", msg("videoUnavailable"));
   // yt-dlp's own words stay as they are (English); only the advice around them is translated.
   const detail = line.replace(/^ERROR:\s*/, "").slice(0, 240);
   if (!detail) return new HttpError(502, msg("ytdlpFailed"), "maybe_outdated");

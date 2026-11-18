@@ -81,6 +81,10 @@ interface UiState {
   versionsFor: Track | null;
   /** The track whose 「이 곡 기록」 is shown (components/TrackRecord.tsx). */
   recordFor: Track | null;
+  /** A track that won't play here, whose other versions are offered (components/Alternatives.tsx). */
+  alternativesFor: Track | null;
+  /** The last track replaced by another version (`from` its old ID), so lists already shown can follow. */
+  lastReplaced: { from: string; track: Track } | null;
   shortcutsOpen: boolean;
   settingsOpen: boolean;
   /** Cinema view: the video maximized over everything. */
@@ -102,6 +106,8 @@ interface UiState {
   openTags: (track: Track | null) => void;
   openVersions: (track: Track | null) => void;
   openRecord: (track: Track | null) => void;
+  openAlternatives: (track: Track | null) => void;
+  noteReplaced: (from: string, track: Track) => void;
   setShortcutsOpen: (open: boolean) => void;
   setSettingsOpen: (open: boolean) => void;
   setTheater: (open: boolean) => void;
@@ -131,6 +137,8 @@ export const useUi = create<UiState>((set, get) => ({
   tagsFor: null,
   versionsFor: null,
   recordFor: null,
+  alternativesFor: null,
+  lastReplaced: null,
   shortcutsOpen: false,
   settingsOpen: false,
   theater: false,
@@ -207,6 +215,8 @@ export const useUi = create<UiState>((set, get) => ({
   openTags: (tagsFor) => set({ tagsFor, menu: null }),
   openVersions: (versionsFor) => set({ versionsFor, menu: null }),
   openRecord: (recordFor) => set({ recordFor, menu: null }),
+  openAlternatives: (alternativesFor) => set({ alternativesFor, menu: null }),
+  noteReplaced: (from, track) => set({ lastReplaced: { from, track } }),
   setShortcutsOpen: (shortcutsOpen) => set({ shortcutsOpen }),
   setSettingsOpen: (settingsOpen) => set({ settingsOpen }),
   setTheater: (theater) => set({ theater }),

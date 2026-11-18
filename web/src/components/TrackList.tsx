@@ -77,6 +77,8 @@ function TrackRow({
   const isFavorite = useLibrary((s) => s.favorites.some((t) => t.id === track.id));
   const toggleFavorite = useLibrary((s) => s.toggleFavorite);
   const keepStatus = useKeepStatus(track);
+  // A YouTube track that won't play here (the server's mark, or found this session): kept in place, skipped when playing.
+  const blocked = usePlayer((s) => track.blocked ?? s.unplayable[track.id]);
   const t = useT();
   // Phones show the checkbox column only while picking (or on pages that always offer it).
   const phoneCol = check === "always" || check === "phone";
@@ -97,9 +99,9 @@ function TrackRow({
         NO_CALLOUT,
         selected && "bg-accent-soft hover:bg-accent-soft",
         dragStyle?.zIndex && "bg-surface-3",
-        // A server file that is gone: still listed (and kept in playlists), skipped when playing.
-        // A hidden one only shows up while "숨긴 것 보기" is on.
-        (track.unavailable || track.hidden) && "opacity-45",
+        // A server file that is gone, or a YouTube video that won't play here: still listed (and kept in playlists),
+        // skipped when playing. A hidden one only shows up while "숨긴 것 보기" is on.
+        (track.unavailable || track.hidden || blocked) && "opacity-45",
         phoneCol ? "grid-cols-[auto_auto_1fr_auto]" : "grid-cols-[auto_1fr_auto]",
         showAlbum
           ? "md:grid-cols-[28px_auto_1fr_auto_auto] lg:grid-cols-[28px_auto_minmax(0,1.4fr)_minmax(0,1fr)_auto_auto]"
@@ -172,6 +174,7 @@ function TrackRow({
             )
           )}
           {track.unavailable && <span className="shrink-0 text-danger">{t.local.unavailable} ·</span>}
+          {blocked && <span className="shrink-0 text-danger">{t.aside.reason[blocked]} ·</span>}
           {track.hidden && <span className="shrink-0">{t.hide.badge} ·</span>}
           <span className="truncate">{track.artist || t.common.youtube}</span>
         </p>
@@ -363,9 +366,9 @@ export function TrackList({
             selected={sel.has(track.id)}
             onCheck={(e) => sel.toggle(i, e.shiftKey)}
             onClick={(e) => {
-              if (!sel.click(i, e)) playList(context ?? tracks, i);
+              if (!sel.click(i, e)) playList(context ?? tracks, i, 0, true);
             }}
-            onPlayPart={(n) => playList(context ?? tracks, i, n)}
+            onPlayPart={(n) => playList(context ?? tracks, i, n, true)}
             menu={() => menuFor(i)}
             reorderable={!!onReorder}
             onPointerDown={(e) => {

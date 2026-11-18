@@ -1,9 +1,10 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import * as box from "../src/box.ts";
-import { checkState, isoDuration, itemGone, signState, syncTargets } from "../src/google.ts";
+import { checkState, isoDuration, itemGone, signState, syncTargets, unplayable } from "../src/google.ts";
 import * as library from "../src/library.ts";
 import { BUNDLE_ID, TRACK_ID, type Track } from "../src/types.ts";
+import { toHttpError } from "../src/ytdlp.ts";
 
 const track = (id: string, title = id): Track => ({ id, title, artist: "a", duration: 60, thumb: "", art: "", kind: "song" });
 const vid = (n: number) => `vid${String(n).padStart(8, "0")}`;
@@ -18,12 +19,12 @@ describe("song box", () => {
     const first = box.mergeTracks([], [track(vid(1)), track(vid(2)), track(vid(1))], src("youtube-playlist", "PLa", 1));
     assert.deepEqual(first.entries.map((e) => e.track.id), [vid(1), vid(2)]);
     assert.equal(first.added.length, 2);
-    first.entries[1].gone = true;
+    first.entries[1].blocked = { reason: "gone", at: 1 };
 
     const again = box.mergeTracks(first.entries, [track(vid(2)), track(vid(3))], src("youtube-playlist", "PLa", 2));
     assert.equal(again.merged, 0);
     assert.deepEqual(again.added.map((e) => e.track.id), [vid(3)]);
-    assert.equal(again.entries.find((e) => e.track.id === vid(2))!.gone, undefined, "back in a live list: not gone");
+    assert.equal(again.entries.find((e) => e.track.id === vid(2))!.blocked, undefined, "back in a live list: not gone");
 
     const liked = box.mergeTracks(again.entries, [track(vid(2))], src("youtube-liked", "LL", 3));
     assert.equal(liked.merged, 1);
@@ -94,8 +95,8 @@ describe("tags", () => {
     assert.deepEqual(await box.allTags(), [{ tag: "작품:Asayake", count: 2 }, { tag: "편곡:브라스", count: 1 }]);
     await box.editTags([vid(1)], (t) => t.filter((x) => x !== "작품:Asayake"));
     assert.equal((await box.listBox({ filter: "untagged" })).total, 2);
-    assert.equal(await box.markGone([vid(1), vid(9)]), 1);
-    assert.equal(await box.markGone([vid(1)]), 0);
+    assert.equal(await box.applyChecks(new Map([[vid(1), "region"], [vid(9), "gone"]]), 5), 1);
+    assert.equal(await box.applyChecks(new Map([[vid(1), "region"]]), 6), 0);
   });
 });
 
@@ -147,6 +148,31 @@ describe("youtube account", () => {
     assert.ok(!itemGone({ snippet: { title: "Asayake", videoOwnerChannelTitle: "Casiopea - Topic" }, status: { privacyStatus: "public" } }));
   });
 
+  it("judges whether a video plays here (videos.list status, contentDetails)", () => {
+    const v = (status: object, contentDetails: object = {}) => ({ id: vid(1), status, contentDetails });
+    const ok = { uploadStatus: "processed", privacyStatus: "public" };
+    assert.equal(unplayable(v(ok), "KR"), null);
+    assert.equal(unplayable(v(ok, { regionRestriction: { blocked: ["KR", "JP"] } }), "KR"), "region");
+    assert.equal(unplayable(v(ok, { regionRestriction: { blocked: ["DE"] } }), "KR"), null);
+    assert.equal(unplayable(v(ok, { regionRestriction: { allowed: ["US", "CA"] } }), "KR"), "region");
+    assert.equal(unplayable(v(ok, { regionRestriction: { allowed: ["US", "KR"] } }), "KR"), null);
+    assert.equal(unplayable(v({ uploadStatus: "rejected", rejectionReason: "copyright", privacyStatus: "public" }), "KR"), "gone");
+    assert.equal(unplayable(v({ uploadStatus: "processed", privacyStatus: "private" }), "KR"), "private");
+    assert.equal(unplayable(v(ok, { contentRating: { ytRating: "ytAgeRestricted" } }), "KR"), "age");
+    assert.equal(unplayable(undefined, "KR"), "gone", "missing from the answer: deleted");
+  });
+
+  it("tells yt-dlp's 'won't play' errors apart", () => {
+    const reason = (line: string) => toHttpError(`ERROR: [youtube] X2KMDkyt-SM: ${line}`).reason;
+    assert.equal(reason("Video unavailable. It was blocked due to the claimed content by Nintendo."), "region");
+    assert.equal(reason("Video unavailable. The uploader has not made this video available in your country"), "region");
+    assert.equal(reason("Private video. Sign in if you've been granted access to this video"), "private");
+    assert.equal(reason("Video unavailable. This video has been removed by the uploader"), "gone");
+    assert.equal(reason("Sign in to confirm your age. This video may be inappropriate for some users."), "age");
+    assert.equal(toHttpError("ERROR: Sign in to confirm you're not a bot").code, "bot_check");
+    assert.equal(toHttpError("ERROR: nsig extraction failed").reason, undefined);
+  });
+
   it("signs the OAuth state for 10 minutes", () => {
     const now = 1_800_000_000_000;
     const state = signState("secret", "home", now);
@@ -167,5 +193,121 @@ describe("youtube account", () => {
     assert.equal(isoDuration("P0D"), 0);
     assert.equal(isoDuration(undefined), 0);
     assert.equal(isoDuration("3:33"), 0);
+  });
+});
+
+describe("tracks that won't play", () => {
+  it("puts them aside: out of every listing, counted by reason, back when they play again", async () => {
+    library.useLibraryStorage(memory());
+    box.useBoxStorage(memory());
+    await box.addToBox([track(vid(1)), track(vid(2)), track(vid(3))], src("youtube-playlist", "PLa"));
+    await box.editTags([vid(2)], () => ["작품:x"]);
+    assert.equal(await box.applyChecks(new Map([[vid(1), null], [vid(2), "region"], [vid(3), "private"]]), 7), 2);
+    assert.equal(await box.checkedAt(), 7);
+    const ids = async (q: box.BoxQuery) => (await box.listBox(q)).items.map((it) => it.track.id);
+    assert.deepEqual(await ids({}), [vid(1)]);
+    assert.deepEqual(await ids({ source: "youtube-playlist:PLa" }), [vid(1)]);
+    assert.deepEqual(await ids({ tag: "작품:x" }), []);
+    assert.deepEqual(await ids({ q: "vid" }), [vid(1)], "the box search (「내 곡」) too");
+    assert.deepEqual(await ids({ filter: "blocked" }), [vid(2), vid(3)]);
+    const listed = (await box.listBox({ filter: "blocked" })).items.find((it) => it.track.id === vid(2))!;
+    assert.equal(listed.track.blocked, "region");
+    assert.equal(listed.blocked!.at, 7);
+    const sources = await box.boxSources();
+    assert.equal(sources.total, 1);
+    assert.deepEqual(sources.aside, { region: 1, private: 1 });
+    assert.deepEqual(sources.sources.map((s) => s.count), [1]);
+    assert.deepEqual(await box.allTags(), []);
+    // A playlist row keeps its place and says why (see /api/library).
+    const annotate = await box.annotator();
+    assert.equal(annotate(track(vid(2))).blocked, "region");
+    assert.equal(annotate(track(vid(1))).blocked, undefined);
+    // Allowed again in a later check: back in the listings.
+    await box.applyChecks(new Map([[vid(2), null]]), 8);
+    assert.deepEqual((await ids({})).sort(), [vid(1), vid(2)]);
+    await box.markBlocked(vid(1), "gone");
+    assert.deepEqual(await ids({}), [vid(2)]);
+  });
+
+  it("reads boxes saved with `gone`", async () => {
+    const store = memory();
+    await store.write(JSON.stringify({ entries: [{ track: track(vid(1)), sources: [src("link", "")], tags: [], addedAt: 1, gone: true }], localTags: {} }));
+    box.useBoxStorage(store);
+    const e = (await box.boxEntry(vid(1)))!;
+    assert.deepEqual(e.blocked, { reason: "gone", at: 0 });
+    assert.equal("gone" in e, false);
+    assert.equal(await box.checkedAt(), undefined);
+  });
+
+  it("picks other versions closest in length, leaving out the same video and those that won't play", () => {
+    const t = (id: string, duration: number, title = "Uncle Skunk", artist = "Guthrie Govan") => ({ ...track(id, title), artist, duration });
+    const original = t(vid(0), 200);
+    const found = [t(vid(0), 200), t(vid(1), 260), t(vid(2), 203), t(vid(3), 199), t(vid(4), 200), t(vid(5), 0), t(vid(6), 201), t(vid(7), 150), t(vid(8), 200)];
+    const picked = box.pickAlternatives(original, found, (x) => x.id === vid(8));
+    assert.deepEqual(picked.map((x) => x.track.id), [vid(4), vid(3), vid(6), vid(2), vid(7)]);
+    assert.deepEqual([picked[0].sameTitle, picked[0].sameArtist], [true, true]);
+  });
+
+  it("offers only results with an alike title, and says why", () => {
+    const t = (id: string, title: string, artist: string, duration: number) => ({ ...track(id, title), artist, duration });
+    const original = t(vid(0), "13. Road Taken (Calm/Roar) ~【Fire Emblem Fates OST: Map Themes Mixed】 【HQ 1080p】", "Loo Zhong Han", 323);
+    const found = [
+      t(vid(1), "Chappell Roan - Good Luck, Babe! (Official Lyric Video)", "Chappell Roan", 219),
+      t(vid(2), "Fire Emblem Fates - Alight (Calm/Storm Mashup)", "Superbird", 336),
+      t(vid(3), "Road Taken (Calm/Roar)", "Fire Emblem - Topic", 320),
+      t(vid(4), "Fire Emblem Fates OST - Road Taken (Calm)", "Loo Zhong Han", 300),
+    ];
+    const picked = box.pickAlternatives(original, found, () => false);
+    assert.deepEqual(picked.map((x) => x.track.id), [vid(3), vid(4)]);
+    assert.deepEqual(picked.map((x) => [x.sameTitle, x.sameArtist]), [[true, false], [false, true]]);
+    assert.deepEqual(box.titleWords(original.title), ["road", "taken", "calm", "roar"]);
+    assert.ok(box.titleLikeness("真夏の果実", "真夏の果実 (2020 Remaster)") >= box.LIKE_ENOUGH, "titles without spaces");
+    assert.ok(box.titleLikeness("Dream of the Return", "Dream of the Return") === 1);
+  });
+
+  it("replaces a track with another version: sources, tags and playlist rows stay, the old ID stays as `was`", async () => {
+    library.useLibraryStorage(memory());
+    box.useBoxStorage(memory());
+    const old = track(vid(1), "Fire Emblem Theme");
+    await box.addToBox([old, track(vid(2))], src("youtube-playlist", "PLa", 1));
+    await box.addToBox([old], src("youtube-liked", "LL", 2));
+    await box.editTags([vid(1)], () => ["작품:Fire Emblem", "장르:게임"]);
+    await box.applyChecks(new Map([[vid(1), "region"], [vid(2), null]]), 3);
+    const p = await library.createPlaylist("Games", [track(vid(2)), old, track(vid(3))]);
+    await library.addFavorite(old);
+    const b = await library.createBundle({ title: "Suite", parts: [old, track(vid(3))] });
+
+    const fresh = track(vid(9), "Fire Emblem Theme (official)");
+    await box.replaceTrack(vid(1), fresh);
+    assert.equal(await library.replaceTrack(vid(1), fresh), 3);
+
+    assert.equal(await box.boxEntry(vid(1)), null);
+    const e = (await box.boxEntry(vid(9)))!;
+    assert.deepEqual(e.tags, ["작품:Fire Emblem", "장르:게임"]);
+    assert.deepEqual(e.sources.map((s) => [s.kind, s.ref, s.was]), [["youtube-playlist", "PLa", vid(1)], ["youtube-liked", "LL", vid(1)]]);
+    assert.equal(e.blocked, undefined);
+    assert.equal(e.addedAt, 1);
+    assert.deepEqual((await box.listBox({})).items.map((it) => it.track.id).sort(), [vid(2), vid(9)]);
+
+    const lib = await library.getLibrary();
+    assert.deepEqual(lib.playlists.find((x) => x.id === p.id)!.tracks.map((t) => t.id), [vid(2), vid(9), vid(3)]);
+    assert.deepEqual(lib.favorites.map((t) => t.id), [vid(9)]);
+    assert.deepEqual(lib.bundles!.find((x) => x.id === b.id)!.parts.map((t) => t.id), [vid(9), vid(3)]);
+
+    // The next sync still lists the old video: it lands on the new entry, not as a track of its own.
+    const again = await box.addToBox([old, track(vid(4))], src("youtube-playlist", "PLa", 4));
+    assert.deepEqual(again.added.map((x) => x.track.id), [vid(4)]);
+    const synced = await box.addToBox([old], src("youtube-playlist", "PLb", 5));
+    assert.equal(synced.merged, 1);
+    assert.deepEqual((await box.boxEntry(vid(9)))!.sources.map((s) => s.ref), ["PLa", "LL", "PLb"]);
+  });
+
+  it("replacing with a track the box has already merges into it", () => {
+    const entries = box.mergeTracks([], [track(vid(1)), track(vid(2))], src("youtube-playlist", "PLa")).entries;
+    entries[0].tags = ["a"];
+    entries[1].tags = ["b"];
+    const out = box.replaceEntry(entries, vid(1), track(vid(2)));
+    assert.equal(out.length, 1);
+    assert.deepEqual(out[0].tags, ["b", "a"]);
   });
 });

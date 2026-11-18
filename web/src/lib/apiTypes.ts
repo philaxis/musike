@@ -1,14 +1,20 @@
-import type { AlbumCard, AlbumPage, ArtistPage, Genre, GenreArtist, GenrePage, Library, Playlist, Track } from "./types";
+import type { AlbumCard, AlbumPage, ArtistPage, Genre, GenreArtist, GenrePage, Library, Playlist, Track, Unplayable } from "./types";
 
 /**
  * What the app needs from a backend. The web app and the desktop app talk to the Musike server over HTTP
  * (lib/api.ts); the Android app does the same work on the phone (native/api.ts). The build picks one.
  */
 
-export type ErrorCode = "tool_missing" | "maybe_outdated" | "bot_check" | "google_login";
+export type ErrorCode = "tool_missing" | "maybe_outdated" | "bot_check" | "google_login" | "unplayable";
 
 export class ApiError extends Error {
-  constructor(public status: number, message: string, public code?: ErrorCode) {
+  constructor(
+    public status: number,
+    message: string,
+    public code?: ErrorCode,
+    /** With code "unplayable": why the video won't play here. */
+    public reason?: Unplayable,
+  ) {
     super(message);
   }
 }

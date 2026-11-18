@@ -518,7 +518,6 @@ export const en = {
     emptyBody: "Paste a YouTube playlist link into Search, or connect your YouTube account in Settings.",
     emptyFiltered: "Nothing here matches",
     noTags: "No tags yet",
-    gone: "Gone from YouTube",
     fromPlaylist: (name: string) => `YouTube '${name}'`,
     fromLiked: "YouTube likes",
     fromLocal: (name: string) => `My folder · ${name}`,
@@ -570,6 +569,39 @@ export const en = {
     disconnected: "YouTube account disconnected",
     connectedToast: "YouTube account connected",
     connectFailed: (reason: string) => `Couldn't connect the YouTube account (${reason})`,
+  },
+
+  /** Tracks that won't play here (blocked in this country, deleted, private, age-restricted): put aside, skipped. */
+  aside: {
+    /** Short, on a row. */
+    reason: { region: "Blocked here", gone: "Gone from YouTube", private: "Private", age: "Age-restricted" },
+    /** Why, in plain words, when the track is picked. */
+    why: {
+      region: "This video is blocked in this country on copyright grounds.",
+      gone: "This video was taken down from YouTube.",
+      private: "This video is private.",
+      age: "This video is age-restricted.",
+    },
+    chosen: (title: string, why: string) => `「${title}」: ${why}`,
+    /** What was skipped, for `skipped`: one kind, or several. */
+    kind: { region: "blocked here", gone: "gone from YouTube", private: "private", age: "age-restricted", any: "won't play" },
+    skipped: (what: string, n: number) => `Skipped ${count(n, "track", "tracks")} (${what})`,
+    cantPlay: "Won't play",
+    findOther: "Find another version",
+    findOf: (title: string) => `Other versions of 「${title}」`,
+    none: "Found no other version of the same song.",
+    searchYoutube: "Search YouTube yourself",
+    sameTitle: "same title",
+    sameArtist: "same artist",
+    failed: "Couldn't search right now.",
+    sameLength: "same length",
+    lengthOff: (seconds: number) => `${seconds > 0 ? "+" : "−"}${Math.abs(seconds)}s`,
+    replace: "Use this one",
+    replaced: (title: string) => `Replaced with 「${title}」`,
+    chip: "Put aside",
+    title: "Tracks put aside",
+    body: "These won't play here, so lists and playback leave them out. Find another version, or wait: one that plays again comes back by itself.",
+    count: (reason: string, n: number) => `${reason} ${n}`,
   },
 
   openLink: {

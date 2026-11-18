@@ -10,6 +10,7 @@ import {
   HeartIcon,
   ListNumbersIcon,
   ListPlusIcon,
+  MagnifyingGlassIcon,
   MinusCircleIcon,
   PlayIcon,
   PlaylistIcon,
@@ -149,6 +150,8 @@ function TrackItems({ menu, run }: { menu: Extract<MenuState, { kind: "track" }>
   const openAddToPlaylist = useUi((s) => s.openAddToPlaylist);
   const isFavorite = useLibrary((s) => s.favorites.some((x) => x.id === track.id));
   const keepItem = useKeep((s) => s.items[track.id]);
+  // Found this session not to play here (the server's mark comes on the track as `blocked`).
+  const unplayable = usePlayer((s) => s.unplayable[track.id]);
   // The bundle this menu's row stands for (or a part of) is playing: offer to skip the rest of it.
   const inPlayingBundle = usePlayer((s) => {
     const part = s.queue[s.index]?.part;
@@ -172,6 +175,14 @@ function TrackItems({ menu, run }: { menu: Extract<MenuState, { kind: "track" }>
         <>
           <Item icon={<CheckSquareIcon size={18} />} onClick={run(menu.select)}>
             {t.basics.select}
+          </Item>
+          <Divider />
+        </>
+      )}
+      {youtube && capabilities.serverLibrary && !tv && (track.blocked || unplayable) && (
+        <>
+          <Item icon={<MagnifyingGlassIcon size={18} />} onClick={() => useUi.getState().openAlternatives(track)}>
+            {t.aside.findOther}
           </Item>
           <Divider />
         </>

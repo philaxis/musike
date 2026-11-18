@@ -10,7 +10,7 @@ import { useT } from "../i18n";
 import { cn } from "../lib/format";
 import { paths } from "../lib/routes";
 import { server, type BoxItem, type BoxSource } from "../lib/server";
-import type { Track } from "../lib/types";
+import type { Track, Unplayable } from "../lib/types";
 import { usePlayer } from "../player/player";
 import { useTagEdits } from "../stores/tags";
 import { useUi } from "../stores/ui";
@@ -20,7 +20,8 @@ type SourceCount = Omit<BoxSource, "at"> & { count: number };
 
 /**
  * Library's 「곡 상자」: every track brought in (and the music folders), newest first, 200 at a time. Filter by
- * unsorted (no tags), source or tag; pick several to play or put in a playlist. Not in TV mode, which only plays.
+ * unsorted (no tags), source or tag; pick several to play or put in a playlist. Tracks that won't play here are put
+ * aside under their own chip, each with 「다른 판 찾기」. Not in TV mode, which only plays.
  */
 export default function SongBox() {
   const [params, setParams] = useSearchParams();
@@ -32,15 +33,18 @@ export default function SongBox() {
   const source = params.get("source") ?? "";
   const tag = params.get("tag") ?? "";
   const untagged = params.get("filter") === "untagged";
-  const mode = source || params.get("by") === "source" ? "source" : tag || params.get("by") === "tag" ? "tag" : untagged ? "untagged" : "all";
+  const aside = params.get("filter") === "blocked";
+  const mode = source || params.get("by") === "source" ? "source" : tag || params.get("by") === "tag" ? "tag" : untagged ? "untagged" : aside ? "aside" : "all";
 
   const [page, setPage] = useState<{ items: BoxItem[]; total: number; next: string | null } | null>(null);
   const [failed, setFailed] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [sources, setSources] = useState<SourceCount[] | null>(null);
+  const [asideCounts, setAsideCounts] = useState<Partial<Record<Unplayable, number>>>({});
   const [tags, setTags] = useState<{ tag: string; count: number }[] | null>(null);
+  const replaced = useUi((s) => s.lastReplaced);
 
-  const query = { filter: untagged ? ("untagged" as const) : undefined, source: source || undefined, tag: tag || undefined };
+  const query = { filter: untagged ? ("untagged" as const) : aside ? ("blocked" as const) : undefined, source: source || undefined, tag: tag || undefined };
 
   // A new filter starts a new list: the selection empties with it (rows that left the list leave it).
   useEffect(() => {
@@ -49,16 +53,38 @@ export default function SongBox() {
     setFailed(false);
     server.box(query, ctrl.signal).then(setPage, (e: Error) => e.name !== "AbortError" && setFailed(true));
     return () => ctrl.abort();
-  }, [untagged, source, tag]);
+  }, [untagged, aside, source, tag]);
 
   const items = page?.items ?? [];
   const tracks: Track[] = useMemo(() => (page?.items ?? []).map((it) => it.track), [page]);
-  const sel = useListSelection(tracks, !isTvMode());
+  // Tracks put aside won't play: no picking there, only 「다른 판 찾기」 per row.
+  const sel = useListSelection(tracks, !isTvMode() && !aside);
+
+  // Sources and how many tracks are put aside (for the chips), again after a track was replaced.
+  useEffect(() => {
+    server.boxSources().then(
+      (r) => {
+        setSources(r.sources);
+        setAsideCounts(r.aside);
+      },
+      () => setSources([]),
+    );
+  }, [replaced]);
 
   useEffect(() => {
-    if (mode === "source" && !sources) server.boxSources().then((r) => setSources(r.sources), () => setSources([]));
     if (mode === "tag" && !tags) server.tags().then(setTags, () => setTags([]));
   }, [mode]);
+
+  // A track replaced by another version (「다른 판 찾기」): it leaves the put-aside list, elsewhere the row follows.
+  useEffect(() => {
+    if (!replaced) return;
+    setPage((p) => {
+      if (!p?.items.some((it) => it.track.id === replaced.from)) return p;
+      if (aside) return { ...p, items: p.items.filter((it) => it.track.id !== replaced.from), total: p.total - 1 };
+      return { ...p, items: p.items.map((it) => (it.track.id === replaced.from ? { ...it, track: replaced.track, blocked: undefined } : it)) };
+    });
+  }, [replaced]);
+  const asideTotal = Object.values(asideCounts).reduce((n, c) => n + (c ?? 0), 0);
 
   if (isTvMode()) return <Navigate to={paths.library} replace />;
 
@@ -97,6 +123,11 @@ export default function SongBox() {
           <Chip on={mode === "tag"} onClick={() => setParams({ by: "tag" })}>
             {t.songBox.byTag}
           </Chip>
+          {(asideTotal > 0 || aside) && (
+            <Chip on={mode === "aside"} onClick={() => setParams({ filter: "blocked" })}>
+              {t.aside.chip} <span className="font-mono opacity-70">{asideTotal}</span>
+            </Chip>
+          )}
         </div>
 
         {mode === "source" && (
@@ -140,6 +171,14 @@ export default function SongBox() {
             ))}
           </div>
         )}
+        {mode === "aside" && (
+          <div className="flex flex-col gap-1 text-sm text-fg-2">
+            <p className="font-medium text-danger">
+              {(Object.entries(asideCounts) as [Unplayable, number][]).map(([r, n]) => t.aside.count(t.aside.reason[r], n)).join(" · ")}
+            </p>
+            <p className="max-w-[70ch]">{t.aside.body}</p>
+          </div>
+        )}
       </div>
 
       {failed ? (
@@ -156,21 +195,25 @@ export default function SongBox() {
         />
       ) : (
         <div onPointerDownCapture={sel.activate}>
-          <SelectionBar
-            chosen={chosen}
-            all={tracks}
-            allSelected={allSelected}
-            onToggleAll={allSelected ? sel.clear : sel.selectAll}
-            onClear={sel.clear}
-            selecting={sel.mode}
-            label={
-              chosen.length ? (
-                <SelectedCount n={chosen.length} total={page.total} />
-              ) : (
-                <Short phone={t.songBox.count(page.total)} wide={`${t.selection.selectAll} · ${t.songBox.count(page.total)}`} />
-              )
-            }
-          />
+          {aside ? (
+            <p className="border-b border-line px-4 py-2.5 text-sm text-fg-2 md:px-6">{t.songBox.count(page.total)}</p>
+          ) : (
+            <SelectionBar
+              chosen={chosen}
+              all={tracks}
+              allSelected={allSelected}
+              onToggleAll={allSelected ? sel.clear : sel.selectAll}
+              onClear={sel.clear}
+              selecting={sel.mode}
+              label={
+                chosen.length ? (
+                  <SelectedCount n={chosen.length} total={page.total} />
+                ) : (
+                  <Short phone={t.songBox.count(page.total)} wide={`${t.selection.selectAll} · ${t.songBox.count(page.total)}`} />
+                )
+              }
+            />
+          )}
           <ul className="mt-2 flex flex-col px-2 md:px-3">
             {items.map((it, i) => (
               <li key={it.track.id}>
@@ -178,31 +221,42 @@ export default function SongBox() {
                   track={it.track}
                   selected={sel.has(it.track.id)}
                   onToggle={(e) => sel.toggle(i, e.shiftKey)}
-                  onPlay={() => playList(tracks, i)}
+                  onPlay={() => (aside ? useUi.getState().openAlternatives(it.track) : playList(tracks, i, 0, true))}
                   menu={() => menuFor(i)}
                   drag={() => (sel.has(it.track.id) ? chosen : [it.track])}
                   row={i}
                   paint={(e) => sel.paint(i, e)}
-                  dim={!!it.gone}
+                  dim={!!it.track.blocked}
                   below={
                     <>
                       <span className="mt-0.5 block truncate text-xs text-fg-3">
-                        {it.gone && <span className="text-danger">{t.songBox.gone} · </span>}
+                        {it.track.blocked && <span className="text-danger">{t.aside.reason[it.track.blocked]} · </span>}
                         {it.sources.map(sourceText).join(", ")}
                       </span>
                       <TagChips tags={edits[it.track.id] ?? it.tags} className="mt-1" />
                     </>
                   }
                   trailing={
-                    <button
-                      type="button"
-                      onClick={(e) => openMenuFromButton(e, menuFor(i))}
-                      aria-label={t.trackList.moreFor(it.track.title)}
-                      title={t.trackList.more}
-                      className="grid size-9 shrink-0 place-items-center rounded-full text-fg-2 hover:bg-surface-3 hover:text-fg"
-                    >
-                      <DotsThreeIcon size={22} weight="bold" />
-                    </button>
+                    <>
+                      {it.track.blocked && (
+                        <button
+                          type="button"
+                          onClick={() => useUi.getState().openAlternatives(it.track)}
+                          className="h-8 shrink-0 rounded-full bg-surface-3 px-3 text-xs font-medium whitespace-nowrap hover:bg-surface-4"
+                        >
+                          {t.aside.findOther}
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={(e) => openMenuFromButton(e, menuFor(i))}
+                        aria-label={t.trackList.moreFor(it.track.title)}
+                        title={t.trackList.more}
+                        className="grid size-9 shrink-0 place-items-center rounded-full text-fg-2 hover:bg-surface-3 hover:text-fg"
+                      >
+                        <DotsThreeIcon size={22} weight="bold" />
+                      </button>
+                    </>
                   }
                 />
               </li>

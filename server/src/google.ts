@@ -6,7 +6,7 @@ import type { FastifyInstance } from "fastify";
 import * as box from "./box.js";
 import { config } from "./config.js";
 import { langOf, msg, tr, type Lang } from "./i18n.js";
-import { HttpError, VIDEO_ID, type Track } from "./types.js";
+import { HttpError, VIDEO_ID, type Track, type Unplayable } from "./types.js";
 
 // The user's YouTube account, read-only: Google sign-in (OAuth web flow, scope youtube.readonly), the playlists
 // (private ones too) and liked videos, and a sync that brings their new tracks into the song box. Plain fetch, no SDK.
@@ -235,7 +235,50 @@ interface Snippet {
 interface Video {
   id: string;
   snippet?: Snippet;
-  contentDetails?: { duration?: string };
+  contentDetails?: { duration?: string; regionRestriction?: { allowed?: string[]; blocked?: string[] }; contentRating?: { ytRating?: string } };
+  status?: { uploadStatus?: string; privacyStatus?: string };
+}
+
+/**
+ * Why a video won't play in `region` (ISO 3166 code), from `videos.list` with `part=status,contentDetails`; null when
+ * it plays. Missing from the answer: deleted. The same judgement every check makes (sync, first start, candidates).
+ */
+export function unplayable(video: Video | undefined, region: string): Unplayable | null {
+  if (!video) return "gone";
+  const upload = video.status?.uploadStatus;
+  if (upload === "rejected" || upload === "deleted" || upload === "failed") return "gone";
+  if (video.status?.privacyStatus === "private") return "private";
+  const r = video.contentDetails?.regionRestriction;
+  if (r?.blocked?.includes(region) || (r?.allowed && !r.allowed.includes(region))) return "region";
+  if (video.contentDetails?.contentRating?.ytRating === "ytAgeRestricted") return "age";
+  return null;
+}
+
+/** `unplayable` for each of `ids` here (MUSIKE_LOCATION), 50 per request. */
+export async function checkVideos(ids: string[]): Promise<Map<string, Unplayable | null>> {
+  const out = new Map<string, Unplayable | null>();
+  const region = config.location.toUpperCase();
+  for (let i = 0; i < ids.length; i += 50) {
+    const chunk = ids.slice(i, i + 50);
+    const page = await api<Video>("videos", { part: "status,contentDetails", id: chunk.join(","), maxResults: "50" });
+    const found = new Map((page.items ?? []).map((v) => [v.id, v]));
+    for (const id of chunk) out.set(id, unplayable(found.get(id), region));
+  }
+  return out;
+}
+
+/** Checks every YouTube track of the song box and stores the result; returns how many newly won't play. */
+async function checkBox(): Promise<number> {
+  const ids = (await box.youtubeIds()).filter((id) => VIDEO_ID.test(id));
+  return box.applyChecks(await checkVideos(ids), Date.now());
+}
+
+/** The first check of the song box, at startup when there was none yet and the account is connected. */
+export async function checkBoxOnce(): Promise<void> {
+  if ((await box.checkedAt()) !== undefined) return;
+  const t = await readTokens();
+  if (!t || t.revoked || !existsSync(config.googleClient)) return;
+  await checkBox();
 }
 
 /** A YouTube video as a Musike track (same images and song/video rule as playlist import). */
@@ -305,7 +348,7 @@ interface PlaylistItem {
   status?: { privacyStatus?: string };
 }
 
-/** Deleted and private videos stay in a playlist as placeholders without an owner channel. */
+/** Deleted and private videos stay in a playlist as placeholders without an owner channel: not tracks to bring in. */
 export function itemGone(item: PlaylistItem): boolean {
   return !item.snippet?.videoOwnerChannelTitle || item.status?.privacyStatus === "private";
 }
@@ -323,59 +366,51 @@ async function videoDetails(ids: string[]): Promise<Map<string, Video>> {
 export interface SyncResult {
   added: { id: string; title: string; source: string }[];
   merged: number;
-  gone: number;
+  /** Box tracks newly found not to play here (see `unplayable`). */
+  blocked: number;
   playlists: number;
 }
 
-/** One playlist's live tracks, and the IDs of its deleted or private videos. */
-async function readPlaylistTracks(id: string): Promise<{ tracks: Track[]; gone: string[] }> {
+/** One playlist's live tracks. */
+async function readPlaylistTracks(id: string): Promise<Track[]> {
   if (id === LIKED) {
     const videos = await all<Video>("videos", { part: "snippet,contentDetails", myRating: "like" });
-    return { tracks: videos.map((v) => videoTrack(v.id, v.snippet?.title ?? "", v.snippet?.channelTitle ?? "", isoDuration(v.contentDetails?.duration))), gone: [] };
+    return videos.map((v) => videoTrack(v.id, v.snippet?.title ?? "", v.snippet?.channelTitle ?? "", isoDuration(v.contentDetails?.duration)));
   }
   const items = await all<PlaylistItem>("playlistItems", { part: "snippet,contentDetails,status", playlistId: id });
-  const gone: string[] = [];
   const live: { vid: string; snippet: Snippet }[] = [];
   const fresh = new Set<string>();
   for (const item of items) {
     const vid = item.contentDetails?.videoId ?? "";
-    if (!VIDEO_ID.test(vid)) continue;
-    if (itemGone(item)) {
-      gone.push(vid);
-      continue;
-    }
+    if (!VIDEO_ID.test(vid) || itemGone(item)) continue;
     live.push({ vid, snippet: item.snippet ?? {} });
     if (!(await box.boxEntry(vid))) fresh.add(vid);
   }
   // Durations only for tracks the box doesn't have yet (quota); a video missing from the answer was deleted.
   const details = await videoDetails([...fresh]);
-  const tracks: Track[] = [];
-  for (const { vid, snippet } of live) {
-    if (fresh.has(vid) && !details.has(vid)) gone.push(vid);
-    else tracks.push(videoTrack(vid, snippet.title ?? "", snippet.videoOwnerChannelTitle ?? "", isoDuration(details.get(vid)?.contentDetails?.duration)));
-  }
-  return { tracks, gone };
+  return live
+    .filter(({ vid }) => !fresh.has(vid) || details.has(vid))
+    .map(({ vid, snippet }) => videoTrack(vid, snippet.title ?? "", snippet.videoOwnerChannelTitle ?? "", isoDuration(details.get(vid)?.contentDetails?.duration)));
 }
 
 let syncing: Promise<SyncResult> | null = null;
 
 async function runSync(lang: Lang): Promise<SyncResult> {
   const targets = syncTargets(await accountPlaylists(lang), await readExcluded());
-  const result: SyncResult = { added: [], merged: 0, gone: 0, playlists: targets.length };
-  const gone = new Set<string>();
+  const result: SyncResult = { added: [], merged: 0, blocked: 0, playlists: targets.length };
   for (const p of targets) {
-    const { tracks, gone: lost } = await readPlaylistTracks(p.id);
+    const tracks = await readPlaylistTracks(p.id);
     const source = { kind: p.id === LIKED ? ("youtube-liked" as const) : ("youtube-playlist" as const), ref: p.id, name: p.title, at: Date.now() };
     const r = await box.addToBox(tracks, source);
     result.added.push(...r.added.map((e) => ({ id: e.track.id, title: e.track.title, source: p.title })));
     result.merged += r.merged;
-    for (const id of lost) gone.add(id);
   }
-  result.gone = await box.markGone(gone);
+  // Then whether each box track (old and new) still plays here: deleted, private, blocked in this country.
+  result.blocked = await checkBox();
   return result;
 }
 
-/** Brings new tracks of every playlist (but the excluded) and the liked videos into the box. One sync at a time. */
+/** Brings new tracks of every playlist (but the excluded) and the liked videos into the box, then checks them all. One sync at a time. */
 export function sync(lang: Lang): Promise<SyncResult> {
   syncing ??= runSync(lang).finally(() => (syncing = null));
   return syncing;
