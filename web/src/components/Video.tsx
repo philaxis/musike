@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import { create } from "zustand";
 import { MD, useMediaQuery } from "../hooks/useMediaQuery";
 import { useT } from "../i18n";
+import { trackTitle } from "../lib/bundles";
 import { cn } from "../lib/format";
 import { selectCurrent, usePlayer, useStatusText, videoEl } from "../player/player";
 import { useUi } from "../stores/ui";
@@ -231,7 +232,7 @@ export function Theater() {
           >
             <div className="pointer-events-auto flex items-start gap-3 pt-3">
               <div className="min-w-0 flex-1 text-white">
-                <p className="truncate text-lg font-semibold tracking-tight md:text-xl">{track.title}</p>
+                <p className="truncate text-lg font-semibold tracking-tight md:text-xl">{trackTitle(track)}</p>
                 <p className="truncate text-sm text-white/70">{statusText ?? track.artist}</p>
               </div>
               <IconButton

@@ -10,6 +10,9 @@ import {
   PlaylistIcon,
   QueueIcon,
   RadioIcon,
+  SkipForwardIcon,
+  StackIcon,
+  TagIcon,
   TrashIcon,
 } from "@phosphor-icons/react";
 import { AnimatePresence, motion } from "motion/react";
@@ -54,6 +57,11 @@ export function TrackMenu() {
   const openAddToPlaylist = useUi((s) => s.openAddToPlaylist);
   const isFavorite = useLibrary((s) => (menu ? s.favorites.some((t) => t.id === menu.track.id) : false));
   const keepItem = useKeep((s) => (menu ? s.items[menu.track.id] : undefined));
+  // The bundle this menu's row stands for (or a part of) is playing: offer to skip the rest of it.
+  const inPlayingBundle = usePlayer((s) => {
+    const part = s.queue[s.index]?.part;
+    return !!menu && !!part && (part.bundle === menu.track.id || part.run === menu.track.part?.run);
+  });
   const isMd = useMediaQuery(MD);
   const box = useRef<HTMLDivElement>(null);
   const t = useT();
@@ -85,6 +93,8 @@ export function TrackMenu() {
   };
 
   const local = menu ? isLocal(menu.track) : false;
+  // YouTube-only actions (radio, keep, open on YouTube) aren't for local files nor bundles.
+  const youtube = !!menu && !local && menu.track.kind !== "bundle";
   // TV mode only plays: no playlist editing or keeping there.
   const tv = isTvMode();
   const keepStatus = keepItem?.status ?? (menu?.track.kept ? "done" : "none");
@@ -102,9 +112,14 @@ export function TrackMenu() {
       <Item icon={<ListPlusIcon size={18} />} onClick={run(() => usePlayer.getState().addToQueue(menu.track))}>
         {t.trackMenu.addToQueue}
       </Item>
-      {!local && (
+      {youtube && (
         <Item icon={<RadioIcon size={18} />} onClick={run(() => void usePlayer.getState().startRadio(menu.track))}>
           {t.trackMenu.startRadio}
+        </Item>
+      )}
+      {inPlayingBundle && (
+        <Item icon={<SkipForwardIcon size={18} />} onClick={run(() => usePlayer.getState().skipBundle())}>
+          {t.songBox.skipBundle}
         </Item>
       )}
       <div className="mx-3 my-1 h-px bg-line" />
@@ -136,7 +151,20 @@ export function TrackMenu() {
           {menu.track.hidden ? t.hide.unhide : t.hide.hide}
         </Item>
       )}
-      {!local && capabilities.serverLibrary && !tv && (
+      {capabilities.serverLibrary && (
+        <>
+          {/* Tags are edited on phones and laptops; TV mode only plays, but can still list other versions. */}
+          {!tv && (
+            <Item icon={<TagIcon size={18} />} onClick={() => useUi.getState().openTags(menu.track)}>
+              {t.songBox.tags}
+            </Item>
+          )}
+          <Item icon={<StackIcon size={18} />} onClick={() => useUi.getState().openVersions(menu.track)}>
+            {t.songBox.versions}
+          </Item>
+        </>
+      )}
+      {youtube && capabilities.serverLibrary && !tv && (
         <>
           <div className="mx-3 my-1 h-px bg-line" />
           {keepStatus === "downloading" ? (
@@ -157,7 +185,7 @@ export function TrackMenu() {
           )}
         </>
       )}
-      {!local && (
+      {youtube && (
         <>
           <div className="mx-3 my-1 h-px bg-line" />
           <Item

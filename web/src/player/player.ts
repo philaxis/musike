@@ -2,13 +2,14 @@ import { create } from "zustand";
 import { getT, useT } from "../i18n";
 import { api, capabilities, explainStreamError, streamSource, systemMedia, type ApiError, type ErrorCode } from "../lib/api";
 import { createAudio } from "../lib/audio";
+import { bundleParts, bundleRow, queueRows, trackTitle } from "../lib/bundles";
 import { shuffled } from "../lib/format";
-import { isLocal } from "../lib/server";
-import type { Track } from "../lib/types";
+import { isLocal, server } from "../lib/server";
+import type { Bundle, Track } from "../lib/types";
 import { useLibrary } from "../stores/library";
 import { openSettings } from "../stores/system";
 import { toast } from "../stores/ui";
-import { crossfadeSupported, FADE_DEFAULT, FADE_MAX, mixer, sameAlbum } from "./crossfade";
+import { crossfadeSupported, FADE_DEFAULT, FADE_MAX, mixer, noFade } from "./crossfade";
 
 export type Repeat = "off" | "all" | "one";
 /** A code translated where it is shown (so switching languages updates it), or a server error already in the right language. */
@@ -44,11 +45,15 @@ interface PlayerState {
   /** Seconds the next track overlaps the end of this one in Audio mode; 0 plays them one after the other. */
   fade: number;
 
-  playList: (tracks: Track[], start?: number) => void;
+  /** Plays `tracks` from row `start`; a bundle row there starts at its part `part` (0-based). */
+  playList: (tracks: Track[], start?: number, part?: number) => void;
   playTrack: (track: Track) => void;
   playNext: (track: Track) => void;
   addToQueue: (track: Track) => void;
-  removeAt: (i: number) => void;
+  /** Removes `count` queue entries from `i` (a bundle's run of parts at once). */
+  removeAt: (i: number, count?: number) => void;
+  /** Moves past the bundle the current track is a part of. */
+  skipBundle: () => void;
   jumpTo: (i: number) => void;
   clearUpcoming: () => void;
   startRadio: (track: Track) => Promise<void>;
@@ -169,6 +174,24 @@ function lookupClip(track: Track): Promise<string | null> {
 
 const needsClipLookup = (track: Track, preferVideo: boolean) =>
   preferVideo && track.kind === "song" && !isLocal(track) && !clipFor.has(track.id);
+
+/**
+ * Each of `tracks` as what it plays: a bundle row becomes its parts (lib/bundles.ts), anything else itself. Bundles the
+ * library doesn't know yet (a /play/<id> link opened before it loaded) are fetched first.
+ */
+function withParts(tracks: Track[], then: (rows: Track[][]) => void) {
+  const known = new Map<string, Bundle>((useLibrary.getState().bundles ?? []).map((b) => [b.id, b]));
+  const missing = [...new Set(tracks.filter((t) => t.kind === "bundle" && !known.has(t.id)).map((t) => t.id))];
+  const expand = () => then(tracks.map((t) => (t.kind !== "bundle" ? [t] : known.has(t.id) ? bundleParts(known.get(t.id)!) : [])));
+  if (!missing.length) return expand();
+  Promise.all(missing.map((id) => server.bundle(id))).then(
+    (found) => {
+      for (const b of found) known.set(b.id, b);
+      expand();
+    },
+    (e: Error) => toast(e.message, "error"),
+  );
+}
 
 export const usePlayer = create<PlayerState>((set, get) => {
   const kindFor = (track: Track): Kind =>
@@ -312,7 +335,9 @@ export const usePlayer = create<PlayerState>((set, get) => {
     const track = s.queue[s.index];
     if (!track || recordedToken === token) return;
     recordedToken = token;
-    useLibrary.getState().recordPlay(track);
+    // A bundle goes into the history as its row, not as the part that happens to start.
+    const bundle = track.part && useLibrary.getState().bundles?.find((b) => b.id === track.part!.bundle);
+    useLibrary.getState().recordPlay(bundle ? bundleRow(bundle) : track);
     // Warm up the next track (and, in Video mode, find and resolve its clip) so it starts quickly.
     const upcoming = s.queue[s.index + 1];
     if (!upcoming) return;
@@ -349,7 +374,7 @@ export const usePlayer = create<PlayerState>((set, get) => {
     const index = s.index < s.queue.length - 1 ? s.index + 1 : s.repeat === "all" ? 0 : -1;
     const current = s.queue[s.index];
     const next = s.queue[index];
-    if (!current || !next || index === s.index || next.unavailable || sameAlbum(current, next)) return;
+    if (!current || !next || index === s.index || next.unavailable || noFade(current, next)) return;
     if (needsClipLookup(next, s.preferVideo) || kindFor(next) !== "audio") return;
     startCrossfade(index, left);
   }
@@ -531,57 +556,71 @@ export const usePlayer = create<PlayerState>((set, get) => {
     autoRadio: saved.autoRadio ?? true,
     fade: saved.fade ?? FADE_DEFAULT,
 
-    playList: (tracks, start = 0) => {
+    playList: (tracks, start = 0, part = 0) => {
       if (!tracks.length) return;
-      const first = tracks[start] ?? tracks[0];
-      if (get().shuffle) {
-        const rest = tracks.filter((_, i) => i !== start);
-        set({ queue: [first, ...shuffled(rest)], original: tracks.slice() });
-        load(0);
-      } else {
-        set({ queue: tracks.slice(), original: null });
-        load(start);
-      }
+      withParts(tracks, (rows) => {
+        const at = rows[start]?.length ? start : 0;
+        const all = rows.flat();
+        if (!all.length) return;
+        const from = Math.min(part, rows[at].length - 1);
+        if (get().shuffle) {
+          // Bundles stay whole: rows are shuffled, never the parts inside one.
+          const rest = rows.filter((_, i) => i !== at);
+          set({ queue: [...rows[at].slice(from), ...shuffled(rest).flat()], original: all });
+          load(0);
+        } else {
+          set({ queue: all, original: null });
+          load(rows.slice(0, at).reduce((n, r) => n + r.length, 0) + from);
+        }
+      });
     },
 
     playTrack: (track) => {
       const s = get();
-      const at = s.queue.findIndex((t) => t.id === track.id);
+      const at = s.queue.findIndex((t) => t.id === track.id || (t.part?.bundle === track.id && t.part.n === 1));
       if (at >= 0) return load(at);
       if (!s.queue.length) return get().playList([track]);
-      const insert = s.index + 1;
-      set({
-        queue: [...s.queue.slice(0, insert), track, ...s.queue.slice(insert)],
-        original: s.original ? [...s.original, track] : null,
+      withParts([track], ([parts]) => {
+        const st = get();
+        const insert = st.index + 1;
+        set({
+          queue: [...st.queue.slice(0, insert), ...parts, ...st.queue.slice(insert)],
+          original: st.original ? [...st.original, ...parts] : null,
+        });
+        load(insert);
       });
-      load(insert);
     },
 
     playNext: (track) => {
-      const s = get();
-      if (!s.queue.length) return get().playList([track]);
-      const insert = s.index + 1;
-      set({
-        queue: [...s.queue.slice(0, insert), track, ...s.queue.slice(insert)],
-        original: s.original ? [...s.original, track] : null,
+      if (!get().queue.length) return get().playList([track]);
+      withParts([track], ([parts]) => {
+        const s = get();
+        const insert = s.index + 1;
+        set({
+          queue: [...s.queue.slice(0, insert), ...parts, ...s.queue.slice(insert)],
+          original: s.original ? [...s.original, ...parts] : null,
+        });
+        toast(getT().player.playsNext(track.title));
       });
-      toast(getT().player.playsNext(track.title));
     },
 
     addToQueue: (track) => {
-      const s = get();
-      if (!s.queue.length) return get().playList([track]);
-      set({ queue: [...s.queue, track], original: s.original ? [...s.original, track] : null });
-      toast(getT().player.addedToQueue(track.title));
+      if (!get().queue.length) return get().playList([track]);
+      withParts([track], ([parts]) => {
+        const s = get();
+        set({ queue: [...s.queue, ...parts], original: s.original ? [...s.original, ...parts] : null });
+        toast(getT().player.addedToQueue(track.title));
+      });
     },
 
-    removeAt: (i) => {
+    removeAt: (i, count = 1) => {
       const s = get();
       if (i < 0 || i >= s.queue.length) return;
-      const removed = s.queue[i];
-      const queue = s.queue.filter((_, j) => j !== i);
-      const original = s.original?.filter((t) => t !== removed) ?? null;
-      if (i < s.index) return set({ queue, original, index: s.index - 1 });
+      const end = Math.min(s.queue.length, i + count);
+      const removed = new Set(s.queue.slice(i, end));
+      const queue = [...s.queue.slice(0, i), ...s.queue.slice(end)];
+      const original = s.original?.filter((t) => !removed.has(t)) ?? null;
+      if (end <= s.index) return set({ queue, original, index: s.index - (end - i) });
       if (i > s.index) return set({ queue, original });
       // Removing the current track: move on to whatever takes its place.
       set({ queue, original });
@@ -592,6 +631,20 @@ export const usePlayer = create<PlayerState>((set, get) => {
         loaded = null;
         set({ index: Math.max(0, queue.length - 1), status: queue.length ? "paused" : "idle", position: 0 });
       }
+    },
+
+    skipBundle: () => {
+      const s = get();
+      const row = queueRows(s.queue).find((r) => r.start <= s.index && s.index < r.end);
+      if (!row || !s.queue[s.index]?.part) return get().next();
+      if (row.end < s.queue.length) return load(row.end);
+      if (s.repeat === "all") return load(0);
+      // Nothing after the bundle: carry on from its last part the way the end of the queue does.
+      set({ index: row.end - 1 });
+      if (s.autoRadio) return void continueWithRadio();
+      cutFade();
+      activeMedia()?.pause();
+      set({ status: "paused", position: 0 });
     },
 
     jumpTo: (i) => load(i),
@@ -684,8 +737,12 @@ export const usePlayer = create<PlayerState>((set, get) => {
       const s = get();
       const current = s.queue[s.index];
       if (!s.shuffle) {
-        const rest = s.queue.filter((_, i) => i !== s.index);
-        set({ shuffle: true, original: s.queue, queue: current ? [current, ...shuffled(rest)] : shuffled(rest), index: 0 });
+        // Rows, not tracks: a bundle's parts stay together, the current one's first.
+        const rows = queueRows(s.queue).map((r) => s.queue.slice(r.start, r.end));
+        const at = rows.findIndex((r) => r.includes(current!));
+        const head = rows[at] ?? [];
+        const rest = shuffled(rows.filter((_, i) => i !== at)).flat();
+        set({ shuffle: true, original: s.queue, queue: [...head, ...rest], index: Math.max(0, head.indexOf(current!)) });
         return;
       }
       const present = new Set(s.queue);
@@ -779,10 +836,11 @@ document.addEventListener("visibilitychange", () => document.visibilityState ===
 // Media Session: lock-screen, headset and notification controls.
 
 function setMetadata(track: Track) {
-  systemMedia?.setTrack({ title: track.title, artist: track.artist, album: track.album ?? "", artwork: track.art || track.thumb });
+  const title = trackTitle(track);
+  systemMedia?.setTrack({ title, artist: track.artist, album: track.album ?? "", artwork: track.art || track.thumb });
   if (!("mediaSession" in navigator)) return;
   navigator.mediaSession.metadata = new MediaMetadata({
-    title: track.title,
+    title,
     artist: track.artist,
     album: track.album ?? "",
     artwork:

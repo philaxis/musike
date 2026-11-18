@@ -146,6 +146,8 @@ export function SelectableRow({
   onPlay,
   position,
   note,
+  below,
+  dim,
   trailing,
 }: {
   track: Track;
@@ -155,6 +157,10 @@ export function SelectableRow({
   position?: number;
   /** Extra context after the artist, e.g. what was searched. */
   note?: ReactNode;
+  /** Lines under the artist (the song box's source and tags). */
+  below?: ReactNode;
+  /** Faded, like a track gone from YouTube. */
+  dim?: boolean;
   trailing?: ReactNode;
 }) {
   const isCurrent = usePlayer((s) => selectCurrent(s)?.id === track.id);
@@ -163,7 +169,7 @@ export function SelectableRow({
   const t = useT();
 
   return (
-    <div className="group flex items-center gap-3 rounded-xl px-2 py-1.5 transition-colors hover:bg-surface-2 md:px-3">
+    <div className={cn("group flex items-center gap-3 rounded-xl px-2 py-1.5 transition-colors hover:bg-surface-2 md:px-3", dim && "opacity-50")}>
       <button
         type="button"
         role="checkbox"
@@ -200,6 +206,7 @@ export function SelectableRow({
             {note}
           </span>
         </span>
+        {below}
       </button>
 
       {isFavorite && <HeartIcon size={15} weight="fill" className="shrink-0 text-accent-text" aria-label={t.common.inFavorites} />}

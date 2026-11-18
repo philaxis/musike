@@ -13,6 +13,13 @@ export const paths = {
   /** My music: a server folder's albums, and one album's tracks. */
   localRoot: (root: string) => `/library/local/${encodeURIComponent(root)}`,
   localAlbum: (root: string, key: string) => `/library/local/${encodeURIComponent(root)}/album?key=${encodeURIComponent(key)}`,
+  /** The song box, filtered: `filter=untagged`, `by=source|tag` (picking), `source=kind:ref`, `tag=…`. */
+  box: (query: Record<string, string> = {}) => {
+    const q = new URLSearchParams(query).toString();
+    return `/library/box${q ? `?${q}` : ""}`;
+  },
+  /** Where Google sign-in returns (`?google=connected|error`): opens Settings. */
+  settings: "/settings",
   /** Direct links (sent by the assistant or notifications): play a track, or a playlist from the start, on this device. */
   playLink: (id: string) => `/play/${id}`,
   listLink: (id: string) => `/list/${id}`,

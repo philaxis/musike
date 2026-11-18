@@ -34,6 +34,9 @@ interface UiState {
   menu: TrackMenuState | null;
   /** Tracks waiting for the "add to playlist" dialog: one from a track menu, many from the list search. */
   addToPlaylist: Track[] | null;
+  /** The track whose tags are being edited, and the one whose other versions are shown (components/Tags.tsx). */
+  tagsFor: Track | null;
+  versionsFor: Track | null;
   shortcutsOpen: boolean;
   settingsOpen: boolean;
   /** Cinema view: the video maximized over everything. */
@@ -50,6 +53,8 @@ interface UiState {
   openMenu: (m: TrackMenuState) => void;
   closeMenu: () => void;
   openAddToPlaylist: (tracks: Track[] | null) => void;
+  openTags: (track: Track | null) => void;
+  openVersions: (track: Track | null) => void;
   setShortcutsOpen: (open: boolean) => void;
   setSettingsOpen: (open: boolean) => void;
   setTheater: (open: boolean) => void;
@@ -74,6 +79,8 @@ export const useUi = create<UiState>((set, get) => ({
   toasts: [],
   menu: null,
   addToPlaylist: null,
+  tagsFor: null,
+  versionsFor: null,
   shortcutsOpen: false,
   settingsOpen: false,
   theater: false,
@@ -130,6 +137,8 @@ export const useUi = create<UiState>((set, get) => ({
   openMenu: (menu) => set({ menu }),
   closeMenu: () => set({ menu: null }),
   openAddToPlaylist: (addToPlaylist) => set({ addToPlaylist, menu: null }),
+  openTags: (tagsFor) => set({ tagsFor, menu: null }),
+  openVersions: (versionsFor) => set({ versionsFor, menu: null }),
   setShortcutsOpen: (shortcutsOpen) => set({ shortcutsOpen }),
   setSettingsOpen: (settingsOpen) => set({ settingsOpen }),
   setTheater: (theater) => set({ theater }),

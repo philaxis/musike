@@ -1,4 +1,4 @@
-import { DatabaseIcon, PlusIcon } from "@phosphor-icons/react";
+import { DatabaseIcon, PlusIcon, TrayIcon } from "@phosphor-icons/react";
 import { useState } from "react";
 import { Link, useNavigate } from "react-router";
 import { Cover, type CoverKind } from "../components/Cover";
@@ -14,19 +14,22 @@ import { useLibrary } from "../stores/library";
 import { useUi } from "../stores/ui";
 import { isTvMode } from "../tv/tvMode";
 
-function Entry({ to, name, kind, tracks, sub }: { to: string; name: string; kind: CoverKind; tracks: Track[]; sub: string }) {
+const COVER = "size-16 shrink-0 rounded-[12px] md:aspect-square md:size-auto md:w-full md:rounded-[14px] md:shadow-[0_12px_32px_rgb(0_0_0/0.3)]";
+
+function Entry({ to, name, kind, tracks, sub }: { to: string; name: string; kind: CoverKind | "box"; tracks: Track[]; sub: string }) {
   return (
     <li>
       <Link
         to={to}
         className="group flex items-center gap-3 rounded-[16px] p-2 transition-colors hover:bg-surface-2 md:flex-col md:items-stretch md:gap-3 md:p-3"
       >
-        <Cover
-          kind={kind}
-          tracks={tracks}
-          iconSize={26}
-          className="size-16 shrink-0 rounded-[12px] md:aspect-square md:size-auto md:w-full md:rounded-[14px] md:shadow-[0_12px_32px_rgb(0_0_0/0.3)]"
-        />
+        {kind === "box" ? (
+          <span className={`${COVER} grid place-items-center bg-accent-soft text-accent-text`}>
+            <TrayIcon size={26} />
+          </span>
+        ) : (
+          <Cover kind={kind} tracks={tracks} iconSize={26} className={COVER} />
+        )}
         <span className="min-w-0">
           <span className="block truncate font-medium">{name}</span>
           <span className="block truncate text-sm text-fg-2">{sub}</span>
@@ -70,6 +73,10 @@ export default function Library() {
       <ul className="grid grid-cols-1 gap-1 px-2 pt-2 md:grid-cols-3 md:gap-2 md:px-4 lg:grid-cols-4 2xl:grid-cols-6">
         <Entry to={paths.favorites} name={t.nav.favorites} kind="favorites" tracks={favorites} sub={t.common.tracks(favorites.length)} />
         <Entry to={paths.history} name={t.nav.recentlyPlayed} kind="history" tracks={history} sub={t.common.tracks(history.length)} />
+        {/* The song box is for sorting, which TV mode leaves to the phone and Hermes. */}
+        {capabilities.serverLibrary && !isTvMode() && (
+          <Entry to={paths.box()} name={t.songBox.title} kind="box" tracks={[]} sub={t.songBox.tileSub} />
+        )}
         {playlists.map((p) => (
           <Entry
             key={p.id}

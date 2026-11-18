@@ -1,9 +1,10 @@
 import { request } from "./http";
-import type { LocalAlbum, LocalRoot, Playlist, Track } from "./types";
+import type { Bundle, LocalAlbum, LocalRoot, Playlist, Track } from "./types";
 
 /**
  * What only the Musike server offers (the web app on a home server): its own music folders, YouTube playlist import,
- * tracks kept on the server and direct links. The Android backend has none of it; check `capabilities.serverLibrary`.
+ * tracks kept on the server, direct links, the song box with its tags, bundles and the connected YouTube account.
+ * The Android backend has none of it; check `capabilities.serverLibrary`.
  */
 
 /** Local tracks: `L` + 20 characters (YouTube ids are 11). */
@@ -17,12 +18,82 @@ export interface PlaylistPreview {
   tracks: Track[];
 }
 
-export interface PlaylistImport {
-  playlist: Playlist;
-  created: boolean;
+/** Where a song-box track came from: a YouTube playlist (`ref` its ID), the liked videos, a music folder, a link, a search. */
+export interface BoxSource {
+  kind: "youtube-playlist" | "youtube-liked" | "local" | "link" | "search";
+  ref: string;
+  name: string;
+  /** When it first came from there (ms); 0 for music folders. */
+  at: number;
+}
+
+export interface BoxItem {
+  track: Track;
+  sources: BoxSource[];
+  tags: string[];
+  addedAt: number;
+  /** Deleted or made private on YouTube; still kept. */
+  gone?: true;
+}
+
+export interface BoxQuery {
+  filter?: "untagged";
+  /** A source kind, or kind:ref for one playlist or folder. */
+  source?: string;
+  tag?: string;
+  /** Words in the title, artist, album, tags or source names. */
+  q?: string;
+  cursor?: string;
+}
+
+export interface BoxPage {
+  items: BoxItem[];
+  total: number;
+  /** Cursor of the next 200, null at the end. */
+  next: string | null;
+}
+
+export interface BoxImport {
+  title: string;
   added: number;
+  merged: number;
   skipped: number;
   total: number;
+}
+
+export interface TagEdit {
+  updated: string[];
+  /** Tracks that are neither in the box, the music folders nor bundles. */
+  missing: string[];
+}
+
+export interface Versions {
+  works: string[];
+  originals: { track: Track; tags: string[] }[];
+  arrangements: { track: Track; tags: string[] }[];
+}
+
+export interface GoogleStatus {
+  connected: boolean;
+  email?: string | null;
+  /** Why not connected: no sign-in settings on the server, never connected, or Google ended the connection. */
+  reason?: "no_client" | "not_connected" | "revoked";
+}
+
+export interface GooglePlaylist {
+  id: string;
+  title: string;
+  count: number;
+  privacy: string;
+  thumb: string;
+  excluded: boolean;
+}
+
+export interface GoogleSync {
+  added: { id: string; title: string; source: string }[];
+  merged: number;
+  gone: number;
+  playlists: number;
 }
 
 export type KeepStatus = "downloading" | "done" | "error";
@@ -76,8 +147,27 @@ export const server = {
 
   previewPlaylist: (url: string, signal?: AbortSignal) =>
     request<PlaylistPreview>(`/api/import/youtube/preview${q({ url })}`, { signal }),
-  importPlaylist: (url: string, name?: string) =>
-    request<PlaylistImport>("/api/import/youtube", { method: "POST", json: { url, name } }),
+  /** Every track of a pasted playlist link into the song box; no playlist is made. */
+  importToBox: (url: string) => request<BoxImport>("/api/import/youtube/box", { method: "POST", json: { url } }),
+
+  box: (query: BoxQuery, signal?: AbortSignal) => request<BoxPage>(`/api/box${q({ ...query })}`, { signal }),
+  boxSources: () =>
+    request<{ sources: (Omit<BoxSource, "at"> & { count: number })[] }>("/api/box/sources").then((r) => r.sources),
+  /** YouTube tracks into the box, as added by hand. */
+  addToBox: (tracks: Track[]) => request<unknown>("/api/box", { method: "POST", json: { tracks, source: { kind: "link" } } }),
+
+  tags: () => request<{ tags: { tag: string; count: number }[] }>("/api/tags").then((r) => r.tags),
+  addTags: (ids: string[], tags: string[]) => request<TagEdit>("/api/tags", { method: "POST", json: { ids, tags } }),
+  removeTags: (ids: string[], tags: string[]) => request<TagEdit>("/api/tags", { method: "DELETE", json: { ids, tags } }),
+  versions: (id: string) => request<Versions>(`/api/tracks/${id}/versions`),
+
+  bundle: (id: string) => request<Bundle>(`/api/bundles/${id}`),
+
+  googleStatus: () => request<GoogleStatus>("/api/google/status"),
+  googlePlaylists: () => request<{ playlists: GooglePlaylist[] }>("/api/google/playlists").then((r) => r.playlists),
+  setGoogleExcluded: (ids: string[]) => request<unknown>("/api/google/excluded", { method: "PUT", json: { ids } }),
+  googleSync: () => request<GoogleSync>("/api/google/sync", { method: "POST" }),
+  googleDisconnect: () => request<unknown>("/api/google", { method: "DELETE" }),
 
   keepList: () => request<{ items: KeepItem[] }>("/api/keep").then((r) => r.items),
   keep: (id: string) => request<{ id: string; status: KeepStatus }>(`/api/keep/${id}`, { method: "POST" }),

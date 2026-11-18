@@ -4,13 +4,15 @@ import { useNavigate } from "react-router";
 import { useT } from "../i18n";
 import { paths } from "../lib/routes";
 import { server, type PlaylistPreview } from "../lib/server";
-import { useLibrary } from "../stores/library";
 import { toast } from "../stores/ui";
 import { Artwork } from "./Artwork";
 
 type State = { status: "loading" } | { status: "ok"; preview: PlaylistPreview } | { status: "error"; message: string };
 
-/** Search's top card for a pasted YouTube playlist link: import it as a playlist of the same name, then open it. */
+/**
+ * Search's top card for a pasted YouTube playlist link: every track goes into the song box under that playlist,
+ * however many there are. No playlist is made; Hermes sorts the box into playlists.
+ */
 export function ImportPlaylistCard({ url }: { url: string }) {
   const [state, setState] = useState<State>({ status: "loading" });
   const [importing, setImporting] = useState(false);
@@ -30,11 +32,12 @@ export function ImportPlaylistCard({ url }: { url: string }) {
   const importIt = async () => {
     setImporting(true);
     try {
-      const r = await server.importPlaylist(url);
-      toast(t.importList.done(r.playlist.name, r.added, r.skipped));
-      // The library's copy carries the server's annotations; fetch it rather than splice the answer in.
-      await useLibrary.getState().load();
-      navigate(paths.playlist(r.playlist.id));
+      const r = await server.importToBox(url);
+      const list = new URL(url).searchParams.get("list") ?? "";
+      toast(t.songBox.imported(r.title, r.added, r.merged), "info", {
+        label: t.songBox.openBox,
+        run: () => navigate(paths.box({ source: `youtube-playlist:${list}` })),
+      });
     } catch (e) {
       toast((e as Error).message, "error");
     } finally {
@@ -49,7 +52,7 @@ export function ImportPlaylistCard({ url }: { url: string }) {
 
   const { preview } = state;
   return (
-    <div className="mb-4 flex items-center gap-4 rounded-[16px] bg-accent-soft p-3 ring-1 ring-line">
+    <div className="mb-4 flex items-center gap-4 rounded-[16px] bg-accent-soft p-3 ring-1 ring-line max-sm:flex-wrap">
       <Artwork src={preview.tracks[0]?.thumb} className="hidden aspect-video w-28 shrink-0 rounded-[10px] sm:block" />
       <span className="min-w-0 flex-1">
         <span className="flex items-center gap-1.5 text-xs font-medium text-accent-text">
@@ -61,10 +64,10 @@ export function ImportPlaylistCard({ url }: { url: string }) {
         type="button"
         disabled={importing}
         onClick={() => void importIt()}
-        className="flex h-11 shrink-0 items-center gap-2 rounded-full bg-accent px-4 text-sm font-semibold text-accent-ink transition-transform active:scale-[0.97] disabled:opacity-60"
+        className="flex h-11 shrink-0 items-center gap-2 rounded-full bg-accent px-4 text-sm font-semibold text-accent-ink transition-transform active:scale-[0.97] disabled:opacity-60 max-sm:w-full max-sm:justify-center"
       >
         <DownloadSimpleIcon size={18} weight="bold" />
-        {importing ? t.importList.importing : t.importList.action(preview.count)}
+        {importing ? t.importList.importing : t.songBox.importAction(preview.count)}
       </button>
     </div>
   );

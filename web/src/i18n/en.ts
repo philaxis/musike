@@ -363,7 +363,7 @@ export const en = {
   fade: {
     section: "Playback",
     title: "Fade between tracks",
-    body: "The next track starts this many seconds early and the two overlap. Not within one local album, or in Video mode.",
+    body: "The next track starts this many seconds early and the two overlap. Not within one local album or one bundle, or in Video mode.",
     off: "Off",
     seconds: (n: number) => `${n} s`,
   },
@@ -492,12 +492,77 @@ export const en = {
 
   importList: {
     label: "YouTube playlist",
-    action: (n: number) => `Import as playlist (${count(n, "track", "tracks")})`,
     importing: "Importing…",
     failed: "Couldn't read this playlist. Check that it's public.",
-    done: (name: string, added: number, skipped: number) =>
-      (added ? `"${name}": ${count(added, "track", "tracks")} imported` : `"${name}" already had every track`) +
-      (skipped ? ` (${skipped} unavailable skipped)` : ""),
+  },
+
+  // Song box, tags, bundles, YouTube account
+  songBox: {
+    title: "Song box",
+    tileSub: "Every track brought in, with sources and tags",
+    all: "All",
+    untagged: "Not sorted",
+    bySource: "By source",
+    byTag: "By tag",
+    count: (n: number) => count(n, "track", "tracks"),
+    loadMore: "Load more",
+    failed: "Couldn't open the song box",
+    empty: "The song box is empty",
+    emptyBody: "Paste a YouTube playlist link into Search, or connect your YouTube account in Settings.",
+    emptyFiltered: "Nothing here matches",
+    noTags: "No tags yet",
+    gone: "Gone from YouTube",
+    fromPlaylist: (name: string) => `YouTube '${name}'`,
+    fromLiked: "YouTube likes",
+    fromLocal: (name: string) => `My folder · ${name}`,
+    fromLink: "Added by hand",
+    fromSearch: "Search",
+    openBox: "Open the song box",
+
+    importAction: (n: number) => `Bring into the song box (${count(n, "track", "tracks")})`,
+    imported: (name: string, added: number, merged: number) =>
+      (added ? `"${name}": ${count(added, "track", "tracks")} into the song box` : `Every track of "${name}" is already in the song box`) +
+      (merged ? ` (${merged} already there got this source)` : ""),
+
+    tags: "Tags",
+    tagsOf: (title: string) => `Tags · ${title}`,
+    tagPlaceholder: "e.g. 작품:Asayake",
+    addTag: "Add",
+    removeTag: (tag: string) => `Remove "${tag}"`,
+    noTagsYet: "No tags on this track yet.",
+    tagsHint: "Start with a kind, the way Hermes does:",
+    cantTag: "This track can't take tags.",
+
+    versions: "Other versions of this work",
+    versionsOf: (works: string) => `Work: ${works}`,
+    noWork: "This track has no 작품: tag yet.",
+    arrangements: "Arrangements",
+    thisTrack: "This track",
+
+    bundle: (n: number) => `Bundle · ${count(n, "track", "tracks")}`,
+    showParts: "Show the parts",
+    hideParts: "Hide the parts",
+    skipBundle: "Skip the bundle",
+
+    google: "YouTube account",
+    connectedAs: (email: string) => `Connected: ${email}`,
+    connected: "Connected",
+    connect: "Connect",
+    reconnect: "Connect again",
+    googleBody: "New tracks from your YouTube playlists and liked videos come into the song box every day. Read-only.",
+    noClient: "The server has no Google sign-in settings yet, so it can't connect.",
+    revoked: "The connection has ended. Connect again.",
+    myPlaylists: "My YouTube playlists",
+    playlistsHint: "Checked lists are brought in. Uncheck one to skip it from the next sync on.",
+    playlistSub: (n: number, priv: boolean) => count(n, "track", "tracks") + (priv ? " · private" : ""),
+    playlistsFailed: "Couldn't read your playlists",
+    syncNow: "Bring in now",
+    syncing: "Bringing in…",
+    synced: (added: number) => (added ? `${count(added, "new track", "new tracks")} in the song box` : "No new tracks"),
+    disconnect: "Disconnect",
+    disconnected: "YouTube account disconnected",
+    connectedToast: "YouTube account connected",
+    connectFailed: (reason: string) => `Couldn't connect the YouTube account (${reason})`,
   },
 
   openLink: {
