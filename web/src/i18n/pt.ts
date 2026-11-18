@@ -245,9 +245,12 @@ export const pt: Messages = {
       "Busque por música, artista ou álbum. Para clipes e ao vivo, use a aba Vídeos. Também dá para colar um link do YouTube.",
     exploreGenres: "Explorar por gênero",
     albums: "Álbuns",
-    myMusic: "Minhas músicas",
-    showAll: (n) => `Ver todas as ${n}`,
-    showLess: "Ver menos",
+    scope: "Onde buscar",
+    mine: "Minhas faixas",
+    youtube: "YouTube",
+    searchYoutube: "Buscar no YouTube",
+    notInMine: (query) => `Nada para "${query}" nas suas faixas.`,
+    mineCount: (n) => `${n} das suas faixas`,
   },
 
   batch: {

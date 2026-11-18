@@ -129,7 +129,8 @@ interface Saved {
   repeat: Repeat;
   preferVideo: boolean;
   quality: Quality;
-  autoRadio: boolean;
+  /** Saved under a new name so earlier sessions (radio on by default) start with it off: only songs in the app play. */
+  radioAfterQueue: boolean;
   fade: number;
 }
 
@@ -553,7 +554,7 @@ export const usePlayer = create<PlayerState>((set, get) => {
     // Builds without video (Android) always play audio, whatever a backup or an old session says.
     preferVideo: capabilities.video && (saved.preferVideo ?? false),
     quality: saved.quality ?? "sd",
-    autoRadio: saved.autoRadio ?? true,
+    autoRadio: saved.radioAfterQueue ?? false,
     fade: saved.fade ?? FADE_DEFAULT,
 
     playList: (tracks, start = 0, part = 0) => {
@@ -820,7 +821,7 @@ function persist() {
     repeat: s.repeat,
     preferVideo: s.preferVideo,
     quality: s.quality,
-    autoRadio: s.autoRadio,
+    radioAfterQueue: s.autoRadio,
     fade: s.fade,
   };
   try {

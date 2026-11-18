@@ -14,7 +14,7 @@ import { Link, useSearchParams } from "react-router";
 import { AlbumGrid } from "../components/AlbumTiles";
 import { Artwork } from "../components/Artwork";
 import { ImportPlaylistCard } from "../components/ImportPlaylistCard";
-import { LocalResults } from "../components/LocalResults";
+import { MineResults } from "../components/MineResults";
 import { GenrePanel } from "../components/GenrePanel";
 import { EmptyState, PageHeader } from "../components/Page";
 import { TrackList, TrackListSkeleton } from "../components/TrackList";
@@ -68,6 +68,8 @@ let genresOpenMemo = false;
 export default function Search() {
   const [params, setParams] = useSearchParams();
   const q = params.get("q") ?? "";
+  // By default search looks only at what's already in the app (song box + music folders); YouTube only when asked.
+  const youtube = !capabilities.serverLibrary || params.get("in") === "youtube";
   const kind: Kind = params.get("type") === "videos" ? "video" : params.get("type") === "albums" ? "album" : "song";
   const t = useT();
   const [text, setText] = useState(q);
@@ -96,11 +98,12 @@ export default function Search() {
     setGenresOpenState(open);
   };
 
-  const setQuery = (next: string, nextKind = kind) => {
+  const setQuery = (next: string, nextKind = kind, nextYoutube = youtube) => {
     const p = new URLSearchParams();
     if (next.trim()) p.set("q", next.trim());
     const type = KIND_PARAM[nextKind];
     if (type) p.set("type", type);
+    if (nextYoutube && capabilities.serverLibrary) p.set("in", "youtube");
     setParams(p, { replace: true });
   };
 
@@ -115,6 +118,12 @@ export default function Search() {
   }, [text]);
 
   useEffect(() => {
+    if (!youtube) {
+      setResults(null);
+      setAlbums(null);
+      setState(q ? "ok" : "idle");
+      return;
+    }
     if (!q) {
       setResults(null);
       setAlbums(null);
@@ -140,11 +149,11 @@ export default function Search() {
         setState("error");
       });
     return () => ctrl.abort();
-  }, [q, kind, retry]);
+  }, [q, kind, retry, youtube]);
 
   useEffect(() => {
     const term = text.trim();
-    if (!term || isLink) return setSuggestions([]);
+    if (!term || isLink || !youtube) return setSuggestions([]);
     const ctrl = new AbortController();
     const timer = setTimeout(() => {
       api
@@ -156,7 +165,7 @@ export default function Search() {
       clearTimeout(timer);
       ctrl.abort();
     };
-  }, [text, isLink]);
+  }, [text, isLink, youtube]);
 
   useEffect(() => {
     if (!linkId) return setLinkTrack(null);
@@ -280,7 +289,32 @@ export default function Search() {
           </div>
         )}
 
-        {!isLink && (
+        {!isLink && capabilities.serverLibrary && (
+          <div role="tablist" aria-label={t.search.scope} className="flex gap-2">
+            {(
+              [
+                [false, t.search.mine],
+                [true, t.search.youtube],
+              ] as const
+            ).map(([yt, label]) => (
+              <button
+                key={label}
+                type="button"
+                role="tab"
+                aria-selected={youtube === yt}
+                onClick={() => setQuery(text || q, kind, yt)}
+                className={cn(
+                  "h-9 rounded-full px-4 text-sm font-semibold transition-colors duration-200",
+                  youtube === yt ? "bg-accent text-accent-ink" : "bg-surface-3 text-fg-2 hover:text-fg",
+                )}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {!isLink && youtube && (
           <div className="flex flex-wrap items-center gap-2">
             <div role="tablist" aria-label={t.search.resultType} className="flex gap-2">
               {tab("song", t.search.songs)}
@@ -313,7 +347,7 @@ export default function Search() {
           </div>
         )}
 
-        {!isLink && genresOpen && <GenrePanel id="genre-panel" />}
+        {!isLink && youtube && genresOpen && <GenrePanel id="genre-panel" />}
       </div>
 
       <div className="mt-4 px-2 md:px-3">
@@ -350,7 +384,7 @@ export default function Search() {
           </div>
         )}
 
-        {!isLink && q && kind !== "album" && capabilities.serverLibrary && <LocalResults q={q} />}
+        {!isLink && !youtube && <MineResults q={q} onYoutube={() => setQuery(text || q, kind, true)} />}
 
         {!isLink && state === "loading" && <TrackListSkeleton />}
 
