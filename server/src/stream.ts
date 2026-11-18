@@ -1,3 +1,4 @@
+import { setTimeout as sleep } from "node:timers/promises";
 import { createReadStream } from "node:fs";
 import { stat } from "node:fs/promises";
 import { Readable } from "node:stream";
@@ -7,6 +8,10 @@ import { HttpError } from "./types.js";
 import { invalidate, resolveStreams, type StreamFormat } from "./ytdlp.js";
 
 const PASS_HEADERS = ["content-length", "content-range", "accept-ranges", "last-modified"];
+
+/** googlevideo answers 403 for a second or two after yt-dlp resolves a URL; keep asking for this long. */
+const WARMUP_MS = 8_000;
+const WARMUP_STEP_MS = 500;
 
 /**
  * Proxies a googlevideo stream, forwarding Range so the browser can seek natively.
@@ -33,13 +38,24 @@ export async function proxyStream(req: FastifyRequest, reply: FastifyReply, id: 
     return fetch(fmt.url, { headers, signal: controller.signal });
   };
 
+  /** Retries 403 on the same URL while it warms up, instead of resolving a new one that is just as cold. */
+  const requestWarm = async (fmt: StreamFormat) => {
+    const deadline = Date.now() + WARMUP_MS;
+    for (;;) {
+      const res = await request(fmt);
+      if (res.status !== 403 || Date.now() + WARMUP_STEP_MS > deadline || controller.signal.aborted) return res;
+      await res.body?.cancel();
+      await sleep(WARMUP_STEP_MS);
+    }
+  };
+
   let fmt = await pick(false);
-  let upstream = await request(fmt);
+  let upstream = await requestWarm(fmt);
   // Expired or rejected URL: resolve again once.
   if (upstream.status === 403 || upstream.status === 410) {
     await upstream.body?.cancel();
     fmt = await pick(true);
-    upstream = await request(fmt);
+    upstream = await requestWarm(fmt);
   }
   if (!upstream.ok || !upstream.body) {
     throw new HttpError(502, msg("streamRefused", { status: upstream.status }), "maybe_outdated");
