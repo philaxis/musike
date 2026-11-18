@@ -3,12 +3,12 @@ import { mkdir, mkdtemp, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, it } from "node:test";
-import { gunzipSync } from "node:zlib";
+import { brotliDecompressSync, gunzipSync } from "node:zlib";
 import Fastify from "fastify";
 import * as box from "../src/box.ts";
 import { config } from "../src/config.ts";
 import * as library from "../src/library.ts";
-import { mapFile, registerMapRoutes } from "../src/mapRoutes.ts";
+import { mapFile, registerMapRoutes, warmMap } from "../src/mapRoutes.ts";
 import type { Track } from "../src/types.ts";
 
 const track = (id: string): Track => ({ id, title: id, artist: "a", duration: 60, thumb: "", art: "", kind: "song" });
@@ -52,8 +52,10 @@ describe("music map files", () => {
     assert.equal(js.statusCode, 200);
     assert.match(js.headers["content-type"] as string, /^text\/javascript/);
     const bin = await app.inject({ method: "GET", url: "/api/map/vectors_e5.bin", headers: { "accept-encoding": "gzip" } });
-    assert.equal(bin.headers["content-encoding"], undefined);
-    assert.deepEqual([...bin.rawPayload], [1, 2, 3, 4]);
+    assert.equal(bin.headers["content-encoding"], "gzip");
+    assert.deepEqual([...gunzipSync(bin.rawPayload)], [1, 2, 3, 4]);
+    const plain = await app.inject({ method: "GET", url: "/api/map/vectors_e5.bin" });
+    assert.deepEqual([...plain.rawPayload], [1, 2, 3, 4]);
     const nested = await app.inject({ method: "GET", url: "/api/map/api/status.json" });
     assert.equal(nested.json().songCount, 4405);
     const bare = await app.inject({ method: "GET", url: "/api/map" });
@@ -72,6 +74,26 @@ describe("music map files", () => {
     const again = await app.inject({ method: "GET", url: "/api/map/index.html", headers: { "if-none-match": etag } });
     assert.equal(again.statusCode, 304);
     assert.equal(again.body, "");
+  });
+
+  it("keeps content-named files for good and gives brotli once it is made", async () => {
+    const app = await analysis();
+    const name = "points.0123456789ab.json";
+    const body = JSON.stringify({ points: Array.from({ length: 300 }, (_, i) => ({ t: `곡 ${i}` })) });
+    await writeFile(path.join(config.analysisDir, "map", name), body);
+    await writeFile(path.join(config.analysisDir, "map", "files.json"), JSON.stringify({ files: { "points.json": name } }));
+    // Opening the library asks whether there is a map (/api/taste/map), which starts this.
+    await warmMap();
+    const res = await app.inject({ method: "GET", url: `/api/map/${name}`, headers: { "accept-encoding": "gzip, deflate, br" } });
+    assert.equal(res.headers["content-encoding"], "br");
+    assert.equal(brotliDecompressSync(res.rawPayload).toString(), body);
+    assert.equal(res.headers["cache-control"], "public, max-age=31536000, immutable");
+    const gz = await app.inject({ method: "GET", url: `/api/map/${name}`, headers: { "accept-encoding": "gzip" } });
+    assert.equal(gz.headers["content-encoding"], "gzip");
+    assert.equal(gunzipSync(gz.rawPayload).toString(), body);
+    // The page names today's files, so it is asked again every time.
+    const page = await app.inject({ method: "GET", url: "/api/map/" });
+    assert.equal(page.headers["cache-control"], "no-cache");
   });
 
   it("never serves anything outside the map folder", async () => {

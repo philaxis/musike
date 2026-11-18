@@ -1,5 +1,5 @@
 /* 자연어 검색(음악 지도): 키워드 즉시 + 브라우저 무료 임베딩(transformers.js, multilingual-e5-small q8).
-   곡 벡터는 vectors_e5.bin(int8)·search_meta.json. 결과 패널·최근 검색·접기/펼치기는 서재 지도 search.js 와 같다.
+   검색 항목은 지도 점(window.P)에서 만들고, 의미 검색 곡 벡터는 vectors_e5.bin(int8, 점 순서)을 처음 의미 검색할 때 받는다. 결과 패널·최근 검색·접기/펼치기는 서재 지도 search.js 와 같다.
    결과는 musicsearch 이벤트(점 번호 목록/null)로 지도에 알린다. '소리로 찾음' 구간은 soundsearch.js(window.soundSearch)가 있을 때만. */
 (() => {
   // ---------------------------------------------------------------- 순위 계산(순수 함수)
@@ -92,14 +92,8 @@
     return (expanded || []).filter(h => h.audio && !h.text).map(h => ({ point: pointOf(h.videoId), score: h.score, why: anchorOf(h.videoId) }))
       .filter(h => h.point >= 0);
   }
-  // 검색 자료의 point 번호는 websearch build 때 지도 순서라 지도만 다시 지으면 어긋난다 → 영상 ID 로 지금 지도의 점 번호를 다시 붙인다.
-  // 지도에 없는 곡은 -1(결과에서 뺀다). 돌려주는 것: 점 번호 → 항목.
-  function relink(items, pointOf) {
-    for (const it of items) it.point = pointOf(it.videoId);
-    return new Map(items.filter(it => it.point >= 0).map(it => [it.point, it]));
-  }
   // Node 테스트용 export(브라우저에서는 window/DOM 경로로 이어간다)
-  const rankAPI = { normText, matchTier, matchBonus, termsOf, kwScore, rankItems, mixRows, soundHits, audioOnly, relink };
+  const rankAPI = { normText, matchTier, matchBonus, termsOf, kwScore, rankItems, mixRows, soundHits, audioOnly };
   if (typeof module !== 'undefined' && module.exports) module.exports = rankAPI;
   if (typeof window === 'undefined') { globalThis.__musicSearchRankAPI = rankAPI; return; }
 
@@ -149,10 +143,8 @@
   const pointIdx = new Map(P.map((p, i) => [p.id, i]));
   const pointOf = id => pointIdx.has(id) ? pointIdx.get(id) : -1;
 
-  let meta = null;
-  let byPoint = null;     // 점 번호 → 검색 메타 항목
-  let vectors = null;
-  let norms = null;
+  let meta = null;        // { items }: 검색 항목(지도 점마다, 점 순서)
+  let byPoint = null;     // 점 번호 → 검색 항목
   let modelPromise = null;
   let loadNote = '';
   let timer = 0;
@@ -172,17 +164,48 @@
     window.lastSearch = pts ? { q: qEl.value.trim(), pts } : null;
     window.dispatchEvent(new CustomEvent('musicsearch', { detail: pts }));
   };
-  fetch('search_meta.json', { cache: 'no-cache' })
-    .then(r => { if (!r.ok) throw new Error(r.status); return r.json(); })
-    .then(async m => {
-      const buf = await fetch('vectors_e5.bin').then(r => { if (!r.ok) throw new Error(r.status); return r.arrayBuffer(); });
-      byPoint = relink(m.items, pointOf);
-      meta = m;
-      vectors = new Int8Array(buf);
-      norms = normsOf(vectors, m.items.length, m.dim);
-      if (qEl.value.trim()) update();
-    })
-    .catch(err => { console.warn('검색 자산을 읽지 못했습니다', err); });
+  // 검색 항목은 지도 점에서 바로 만든다(받을 것 없이 글자 검색이 곧장 된다). 요약은 설명 글(detail)이 오면 채워 다시 만든다.
+  // 의미 검색용 곡 벡터(vectors_e5.bin, 줄 순서 = 점 순서, 같은 분석이 쓴다)는 의미 검색을 처음 할 때 받는다.
+  const file = name => (window.mapFile ? window.mapFile(name) : name);
+  let detailAsked = false;
+  function items() {
+    if (!meta) {
+      meta = {
+        items: P.map((p, i) => ({
+          videoId: p.id, point: i, title: p.t, artist: p.a, composer: p.c, work: p.w, genre: p.g, subgenre: p.sg, era: p.e,
+          year: p.y, moods: (p.m || []).join(' '), playlists: p.pl || [], summary: String(p.ct || '').trim().slice(0, 180),
+        })),
+      };
+      byPoint = new Map(meta.items.map(it => [it.point, it]));
+      if (!detailAsked && window.mapDetail) {
+        detailAsked = true;
+        window.mapDetail().then(() => {
+          meta = null;
+          if (qEl.value.trim() && view === 'list' && box.classList.contains('on')) rerender();
+        }, () => { detailAsked = false; });
+      }
+    }
+    return meta.items;
+  }
+  let vecData = null;
+  function loadVectors() {
+    if (!vecData) {
+      vecData = fetch(file('vectors_e5.bin'))
+        .then(r => { if (!r.ok) throw new Error(r.status); return r.arrayBuffer(); })
+        .then(buf => {
+          const vectors = new Int8Array(buf), dim = vectors.length / P.length;
+          if (!dim || !Number.isInteger(dim)) throw new Error('곡 벡터 크기가 지도와 맞지 않습니다');
+          return { vectors, dim, norms: normsOf(vectors, P.length, dim) };
+        });
+      vecData.catch(err => { vecData = null; console.warn('의미 검색 자료를 읽지 못했습니다', err); });
+    }
+    return vecData;
+  }
+  // 검색창에 들어오거나 글자를 넣을 때: 항목을 만들고 의미 검색이 켜져 있으면 곡 벡터를 받기 시작한다
+  function prepareSearch() {
+    items();
+    if (semOK) loadVectors().catch(() => { /* 위에서 알림, 다음 검색 때 다시 */ });
+  }
 
   function normsOf(vecs, n, dim) {
     const out = new Float32Array(n);
@@ -226,7 +249,6 @@
     return list;
   }
   window.musicSearchEmbed = embed;  // soundsearch.js 가 같은 모델을 다시 받지 않게
-  window.__websearchMeta = () => meta;
 
   // 질문 벡터와 int8 곡 벡터의 코사인, 정규화용 최소·최대
   function cosines(qvec, vecs, nrm, dim) {
@@ -250,8 +272,16 @@
   // 소리로 찾음: soundsearch.js(ES 모듈, 처음 검색 때 import)의 soundSearch 로 소리 개념 → 곡.
   // 개념이 하나도 안 맞으면 expandByAudio 로 글자 결과의 소리 이웃을 대신 보인다. 의미 검색 모델을 쓰므로 그게 켜졌을 때만.
   let soundMod = null;
-  const loadSoundMod = () => soundMod || (soundMod = import('./soundsearch.js').catch(err => { console.warn('soundsearch.js 를 읽지 못했습니다(소리 구간 없이 계속)', err); return null; }));
-  const audioNb = new Map(P.filter(p => p.an && p.an.length).map(p => [p.id, p.an.map((j, r) => [P[j].id, 1 - r / 40])]));
+  const loadSoundMod = () => soundMod || (soundMod = import('./' + file('soundsearch.js')).catch(err => { console.warn('soundsearch.js 를 읽지 못했습니다(소리 구간 없이 계속)', err); return null; }));
+  // 소리 이웃(P[].an)은 지도의 설명·이웃 자료(detail)가 온 뒤에 있다
+  let audioNb = null;
+  const audioNbs = async () => {
+    if (!audioNb) {
+      if (window.mapDetail) await window.mapDetail();
+      audioNb = new Map(P.filter(p => p.an && p.an.length).map(p => [p.id, p.an.map((j, r) => [P[j].id, 1 - r / 40])]));
+    }
+    return audioNb;
+  };
   async function loadSound(query) {
     if (query.length < 2 || !semOK) return;
     const mod = await loadSoundMod();
@@ -259,10 +289,11 @@
     if (typeof search !== 'function') return;
     try {
       let s = soundHits(await search(query, { k: 12 }), pointOf);
-      if (!s.hits.length && mod && mod.expandByAudio && meta) {
-        const text = rankItems(meta.items, query, semCache.q === query ? semCache : null).slice(0, 10).map(r => ({ videoId: r.it.videoId, score: r.score }));
-        const anchorOf = vid => { for (const t of text) if ((audioNb.get(t.videoId) || []).some(r => r[0] === vid)) return [`‘${(P[pointOf(t.videoId)] || {}).t || ''}’과 소리가 비슷`]; return []; };
-        s = { concept: '글자 결과와 소리가 비슷한 곡', hits: audioOnly(mod.expandByAudio(text, audioNb, { k: 30 }), pointOf, anchorOf).slice(0, 8) };
+      if (!s.hits.length && mod && mod.expandByAudio) {
+        const nb = await audioNbs();
+        const text = rankItems(items(), query, semCache.q === query ? semCache : null).slice(0, 10).map(r => ({ videoId: r.it.videoId, score: r.score }));
+        const anchorOf = vid => { for (const t of text) if ((nb.get(t.videoId) || []).some(r => r[0] === vid)) return [`‘${(P[pointOf(t.videoId)] || {}).t || ''}’과 소리가 비슷`]; return []; };
+        s = { concept: '글자 결과와 소리가 비슷한 곡', hits: audioOnly(mod.expandByAudio(text, nb, { k: 30 }), pointOf, anchorOf).slice(0, 8) };
       }
       if (qEl.value.trim() !== query) return;
       sound = { q: query, ...s };
@@ -280,9 +311,9 @@
     return semOK ? '키워드' : '키워드 (의미 검색 꺼짐)';
   }
   function rank(query) {
-    if (!meta) return { rows: [], status: '검색 자료를 읽는 중…' };
+    const list = items();
     const sem = semCache.q === query && semCache.cos ? semCache : null;
-    const rows = rankItems(meta.items, query, sem).filter(r => r.it.point >= 0);
+    const rows = rankItems(list, query, sem).filter(r => r.it.point >= 0);
     const status = statusOf(sem);
     const snd = soundRowsFor(query);
     return { rows: mixRows(rows.slice(0, 24), snd), status, total: rows.length, sndTotal: snd.length };
@@ -432,7 +463,7 @@
   // 모델을 받는 동안 진행률마다 목록 전체를 다시 그리면 누르던 결과가 바뀌어 클릭이 사라진다 → 상태 글자만 고친다
   function renderStatus() {
     const el = box.querySelector('.sst');
-    if (!meta || !el || view !== 'list' || !qEl.value.trim()) return;
+    if (!el || view !== 'list' || !qEl.value.trim()) return;
     const query = qEl.value.trim();
     last.status = statusOf(semCache.q === query && semCache.cos ? semCache : null);
     el.textContent = last.status;
@@ -459,14 +490,14 @@
     const first = rank(query);
     render(first.rows, first.status, first.total, first.sndTotal);
     if (sound.q !== query) loadSound(query);
-    if (!allowSearch || !semOK || !meta || query.length < 2) return;
+    if (!allowSearch || !semOK || query.length < 2) return;
     try {
-      const [qv] = await embed(['query: ' + query]);
+      const [vec, [qv]] = await Promise.all([loadVectors(), embed(['query: ' + query])]);
       if (mine !== seq || qEl.value.trim() !== query) return;
-      semCache = { q: query, ...cosines(qv, vectors, norms, meta.dim) };
+      semCache = { q: query, ...cosines(qv, vec.vectors, vec.norms, vec.dim) };
       const done = rank(query);
       render(done.rows, done.status, done.total, done.sndTotal);
-    } catch (_) { /* 상태 문구는 ensureModel 쪽에서 */ }
+    } catch (_) { /* 상태 문구는 ensureModel·loadVectors 쪽에서 */ }
   }
 
   // 좁은 화면에서 검색창에 포커스가 있으면(키보드 배치) 누르는 순간 포커스가 빠지며 목록이 아래로 옮겨가 클릭이 엇나간다 → 결과 줄·결과 메뉴는 포커스를 뺏지 않는다
@@ -514,6 +545,7 @@
     if (row) choose(+row.dataset.k);
   });
   qEl.addEventListener('input', () => {
+    prepareSearch();
     seq++;  // 진행 중인 의미 검색 결과는 버린다(입력이 바뀌었으므로)
     clearTimeout(timer);
     const wasRecents = view === 'recents';
@@ -528,6 +560,7 @@
     timer = setTimeout(() => update(), 260);
   });
   const reopen = () => {
+    prepareSearch();
     if (!qEl.value.trim()) { showRecents(); return; }  // 빈 검색창: 최근 검색
     if (!box.classList.contains('on') || folded || view !== 'list') { view = 'list'; show(); repaint(); }
   };

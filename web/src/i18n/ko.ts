@@ -749,6 +749,8 @@ export const ko: Messages = {
     map: "음악 지도",
     mapMissing: "아직 음악 지도가 없어요",
     mapMissingBody: "취향 분석이 매일 아침 모든 곡으로 지도를 그려요. 다음 분석 뒤에 다시 열어 주세요.",
+    mapLoading: "지도를 그리는 중…",
+    mapLoadFailed: "지도 자료를 받지 못했어요. 연결을 확인하고 다시 해 주세요.",
   },
 
   works: {

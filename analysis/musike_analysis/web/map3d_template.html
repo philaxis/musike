@@ -4,10 +4,27 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover">
 <title>음악 지도</title>
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
 <script>
 // Musike 「음악 지도」 화면(/library/map) 안 iframe 에서만 쓴다(재생·메뉴는 Musike 쪽). 주소창으로 열면 그 화면으로 옮긴다.
 if (window.parent === window) location.replace("/library/map" + location.hash);
+// 자료·스크립트 파일 이름표(이름에 내용 해시가 있어 브라우저가 오래 캐시한다). 첫 화면 자료는 three.js 와 함께 지금 받기 시작하고,
+// 설명·이웃(detail)은 첫 화면을 그린 뒤, 검색 자료는 처음 검색할 때 받는다.
+window.MAP_FILES = __FILES__;
+window.mapFile = name => window.MAP_FILES[name] || name;
+window.mapJson = name => fetch(window.mapFile(name)).then(r => { if (!r.ok) throw new Error(`${name}: HTTP ${r.status}`); return r.json(); });
+window.MAP_DATA = window.parent === window ? null : window.mapJson("points.json");
+// detail: 점마다 설명 글(ct)·설명 이웃(nn, 점수 ns)·소리 이웃(an)을 window.P 에 채운다(그 전엔 빈 값)
+window.mapDetail = () => window.MAP_DETAIL || (window.MAP_DETAIL = window.mapJson("detail.json").then(d => {
+  window.P.forEach((p, i) => {
+    p.ct = d.ct[i] || ""; p.ns = d.ns[i] || []; p.nn = d.nn[i] || [];
+    if (d.an[i]) p.an = d.an[i];
+  });
+}).catch(err => { window.MAP_DETAIL = null; throw err; }));
+for (const name of ["search.js", "player.js"]) {
+  const l = document.createElement("link");
+  l.rel = "preload"; l.as = "script"; l.href = window.mapFile(name);
+  document.head.append(l);
+}
 </script>
 <style>
 :root{color-scheme:light;--bg:#fafaf9;--fg:#1c1d21;--mut:#6b7079;--card:rgba(255,255,255,.92);--solid:#fff;--line:#e3e5e9;--chip:#f1f2f4;--acc:#0b8a7c;--acc-ink:#fff;--play:#c27c0e;--fav:#e8457a;--shadow:0 8px 28px rgba(20,24,32,.10);--grey:#c9cdd3;--axis:#c3c7ce}
@@ -468,10 +485,6 @@ details[open] summary::before{content:"▾ ";}
 <div id="legend"></div>
 <div id="status"></div>
 <button id="edge" type="button" aria-label="선택한 곡으로 이동" title="선택한 곡으로 이동" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5M5 12l7-7 7 7"/></svg></button>
-<script>
-const DATA = __DATA__;
-window.P = DATA.points;
-</script>
 <script type="importmap">
 {"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"}}
 </script>
@@ -480,7 +493,27 @@ import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 
 THREE.ColorManagement.enabled = false;  // 팔레트 색을 그대로
-const D = DATA, P = D.points, n = P.length, R = 100;
+// 첫 화면 자료(머리에서 받기 시작한 MAP_DATA)를 기다린 뒤 검색·Musike 다리 스크립트를 붙인다(둘 다 window.P 를 읽는다).
+// 설명 글·이웃(ct·ns·nn·an)은 첫 화면 뒤에 detail 파일로 채운다(loadDetail). 그 전에는 빈 값이다.
+let D;
+try {
+  D = await window.MAP_DATA;
+  if (!D || !Array.isArray(D.points)) throw new Error("지도 자료가 비었습니다");
+} catch (err) {
+  document.getElementById("status").textContent = "지도 자료를 읽지 못했습니다";
+  if (window.parent !== window) window.parent.postMessage({ musikeMap: 1, type: "failed" }, location.origin);
+  throw err;
+}
+for (const p of D.points) { p.ct = ""; p.ns = []; p.nn = []; }
+window.P = D.points;
+const script = src => new Promise((ok, no) => {
+  const s = document.createElement("script");
+  s.src = src; s.onload = ok; s.onerror = () => no(new Error(`${src} 를 읽지 못했습니다`));
+  document.head.append(s);
+});
+await script(window.mapFile("search.js"));
+await script(window.mapFile("player.js"));
+const P = D.points, n = P.length, R = 100;
 const $ = id => document.getElementById(id);
 const store = window.store || { get: (k, f = null) => f, set() {}, on() {}, off() {} };  // search.js 가 먼저 정의한다
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
@@ -2104,7 +2137,8 @@ resize();
 { const qc = chips.find(c => c.k === "q"); if (qc && !$("q").value) { $("q").value = qc.v; $("q").dispatchEvent(new Event("input")); } }
 applyTheme(THEME0 === "light" || THEME0 === "dark" ? THEME0 : null);
 openFromHash();
-renderer.setAnimationLoop(now => {
+let drawn = false;
+function tick(now) {
   stepAnim(now);
   if (fly) {
     controls.target.lerp(fly.t, 0.1); camera.position.lerp(fly.c, 0.1);
@@ -2120,11 +2154,40 @@ renderer.setAnimationLoop(now => {
   updateDepthRange();
   renderer.render(scene, camera);
   placeLabels();
+  if (!drawn) {  // 첫 화면을 그렸다: Musike 가 불러오는 중 표시를 걷고, 그 뒤에 글꼴·설명·이웃을 받는다
+    drawn = true;
+    window.dispatchEvent(new Event("mapready"));
+    loadFont();
+    loadDetail();
+  }
+}
+renderer.setAnimationLoop(tick);
+// Musike 가 다른 화면으로 가면 지도는 숨긴 채 살아 있다(다시 들어오면 그대로). 숨은 동안은 그리지 않는다.
+addEventListener("musikevisible", e => {
+  if (e.detail) { resize(); renderer.setAnimationLoop(tick); }
+  else renderer.setAnimationLoop(null);
 });
-if (document.fonts) document.fonts.ready.then(() => { dirty = true; });
-window.dispatchEvent(new Event("mapready"));
+function loadDetail() {
+  window.mapDetail().then(() => {
+    // 그새 걸린 이웃 조건·고른 곡의 이웃·정보 패널을 다시
+    if (chips.some(c => c.k === "nb" || c.k === "na")) chipsChanged(false);
+    else if (selected >= 0) paint();
+    if (selected >= 0 && panel.classList.contains("open")) showPanel(selected);
+  }, err => console.warn("지도 설명·이웃 자료를 읽지 못했습니다", err));
+}
+// 글꼴(Pretendard, CDN 의 글자 묶음 수십 개, 처음엔 600KB 남짓)은 첫 화면 뒤에: 느린 연결에서 지도 자료와 다투지 않게. 그 전엔 시스템 글꼴.
+function loadFont() {
+  const link = document.createElement("link");
+  link.rel = "stylesheet";
+  link.href = "https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css";
+  // 글꼴이 바뀌면 이름표 크기를 다시 잰다(겹침 계산)
+  link.onload = () => document.fonts.ready.then(() => {
+    for (const L of LBL.values()) L.cls = "";
+    for (const a of axisLabels) a.w = 0;
+    dirty = true;
+  });
+  document.head.append(link);
+}
 </script>
-<script src="search.js"></script>
-<script src="player.js"></script>
 </body>
 </html>

@@ -12,7 +12,7 @@
 - 데이터: `~/.local/share/musike/data`(`library.json`, `local-index.json`, `backups/`, 영상 기록 `videos.json`·`video-events.jsonl`·`video-aliases.json`은 `server/src/ledger.ts`만 씀). 캐시·받아 둔 곡: `/mnt/backup8t/orca-data/musike/{cache,keep}`(HDD).
 - 내 음악 폴더(`MUSIKE_LOCAL_DIRS`, 읽기 전용, 절대 쓰지 않음): `/mnt/backup8t/gdrive/current/MUSICS/{야마시타 타츠로,카시오페아}`(구글 드라이브 사본), `~/보관함/유튜브`(yt-bulk).
 - yt-dlp: `uv tool`로 설치, `yt-dlp-update.timer`가 매일 업데이트.
-- 취향 분석(#26, `analysis/` 파이썬, 설계 `openspec/changes/analysis-move/design.md`): `musike-analysis.timer`가 매일 06:50 `uv run python -m musike_analysis update`(곡 상자 → 카드·소리/글 벡터·소리 묶음 → `~/.local/share/musike/analysis/{taste.json,audio.f32,text.f32,map/}`). 원본(조각·카드·parquet)은 `/mnt/backup8t/orca-data/musike/analysis/`. 마지막 결과 `python -m musike_analysis status`. 지도 웹 파일(`analysis/musike_analysis/web/`)만 고쳤으면 `python -m musike_analysis map`(계산 없이 `map/index.html`만 다시, 시험은 `MUSIKE_ANALYSIS_DIR=/tmp/…`). 시험: `cd analysis && uv run --group dev pytest`.
+- 취향 분석(#26, `analysis/` 파이썬, 설계 `openspec/changes/analysis-move/design.md`): `musike-analysis.timer`가 매일 06:50 `uv run python -m musike_analysis update`(곡 상자 → 카드·소리/글 벡터·소리 묶음 → `~/.local/share/musike/analysis/{taste.json,audio.f32,text.f32,map/}`). 원본(조각·카드·parquet)은 `/mnt/backup8t/orca-data/musike/analysis/`. 마지막 결과 `python -m musike_analysis status`. 지도 웹 파일(`analysis/musike_analysis/web/`)만 고쳤으면 `python -m musike_analysis map`(계산 없이 `map/index.html`과 해시 이름 파일(`points.<해시>.json` 등, 이름표 `files.json`)만 다시, 시험은 `MUSIKE_ANALYSIS_DIR=/tmp/…`). 시험: `cd analysis && uv run --group dev pytest`.
 - 헤르메스 기술: `~/.hermes/skills/media/musike/SKILL.md`(API 표와 답장 모양). API를 바꾸면 같이 고친다.
 
 ## 개발
@@ -51,7 +51,7 @@
 | GET | `/api/taste/radio/:id` | 닮은 곡 라디오 25곡(그 곡 먼저, 소리·설명 반반 닮음 + MMR, 아티스트 2곡까지, 작품 덩어리는 한 번). 악장이면 그 연주 덩어리가 먼저(`seed`도 그 줄). 분석에 없는 곡은 `analyzed: false` |
 | GET | `/api/taste/mixes` · `/api/taste/mixes/:mid` | 오늘의 자동 재생목록(`daily-1`~`daily-5`, `on-repeat`, `new-for-you`, `forgotten`, `upbeat`, `calm`; 서울 날짜로 하루 동안 같음). 작품 덩어리는 한 번(들은 횟수는 가장 많이 들은 악장) |
 | GET | `/api/works/track/:id` · `/api/works/album?key=` · `/api/works/instance?key=` · `/api/works/composers?genre=` · `/api/works/composer?name=` | 분석의 앨범·작곡가·연주(`instance`)로 내 곡만 묶기: 곡 하나가 이어지는 곳(없으면 null, 내 파일은 `album.local` = 내 음악 앨범) · 앨범의 내 곡(흔한 이름에 아티스트마다 1곡이면 아티스트별 따로, 키 `이름\t아티스트`) · 한 연주 악장 순(번호 없는 곡은 뒤에 제목 순, 다른 연주 안 섞음) · 작곡가 목록(곡 수 순) · 작곡가의 작품 → 연주 → 곡. 앨범·연주·작곡가 응답의 `titles`는 악장 있는 곡의 줄 제목(`II. Adagio`, 여러 작품 앨범은 `· 작품`), 곡 자체 제목은 그대로. 작품 덩어리의 악장에는 `work: {key, title}`(웹이 이어 있는 악장을 대기열 한 줄로 묶음) |
-| GET | `/api/taste/map` · `/api/map/<파일>` · `POST /api/taste/map/tracks {ids}` | 3D 음악 지도: 있는지·곡 수 · 분석 폴더 `map/` 정적 파일(밖으로 나가는 경로 404, gzip·ETag, 없으면 404 안내) · 지도 점 곡 번호 → 지금 들을 수 있는 곡(순서대로, 모르는 곡·지워진 영상 빠짐, 악장은 그 연주 덩어리 줄로 처음 자리에 한 번) |
+| GET | `/api/taste/map` · `/api/map/<파일>` · `POST /api/taste/map/tracks {ids}` | 3D 음악 지도: 있는지·곡 수(묻는 김에 그날 지도 파일 압축을 미리) · 분석 폴더 `map/` 정적 파일(밖으로 나가는 경로 404, brotli·gzip·ETag, 해시 이름 파일은 `immutable`·그 밖은 `no-cache`, 없으면 404 안내) · 지도 점 곡 번호 → 지금 들을 수 있는 곡(순서대로, 모르는 곡·지워진 영상 빠짐, 악장은 그 연주 덩어리 줄로 처음 자리에 한 번) |
 
 작품 덩어리(설계 `openspec/changes/work-unit/design.md`): 악장 있는 곡이 둘 이상인 연주. Musike가 고른 목록(라디오·자동 재생목록·소리 묶음·지도)에는 묶음 줄 하나로 온다: `kind: "bundle"`, id `W`+1악장 번호(저장 안 됨), `title` 「작곡가 성: 작품」, `artist` 연주자, `work: {key, title, parts: 악장들, labels: 줄 제목}`.
 

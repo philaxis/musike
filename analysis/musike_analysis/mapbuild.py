@@ -2,22 +2,25 @@
 
 큰 군집 = 큰 갈래, 세부 군집 = 소리 묶음(taste.json 과 같은 것). Musike 가 이 폴더를 /api/map/ 으로 내주고 「음악 지도」 화면의
 iframe 에 띄운다(재생·메뉴는 Musike 쪽, web/player.js 가 다리).
-- index.html (데이터 인라인) + 페이지가 부르는 web 파일 — render(): `python -m musike_analysis map` 은 이것만 다시 쓴다
-- map_points.json, search_meta.json · vectors_e5.bin (브라우저 의미 검색)
+- index.html(작은 껍데기) + 내용 해시를 이름에 단 파일들 — render(): `python -m musike_analysis map` 은 이것만 다시 쓴다.
+  points.<해시>.json(첫 화면에 필요한 지점 자료) · detail.<해시>.json(설명·이웃, 첫 화면 뒤에) · web 파일 · 검색 자료 사본.
+  이름이 내용을 따르므로 서버는 이 파일들을 오래 캐시하게 하고(immutable), 바뀌면 이름이 바뀐다. files.json 이 지금 이름표.
+- map_points.json(지도 자료 원본), vectors_e5.bin(의미 검색 곡 벡터, 점 순서, 처음 의미 검색할 때 받는다)
 - api/songs.json · api/neighbors.json · api/status.json
 """
 
 from __future__ import annotations
 
+import hashlib
 import json
-import shutil
+import re
 from pathlib import Path
 
 import numpy as np
 
 from . import budget
 from .config import API_DIR, MAP_DIR
-from .soundsearch import int8_assets
+from .soundsearch import int8_bytes
 from .util import atomic_write_bytes, atomic_write_json, log, now_iso
 from .vectors import unit
 
@@ -25,6 +28,13 @@ SEED = 42
 NEIGHBORS = 30
 WEB_DIR = Path(__file__).with_name("web")
 WEB_FILES = ("search.js", "soundsearch.js", "player.js")
+# 검색할 때만 받는 자료(vectors_e5.bin 은 아래 build, 소리 개념 자료는 soundsearch.build 가 먼저 쓴다). 없으면 그 검색만 꺼진다.
+# 글자 검색 항목은 지도 점에서 만들므로 따로 받지 않는다.
+SEARCH_FILES = ("vectors_e5.bin", "sound_concepts_meta.json", "sound_concepts_index.json", "vectors_e5_concepts.bin")
+# 첫 화면에는 필요 없는 지점 필드: 설명 글·이웃(정보 패널, 이웃 조건, 소리 이웃). 첫 화면을 그린 뒤 detail 파일로 받는다.
+DETAIL = ("ct", "ns", "nn", "an")
+HASHED = re.compile(r"^[\w-]+\.[0-9a-f]{12}\.\w+$")
+MANIFEST = "files.json"
 
 
 def umap_xyz(vecs: np.ndarray) -> np.ndarray:
@@ -55,14 +65,56 @@ def neighbors(vecs: np.ndarray, k: int = NEIGHBORS) -> tuple[np.ndarray, np.ndar
     return np.take_along_axis(idx, order, axis=1), np.take_along_axis(part, order, axis=1)
 
 
+def _put(stem: str, ext: str, raw: bytes) -> str:
+    """내용 해시를 이름에 단 파일(같은 내용이면 그대로 둔다)."""
+    name = f"{stem}.{hashlib.sha256(raw).hexdigest()[:12]}{ext}"
+    if not (MAP_DIR / name).is_file():
+        atomic_write_bytes(MAP_DIR / name, raw)
+    return name
+
+
+def _json(value) -> bytes:
+    return json.dumps(value, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+
+
+def split_points(data: dict) -> tuple[dict, dict]:
+    """지도 자료 → (첫 화면 자료, 나중 자료). 나중 자료는 필드마다 점 순서의 배열(이웃 점수는 화면처럼 소수 둘째 자리)."""
+    points = data.get("points") or []
+    core = {**data, "points": [{k: v for k, v in p.items() if k not in DETAIL} for p in points]}
+    detail = {
+        "ct": [p.get("ct") or "" for p in points],
+        "ns": [[round(float(s), 2) for s in p.get("ns") or []] for p in points],
+        "nn": [p.get("nn") or [] for p in points],
+        "an": [p.get("an") for p in points],
+    }
+    return core, detail
+
+
 def render(data: dict) -> None:
-    """지도 페이지: 템플릿에 지점 자료를 넣은 index.html 과 페이지가 부르는 web 파일."""
+    """지도 페이지: 해시 이름의 자료·web 파일과 그 이름을 담은 index.html. 지난번과 이번 것이 아닌 해시 파일은 지운다
+    (지난번 것은 남겨 둔다: 이미 열려 있는 지도가 처음 검색할 때 옛 이름을 부른다)."""
     MAP_DIR.mkdir(parents=True, exist_ok=True)
-    body = json.dumps(data, ensure_ascii=False, separators=(",", ":")).replace("</", "<\\/")
-    html = (WEB_DIR / "map3d_template.html").read_text(encoding="utf-8").replace("__DATA__", body)
-    for name in WEB_FILES:
-        shutil.copyfile(WEB_DIR / name, MAP_DIR / name)
+    core, detail = split_points(data)
+    files = {"points.json": _put("points", ".json", _json(core)), "detail.json": _put("detail", ".json", _json(detail))}
+    for name in WEB_FILES + SEARCH_FILES:
+        src = (WEB_DIR if name in WEB_FILES else MAP_DIR) / name
+        if src.is_file():
+            stem, ext = name.rsplit(".", 1)
+            files[name] = _put(stem, "." + ext, src.read_bytes())
+    body = json.dumps(files, ensure_ascii=False, separators=(",", ":"))
+    html = (WEB_DIR / "map3d_template.html").read_text(encoding="utf-8").replace("__FILES__", body)
     atomic_write_bytes(MAP_DIR / "index.html", html.encode("utf-8"))
+
+    manifest = MAP_DIR / MANIFEST
+    try:
+        previous = json.loads(manifest.read_text(encoding="utf-8")).get("files") or {}
+    except (OSError, ValueError, AttributeError):
+        previous = {}
+    keep = set(files.values()) | {v for v in previous.values() if isinstance(v, str)}
+    for path in MAP_DIR.iterdir():
+        if HASHED.match(path.name) and path.name not in keep and path.is_file():
+            path.unlink()
+    atomic_write_json(manifest, {"files": files})
 
 
 def rerender() -> int:
@@ -156,17 +208,10 @@ def build(order: list[str], songs: dict, cards: dict, extra: dict, genre: dict, 
 
     MAP_DIR.mkdir(parents=True, exist_ok=True)
     atomic_write_json(MAP_DIR / "map_points.json", data)
-    render(data)
 
-    rows = [
-        {
-            "videoId": p["id"], "point": i, "title": p["t"], "artist": p["a"], "composer": p["c"], "work": p["w"],
-            "genre": p["g"], "subgenre": p["sg"], "era": p["e"], "year": p["y"], "moods": " ".join(p["m"]),
-            "playlists": p["pl"], "summary": p["ct"].strip()[:180],
-        }
-        for i, p in enumerate(points)
-    ]
-    int8_assets(tmat, rows, MAP_DIR / "vectors_e5.bin", MAP_DIR / "search_meta.json")
+    # 의미 검색 곡 벡터: 줄 순서 = 점 순서(검색 항목은 브라우저가 지도 점에서 만든다)
+    atomic_write_bytes(MAP_DIR / "vectors_e5.bin", int8_bytes(tmat))
+    render(data)  # 검색 자료까지 쓴 뒤: 해시 이름 사본을 같이 만든다
 
     names = {g["id"]: g["name"] for g in groups}
     atomic_write_json(
