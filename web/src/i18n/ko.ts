@@ -357,7 +357,7 @@ export const ko: Messages = {
   fade: {
     section: "재생",
     title: "곡 사이 페이드",
-    body: "다음 곡을 이만큼 일찍 시작해 두 곡을 겹쳐 넘겨요. 같은 로컬 앨범 안에서와 영상 모드에서는 겹치지 않아요.",
+    body: "다음 곡을 이만큼 일찍 시작해 두 곡을 겹쳐 넘겨요. 같은 로컬 앨범·묶음 안에서와 영상 모드에서는 겹치지 않아요.",
     off: "끔",
     seconds: (n) => `${n}초`,
   },
@@ -485,12 +485,77 @@ export const ko: Messages = {
 
   importList: {
     label: "YouTube 재생목록",
-    action: (n) => `재생목록으로 가져오기 (${n}곡)`,
-    importing: "가져오는 중…",
+    importing: "들여오는 중…",
     failed: "이 재생목록을 읽지 못했어요. 공개된 목록인지 확인해 주세요.",
-    done: (name, added, skipped) =>
-      (added ? `「${name}」 ${added}곡을 가져왔어요` : `「${name}」에 새로 더할 곡이 없어요`) +
-      (skipped ? ` (못 받는 곡 ${skipped}개 건너뜀)` : ""),
+  },
+
+  // 곡 상자·꼬리표·묶음·유튜브 계정
+  songBox: {
+    title: "곡 상자",
+    tileSub: "들여온 곡 전부, 출처와 꼬리표",
+    all: "전체",
+    untagged: "정리 안 됨",
+    bySource: "출처별",
+    byTag: "꼬리표별",
+    count: (n) => `${n}곡`,
+    loadMore: "더 보기",
+    failed: "곡 상자를 열지 못했어요",
+    empty: "곡 상자가 비어 있어요",
+    emptyBody: "검색창에 유튜브 재생목록 링크를 붙여 넣거나, 설정에서 유튜브 계정을 연결하면 곡이 들어와요.",
+    emptyFiltered: "여기에 맞는 곡이 없어요",
+    noTags: "아직 꼬리표가 없어요",
+    gone: "유튜브에서 사라짐",
+    fromPlaylist: (name) => `유튜브 '${name}'`,
+    fromLiked: "유튜브 좋아요",
+    fromLocal: (name) => `내 폴더 · ${name}`,
+    fromLink: "직접 넣음",
+    fromSearch: "검색",
+    openBox: "곡 상자 보기",
+
+    importAction: (n) => `곡 상자로 들여오기 (${n}곡)`,
+    imported: (name, added, merged) =>
+      (added ? `「${name}」 ${added}곡을 곡 상자에 넣었어요` : `「${name}」의 곡은 이미 모두 곡 상자에 있어요`) +
+      (merged ? ` (이미 있던 ${merged}곡은 출처만 더함)` : ""),
+
+    tags: "꼬리표",
+    tagsOf: (title) => `꼬리표 · ${title}`,
+    tagPlaceholder: "예: 작품:Asayake",
+    addTag: "달기",
+    removeTag: (tag) => `「${tag}」 떼기`,
+    noTagsYet: "아직 꼬리표가 없어요.",
+    tagsHint: "헤르메스와 같은 말로, 앞에 종류를 붙여요:",
+    cantTag: "이 곡에는 꼬리표를 달 수 없어요.",
+
+    versions: "같은 작품 다른 버전",
+    versionsOf: (works) => `작품: ${works}`,
+    noWork: "이 곡에는 아직 「작품:」 꼬리표가 없어요.",
+    arrangements: "편곡",
+    thisTrack: "지금 곡",
+
+    bundle: (n) => `묶음 ${n}곡`,
+    showParts: "묶음 펼치기",
+    hideParts: "묶음 접기",
+    skipBundle: "묶음 건너뛰기",
+
+    google: "유튜브 계정",
+    connectedAs: (email) => `연결됨: ${email}`,
+    connected: "연결됨",
+    connect: "연결하기",
+    reconnect: "다시 연결하기",
+    googleBody: "내 유튜브 재생목록과 좋아요 표시한 동영상의 새 곡이 매일 곡 상자로 들어와요. 읽기만 해요.",
+    noClient: "서버에 구글 로그인 설정 파일이 없어서 아직 연결할 수 없어요.",
+    revoked: "연결이 끊겼어요. 다시 연결해 주세요.",
+    myPlaylists: "내 유튜브 재생목록",
+    playlistsHint: "체크한 목록만 들여와요. 체크를 끄면 다음 가져오기부터 건너뛰어요.",
+    playlistSub: (n, priv) => `${n}곡${priv ? " · 비공개" : ""}`,
+    playlistsFailed: "재생목록을 읽지 못했어요",
+    syncNow: "지금 들여오기",
+    syncing: "들여오는 중…",
+    synced: (added) => (added ? `새로 ${added}곡이 곡 상자에 들어왔어요` : "새로 들어온 곡이 없어요"),
+    disconnect: "연결 끊기",
+    disconnected: "유튜브 계정 연결을 끊었어요",
+    connectedToast: "유튜브 계정을 연결했어요",
+    connectFailed: (reason) => `유튜브 계정을 연결하지 못했어요 (${reason})`,
   },
 
   openLink: {

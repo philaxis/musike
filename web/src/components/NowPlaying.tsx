@@ -3,6 +3,7 @@ import {
   MagnifyingGlassIcon,
   QueueIcon,
   RadioIcon,
+  SkipForwardIcon,
   VideoCameraSlashIcon,
   XIcon,
 } from "@phosphor-icons/react";
@@ -10,6 +11,7 @@ import { AnimatePresence, motion, useDragControls, useReducedMotion } from "moti
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { useT } from "../i18n";
+import { trackTitle } from "../lib/bundles";
 import { cn } from "../lib/format";
 import { isLocal } from "../lib/server";
 import type { Track } from "../lib/types";
@@ -75,13 +77,23 @@ function Stage({ track, slot, className }: { track: Track; slot: number; classNa
 function TrackHeading({ track, large = false }: { track: Track; large?: boolean }) {
   const statusText = useStatusText();
   const status = usePlayer((s) => s.status);
+  const t = useT();
   return (
     <div className="flex items-center gap-3">
       <div className="min-w-0 flex-1">
-        <h2 className={cn("truncate font-semibold tracking-tight", large ? "text-[22px] leading-tight" : "text-lg")}>{track.title}</h2>
+        <h2 className={cn("truncate font-semibold tracking-tight", large ? "text-[22px] leading-tight" : "text-lg")}>{trackTitle(track)}</h2>
         <p className={cn("truncate", large ? "text-base" : "text-sm", status === "error" ? "text-danger" : "text-fg-2")}>
-          {statusText ?? [track.artist, track.album].filter(Boolean).join(" · ")}
+          {statusText ?? [track.part?.title, track.artist, track.album].filter(Boolean).join(" · ")}
         </p>
+        {track.part && (
+          <button
+            type="button"
+            onClick={() => usePlayer.getState().skipBundle()}
+            className="mt-1.5 flex h-8 items-center gap-1.5 rounded-full bg-surface-1 px-3 text-xs font-medium text-fg-2 ring-1 ring-line hover:text-fg"
+          >
+            <SkipForwardIcon size={14} /> {t.songBox.skipBundle}
+          </button>
+        )}
       </div>
       <FavoriteButton track={track} size={large ? "lg" : "md"} />
     </div>
@@ -120,7 +132,7 @@ function PanelBody({ tab, slot }: { tab: PanelTab; slot: number }) {
           <div className="flex items-center gap-3">
             <Artwork src={nextUp.thumb} className="size-10 rounded-[8px]" />
             <div className="min-w-0">
-              <p className="truncate text-sm font-medium">{nextUp.title}</p>
+              <p className="truncate text-sm font-medium">{trackTitle(nextUp)}</p>
               <p className="truncate text-xs text-fg-2">{nextUp.artist}</p>
             </div>
           </div>

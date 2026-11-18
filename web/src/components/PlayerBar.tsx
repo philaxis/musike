@@ -1,4 +1,5 @@
 import { KeyboardIcon, QueueIcon, SidebarSimpleIcon } from "@phosphor-icons/react";
+import { trackTitle } from "../lib/bundles";
 import { cn } from "../lib/format";
 import { useT } from "../i18n";
 import { selectCurrent, usePlayer, useStatusText } from "../player/player";
@@ -33,7 +34,7 @@ export function PlayerBar() {
                 <Artwork src={track.thumb} className="size-14 rounded-[10px]" />
               </button>
               <div className="min-w-0">
-                <p className="truncate text-sm font-medium">{track.title}</p>
+                <p className="truncate text-sm font-medium">{trackTitle(track)}</p>
                 <p className={cn("truncate text-[13px]", status === "error" ? "text-danger" : "text-fg-2")}>
                   {statusText ?? track.artist}
                 </p>

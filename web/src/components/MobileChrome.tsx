@@ -1,5 +1,6 @@
 import { BooksIcon, HouseIcon, MagnifyingGlassIcon } from "@phosphor-icons/react";
 import { NavLink, useNavigate } from "react-router";
+import { trackTitle } from "../lib/bundles";
 import { cn } from "../lib/format";
 import { useT } from "../i18n";
 import { NOW_PLAYING_HASH, paths } from "../lib/routes";
@@ -77,7 +78,7 @@ export function MiniPlayer() {
           >
             <Artwork src={track.thumb} className="size-11 rounded-[10px]" />
             <span className="min-w-0">
-              <span className="block truncate text-sm font-medium">{track.title}</span>
+              <span className="block truncate text-sm font-medium">{trackTitle(track)}</span>
               <span className={cn("block truncate text-xs", status === "error" ? "text-danger" : "text-fg-2")}>
                 {statusText ?? track.artist}
               </span>

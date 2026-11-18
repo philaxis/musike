@@ -9,6 +9,7 @@ import { TitleBar } from "./components/TitleBar";
 import { desktop } from "./lib/desktop";
 import { SettingsDialog } from "./components/SettingsDialog";
 import { Toasts } from "./components/Toasts";
+import { TagsDialog, VersionsDialog } from "./components/Tags";
 import { TrackMenu } from "./components/TrackMenu";
 import { FloatingVideo, Theater } from "./components/Video";
 import { MD, useMediaQuery } from "./hooks/useMediaQuery";
@@ -33,6 +34,7 @@ import LocalAlbum from "./views/LocalAlbum";
 import LocalRoot from "./views/LocalRoot";
 import OpenLink from "./views/OpenLink";
 import Search from "./views/Search";
+import SongBox from "./views/SongBox";
 
 const SHEET_HASH = `#${NOW_PLAYING_HASH}`;
 
@@ -55,6 +57,22 @@ export default function App() {
     // Which YouTube tracks are kept on the server (and which are still downloading).
     if (capabilities.serverLibrary) void useKeep.getState().load();
   }, [loadLibrary]);
+
+  // Google sign-in returns to /settings?google=connected|error (or elsewhere with ?google=): say how it went.
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const google = params.get("google");
+    const settings = location.pathname === paths.settings;
+    if (!settings && !google) return;
+    const t = getT();
+    if (google === "connected") toast(t.songBox.connectedToast);
+    else if (google === "error") toast(t.songBox.connectFailed(params.get("reason") ?? "?"), "error");
+    if (settings) openSettings();
+    params.delete("google");
+    params.delete("reason");
+    const rest = params.toString();
+    navigate(settings ? paths.home : `${location.pathname}${rest ? `?${rest}` : ""}`, { replace: true });
+  }, [location.pathname, location.search]);
 
   // Check yt-dlp shortly after start and say so once if something needs doing (not on Android: no yt-dlp there).
   useEffect(() => {
@@ -143,6 +161,7 @@ export default function App() {
               <Route path={paths.playLink(":id")} element={<OpenLink key="track" kind="track" />} />
               <Route path={paths.listLink(":id")} element={<OpenLink key="playlist" kind="playlist" />} />
               <Route path={paths.openFile} element={<OpenLink key="file" kind="file" />} />
+              <Route path="/library/box" element={<SongBox />} />
               <Route path="*" element={<Home />} />
             </Routes>
           )}
@@ -167,6 +186,8 @@ export default function App() {
       <AddToPlaylistDialog />
       <ShortcutsDialog />
       <SettingsDialog />
+      <TagsDialog />
+      <VersionsDialog />
       <Toasts />
     </div>
   );

@@ -14,9 +14,11 @@ import { cn } from "../lib/format";
 import { crossfadeSupported } from "../player/crossfade";
 import { useSystem } from "../stores/system";
 import { useUi } from "../stores/ui";
+import { isTvMode } from "../tv/tvMode";
 import { BackupSection } from "./BackupSection";
 import { AccentPicker, LayoutSection } from "./CustomizeSection";
 import { FadeSection } from "./FadeSection";
+import { GoogleSection } from "./GoogleSection";
 import { Modal } from "./Modal";
 
 function Segmented<T extends string>({
@@ -155,6 +157,9 @@ export function SettingsDialog() {
         </section>
 
         {crossfadeSupported && <FadeSection />}
+
+        {/* The YouTube account feeds the song box: sorting, which TV mode leaves to the phone and Hermes. */}
+        {capabilities.serverLibrary && !isTvMode() && <GoogleSection />}
 
         <LayoutSection />
 

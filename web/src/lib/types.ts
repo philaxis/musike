@@ -17,6 +17,26 @@ export interface Track {
   kept?: boolean;
   /** From the server, never stored: a "내 음악" track the user hid, listed only while hidden items are shown. */
   hidden?: boolean;
+  /** Never on the server: this queued track is one part of a bundle the player expanded (see lib/bundles.ts). */
+  part?: BundlePart;
+}
+
+/** Where a queued track sits in the bundle it came from. `run` tells two plays of one bundle apart. */
+export interface BundlePart {
+  bundle: string;
+  title: string;
+  n: number;
+  of: number;
+  run: string;
+}
+
+/** Several tracks played in order as one row (a symphony's movements, a live set). Rows elsewhere point here by id. */
+export interface Bundle {
+  id: string;
+  title: string;
+  artist?: string;
+  parts: Track[];
+  tags: string[];
 }
 
 /** One of the server's music folders. `online` is false while it can't be read (say, the drive isn't mounted). */
@@ -55,6 +75,8 @@ export interface Library {
   favorites: Track[];
   playlists: Playlist[];
   history: Track[];
+  /** The Musike server only: the parts of the bundle rows above. */
+  bundles?: Bundle[];
 }
 
 export interface Genre {

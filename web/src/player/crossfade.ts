@@ -14,8 +14,14 @@ export const FADE_MAX = 12;
 export const crossfadeSupported = canMixAudio && capabilities.serverLibrary;
 
 /** Consecutive tracks of one local album play on without a fade, so live albums and gapless records stay whole. */
-export const sameAlbum = (a: Track, b: Track) =>
+const sameAlbum = (a: Track, b: Track) =>
   isLocal(a) && isLocal(b) && !!a.album && a.album === b.album && a.artist === b.artist;
+
+/**
+ * Whether `b` follows `a` without a fade: the same local album, or the next part of the same bundle in the queue
+ * (one run, see lib/bundles.ts), which plays on like one long track.
+ */
+export const noFade = (a: Track, b: Track) => sameAlbum(a, b) || (!!a.part && a.part.run === b.part?.run);
 
 interface Graph {
   ctx: AudioContext;

@@ -9,6 +9,7 @@ import { EmptyState, PageHeader } from "../components/Page";
 import { TrackList } from "../components/TrackList";
 import { useT } from "../i18n";
 import { capabilities } from "../lib/api";
+import { queueRows } from "../lib/bundles";
 import { shuffled } from "../lib/format";
 import { paths } from "../lib/routes";
 import type { Track } from "../lib/types";
@@ -60,8 +61,9 @@ export default function Collection({ kind }: Props) {
   }
 
   const total = tracks.reduce((sum, t) => sum + (t.duration || 0), 0);
-  // The queue holds exactly these tracks, so this collection is the current playback context.
-  const isThisPlaying = tracks.length > 0 && queue.length === tracks.length && queue.every((t) => tracks.some((x) => x.id === t.id));
+  // The queue holds exactly these tracks (a bundle's run of parts counting as its row): this collection is playing.
+  const rows = queueRows(queue).map((r) => queue[r.start].part?.bundle ?? queue[r.start].id);
+  const isThisPlaying = tracks.length > 0 && rows.length === tracks.length && rows.every((id) => tracks.some((x) => x.id === id));
   const playing = isThisPlaying && (status === "playing" || status === "loading");
 
   return (

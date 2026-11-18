@@ -357,7 +357,7 @@ export const pt: Messages = {
   fade: {
     section: "Reprodução",
     title: "Transição entre faixas",
-    body: "A próxima faixa começa esses segundos antes e as duas se sobrepõem. Não dentro de um mesmo álbum local, nem no modo Vídeo.",
+    body: "A próxima faixa começa esses segundos antes e as duas se sobrepõem. Não dentro de um mesmo álbum local ou pacote, nem no modo Vídeo.",
     off: "Desligado",
     seconds: (n) => `${n} s`,
   },
@@ -486,12 +486,77 @@ export const pt: Messages = {
 
   importList: {
     label: "Playlist do YouTube",
-    action: (n) => `Importar como playlist (${count(n, "faixa", "faixas")})`,
-    importing: "Importando…",
+    importing: "Trazendo…",
     failed: "Não foi possível ler esta playlist. Confira se ela é pública.",
-    done: (name, added, skipped) =>
-      (added ? `"${name}": ${count(added, "faixa importada", "faixas importadas")}` : `"${name}" já tinha todas as faixas`) +
-      (skipped ? ` (${skipped} indisponíveis puladas)` : ""),
+  },
+
+  // Caixa de faixas, etiquetas, pacotes, conta do YouTube
+  songBox: {
+    title: "Caixa de faixas",
+    tileSub: "Tudo o que entrou, com origens e etiquetas",
+    all: "Todas",
+    untagged: "Sem organizar",
+    bySource: "Por origem",
+    byTag: "Por etiqueta",
+    count: (n) => count(n, "faixa", "faixas"),
+    loadMore: "Mostrar mais",
+    failed: "Não foi possível abrir a caixa de faixas",
+    empty: "A caixa de faixas está vazia",
+    emptyBody: "Cole o link de uma playlist do YouTube na Busca ou conecte sua conta do YouTube nas Configurações.",
+    emptyFiltered: "Nada aqui corresponde",
+    noTags: "Ainda sem etiquetas",
+    gone: "Sumiu do YouTube",
+    fromPlaylist: (name) => `YouTube '${name}'`,
+    fromLiked: "Curtidas do YouTube",
+    fromLocal: (name) => `Minha pasta · ${name}`,
+    fromLink: "Adicionada à mão",
+    fromSearch: "Busca",
+    openBox: "Abrir a caixa de faixas",
+
+    importAction: (n) => `Trazer para a caixa (${count(n, "faixa", "faixas")})`,
+    imported: (name, added, merged) =>
+      (added ? `"${name}": ${count(added, "faixa", "faixas")} na caixa` : `Todas as faixas de "${name}" já estão na caixa`) +
+      (merged ? ` (${merged} já existentes ganharam esta origem)` : ""),
+
+    tags: "Etiquetas",
+    tagsOf: (title) => `Etiquetas · ${title}`,
+    tagPlaceholder: "ex.: 작품:Asayake",
+    addTag: "Adicionar",
+    removeTag: (tag) => `Remover "${tag}"`,
+    noTagsYet: "Esta faixa ainda não tem etiquetas.",
+    tagsHint: "Comece pelo tipo, como o Hermes faz:",
+    cantTag: "Esta faixa não aceita etiquetas.",
+
+    versions: "Outras versões desta obra",
+    versionsOf: (works) => `Obra: ${works}`,
+    noWork: "Esta faixa ainda não tem a etiqueta 작품:.",
+    arrangements: "Arranjos",
+    thisTrack: "Esta faixa",
+
+    bundle: (n) => `Pacote · ${count(n, "faixa", "faixas")}`,
+    showParts: "Mostrar as partes",
+    hideParts: "Esconder as partes",
+    skipBundle: "Pular o pacote",
+
+    google: "Conta do YouTube",
+    connectedAs: (email) => `Conectada: ${email}`,
+    connected: "Conectada",
+    connect: "Conectar",
+    reconnect: "Conectar de novo",
+    googleBody: "Faixas novas das suas playlists e vídeos curtidos do YouTube entram na caixa todo dia. Só leitura.",
+    noClient: "O servidor ainda não tem as configurações de login do Google, então não dá para conectar.",
+    revoked: "A conexão terminou. Conecte de novo.",
+    myPlaylists: "Minhas playlists do YouTube",
+    playlistsHint: "Só as marcadas entram. Desmarque uma para pulá-la a partir da próxima vez.",
+    playlistSub: (n, priv) => count(n, "faixa", "faixas") + (priv ? " · privada" : ""),
+    playlistsFailed: "Não foi possível ler suas playlists",
+    syncNow: "Trazer agora",
+    syncing: "Trazendo…",
+    synced: (added) => (added ? `${count(added, "faixa nova", "faixas novas")} na caixa` : "Nenhuma faixa nova"),
+    disconnect: "Desconectar",
+    disconnected: "Conta do YouTube desconectada",
+    connectedToast: "Conta do YouTube conectada",
+    connectFailed: (reason) => `Não foi possível conectar a conta do YouTube (${reason})`,
   },
 
   openLink: {

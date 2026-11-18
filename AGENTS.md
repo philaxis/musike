@@ -40,4 +40,4 @@
 | GET/PUT/POST | `/api/google/playlists` · `PUT /api/google/excluded {ids}` · `POST /api/google/sync` | 내 유튜브 재생목록(체크 끈 것 `excluded`) · 들여오지 않을 목록 · 새 곡을 곡 상자로(409 `google_login`이면 다시 연결) |
 
 원작 API(검색, 재생목록 만들기·넣기·빼기, 즐겨찾기, 스트림)는 README의 API 표.
-웹 경로: `/play/:id`(곡 바로 재생), `/list/:pid`(재생목록 처음부터).
+웹 경로: `/play/:id`(곡·묶음 바로 재생), `/list/:pid`(재생목록 처음부터), `/library/box`(곡 상자, `?filter=untagged`·`?source=kind:ref`·`?tag=`), `/settings`(설정 열기, 구글 로그인 뒤 `?google=connected|error`로 돌아오는 곳).

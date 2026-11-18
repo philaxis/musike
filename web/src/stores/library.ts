@@ -27,6 +27,7 @@ export const useLibrary = create<LibraryState>((set, get) => ({
   favorites: [],
   playlists: [],
   history: [],
+  bundles: [],
   status: "idle",
 
   load: async () => {

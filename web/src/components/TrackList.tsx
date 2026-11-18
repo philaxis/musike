@@ -1,5 +1,14 @@
-import { ClockIcon, CloudArrowDownIcon, CloudCheckIcon, DotsThreeIcon, HardDrivesIcon, HeartIcon, VideoCameraIcon } from "@phosphor-icons/react";
-import { memo, type CSSProperties, type MouseEvent, type PointerEvent } from "react";
+import {
+  CaretDownIcon,
+  ClockIcon,
+  CloudArrowDownIcon,
+  CloudCheckIcon,
+  DotsThreeIcon,
+  HardDrivesIcon,
+  HeartIcon,
+  VideoCameraIcon,
+} from "@phosphor-icons/react";
+import { memo, useState, type CSSProperties, type MouseEvent, type PointerEvent } from "react";
 import { useT } from "../i18n";
 import { cn, formatTime } from "../lib/format";
 import { isLocal } from "../lib/server";
@@ -17,6 +26,8 @@ interface RowProps {
   track: Track;
   position: number;
   onPlay: () => void;
+  /** A bundle row: play it from one of its parts (0-based). */
+  onPlayPart: (part: number) => void;
   playlistId?: string;
   showAlbum: boolean;
   /** Set where rows can be dragged into a new order. */
@@ -24,8 +35,15 @@ interface RowProps {
   dragStyle?: CSSProperties;
 }
 
-const TrackRow = memo(function TrackRow({ track, position, onPlay, playlistId, showAlbum, onDragStart, dragStyle }: RowProps) {
-  const isCurrent = usePlayer((s) => selectCurrent(s)?.id === track.id);
+const TrackRow = memo(function TrackRow({ track, position, onPlay, onPlayPart, playlistId, showAlbum, onDragStart, dragStyle }: RowProps) {
+  // Which part of this bundle row is playing (1-based), 0 when none.
+  const playingPart = usePlayer((s) => {
+    const part = selectCurrent(s)?.part;
+    return part?.bundle === track.id ? part.n : 0;
+  });
+  const isCurrent = usePlayer((s) => selectCurrent(s)?.id === track.id) || playingPart > 0;
+  const bundle = useLibrary((s) => (track.kind === "bundle" ? s.bundles?.find((b) => b.id === track.id) : undefined));
+  const [expanded, setExpanded] = useState(false);
   const isPlaying = usePlayer((s) => s.status === "playing" || s.status === "loading");
   const isFavorite = useLibrary((s) => s.favorites.some((t) => t.id === track.id));
   const toggleFavorite = useLibrary((s) => s.toggleFavorite);
@@ -86,6 +104,11 @@ const TrackRow = memo(function TrackRow({ track, position, onPlay, playlistId, s
         </p>
         <p className="mt-0.5 flex items-center gap-1.5 truncate text-[13px] text-fg-2">
           {track.kind === "video" && <VideoCameraIcon size={13} className="shrink-0 text-fg-3" aria-label={t.common.video} />}
+          {bundle && (
+            <span className="shrink-0 rounded-full bg-accent-soft px-1.5 text-[11px] leading-[18px] font-medium text-accent-text">
+              {t.songBox.bundle(bundle.parts.length)}
+            </span>
+          )}
           {isLocal(track) ? (
             <HardDrivesIcon size={13} className="shrink-0 text-fg-3" aria-label={t.local.badge} />
           ) : keepStatus === "done" ? (
@@ -121,15 +144,53 @@ const TrackRow = memo(function TrackRow({ track, position, onPlay, playlistId, s
         </span>
       </div>
 
-      <button
-        type="button"
-        onClick={menuAt}
-        aria-label={t.trackList.moreFor(track.title)}
-        title={t.trackList.more}
-        className="relative z-10 grid size-9 place-items-center rounded-full text-fg-2 transition-[opacity,background-color] hover:bg-surface-3 hover:text-fg md:opacity-0 md:group-hover:opacity-100 md:focus-visible:opacity-100"
-      >
-        <DotsThreeIcon size={22} weight="bold" />
-      </button>
+      <div className="relative z-10 flex items-center">
+        {bundle && (
+          <button
+            type="button"
+            onClick={() => setExpanded(!expanded)}
+            aria-expanded={expanded}
+            aria-label={expanded ? t.songBox.hideParts : t.songBox.showParts}
+            title={expanded ? t.songBox.hideParts : t.songBox.showParts}
+            className="grid size-9 place-items-center rounded-full text-fg-2 hover:bg-surface-3 hover:text-fg"
+          >
+            <CaretDownIcon size={18} className={cn("transition-transform duration-200", expanded && "rotate-180")} />
+          </button>
+        )}
+        <button
+          type="button"
+          onClick={menuAt}
+          aria-label={t.trackList.moreFor(track.title)}
+          title={t.trackList.more}
+          className="grid size-9 place-items-center rounded-full text-fg-2 transition-[opacity,background-color] hover:bg-surface-3 hover:text-fg md:opacity-0 md:group-hover:opacity-100 md:focus-visible:opacity-100"
+        >
+          <DotsThreeIcon size={22} weight="bold" />
+        </button>
+      </div>
+
+      {expanded && bundle && (
+        // The parts, played from where you tap; inside the row so dragging still moves the bundle as one.
+        <ol className="relative z-10 col-span-full -mt-1 mb-1 flex flex-col md:pl-10" onPointerDown={(e) => e.stopPropagation()}>
+          {bundle.parts.map((part, n) => (
+            <li key={`${part.id}-${n}`}>
+              <button
+                type="button"
+                onClick={() => onPlayPart(n)}
+                aria-label={t.common.playX(part.title)}
+                className="flex w-full items-center gap-3 rounded-lg px-2 py-1.5 text-left hover:bg-surface-3"
+              >
+                <span className="w-6 shrink-0 text-center font-mono text-xs text-fg-3 tabular-nums">
+                  {playingPart === n + 1 ? <Equalizer live={isPlaying} /> : n + 1}
+                </span>
+                <span className={cn("min-w-0 flex-1 truncate text-sm", playingPart === n + 1 ? "text-accent-text" : "text-fg")}>
+                  {part.title}
+                </span>
+                <span className="shrink-0 font-mono text-xs text-fg-3 tabular-nums">{part.duration ? formatTime(part.duration) : ""}</span>
+              </button>
+            </li>
+          ))}
+        </ol>
+      )}
     </li>
   );
 });
@@ -181,6 +242,7 @@ export function TrackList({ tracks, context, playlistId, showAlbum: albumWanted 
             playlistId={playlistId}
             showAlbum={showAlbum}
             onPlay={() => playList(context ?? tracks, i)}
+            onPlayPart={(n) => playList(context ?? tracks, i, n)}
             onDragStart={onReorder && reorder.start(i)}
             dragStyle={reorder.styleFor(i)}
           />
