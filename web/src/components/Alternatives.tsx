@@ -1,7 +1,10 @@
+import { MagnifyingGlassIcon } from "@phosphor-icons/react";
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router";
 import { useT } from "../i18n";
-import { cn, formatTime } from "../lib/format";
-import { server } from "../lib/server";
+import { formatTime } from "../lib/format";
+import { paths } from "../lib/routes";
+import { server, type Alternative } from "../lib/server";
 import type { Track } from "../lib/types";
 import { usePlayer } from "../player/player";
 import { useLibrary } from "../stores/library";
@@ -10,14 +13,16 @@ import { Artwork } from "./Artwork";
 import { Modal } from "./Modal";
 
 /**
- * 「다른 판 찾기」 for a track that won't play here: up to five YouTube results for its title and artist, closest in
- * length first. Picking one puts it in place of the track in the song box, playlists, favorites and the queue.
+ * 「다른 판 찾기」 for a track that won't play here: up to five YouTube results with an alike title, closest in length
+ * first, each saying why (same title, same artist, length). Picking one puts it in place of the track in the song box,
+ * playlists, favorites and the queue. None: search YouTube by hand.
  */
 export function AlternativesDialog() {
   const track = useUi((s) => s.alternativesFor);
   const close = () => useUi.getState().openAlternatives(null);
-  const [found, setFound] = useState<Track[] | "error" | null>(null);
+  const [found, setFound] = useState<Alternative[] | "error" | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  const navigate = useNavigate();
   const t = useT();
 
   useEffect(() => {
@@ -45,7 +50,21 @@ export function AlternativesDialog() {
     }
   };
 
-  const off = (other: Track) => (track?.duration && other.duration ? other.duration - track.duration : null);
+  const searchYoutube = () => {
+    if (!track) return;
+    close();
+    navigate(`${paths.search}?q=${encodeURIComponent(track.title)}`);
+  };
+
+  /** Why a candidate is offered, in a few words: same title, same artist, how its length compares. */
+  const why = (a: Alternative) => {
+    const off = track?.duration && a.track.duration ? a.track.duration - track.duration : null;
+    return [
+      a.sameTitle && t.aside.sameTitle,
+      a.sameArtist && t.aside.sameArtist,
+      off !== null && (off === 0 ? t.aside.sameLength : t.aside.lengthOff(off)),
+    ].filter(Boolean) as string[];
+  };
 
   return (
     <Modal open={!!track} onClose={close} title={track ? t.aside.findOf(track.title) : ""}>
@@ -55,43 +74,50 @@ export function AlternativesDialog() {
             <div className="skeleton mx-1 h-14 rounded-xl" />
             <div className="skeleton mx-1 h-14 rounded-xl" />
           </>
-        ) : found === "error" ? (
-          <p className="px-1 text-sm text-fg-2">{t.aside.failed}</p>
-        ) : !found.length ? (
-          <p className="px-1 text-sm text-fg-2">{t.aside.none}</p>
+        ) : found === "error" || !found.length ? (
+          <div className="flex flex-col items-start gap-3 px-1">
+            <p className="text-sm text-fg-2">{found === "error" ? t.aside.failed : t.aside.none}</p>
+            <button
+              type="button"
+              onClick={searchYoutube}
+              className="flex h-10 items-center gap-2 rounded-full bg-surface-3 px-4 text-sm font-medium hover:bg-surface-4"
+            >
+              <MagnifyingGlassIcon size={16} />
+              {t.aside.searchYoutube}
+            </button>
+          </div>
         ) : (
           <ul className="flex flex-col">
-            {found.map((other) => {
-              const d = off(other);
-              return (
-                <li key={other.id}>
-                  <button
-                    type="button"
-                    disabled={!!busy}
-                    onClick={() => void pick(other)}
-                    aria-label={`${t.aside.replace}: ${other.title}`}
-                    className="flex w-full items-center gap-3 rounded-xl px-2 py-1.5 text-left hover:bg-surface-3 disabled:opacity-60"
-                  >
-                    <Artwork src={other.thumb} className="size-11 shrink-0 rounded-[10px]" />
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate text-[15px] font-medium">{other.title}</span>
-                      <span className="block truncate text-[13px] text-fg-2">
-                        {other.artist}
-                        {other.duration > 0 && ` · ${formatTime(other.duration)}`}
-                        {d !== null && (
-                          <span className={cn("ml-1", Math.abs(d) <= 3 ? "text-accent-text" : "text-fg-3")}>
-                            ({d === 0 ? t.aside.sameLength : t.aside.lengthOff(d)})
-                          </span>
-                        )}
-                      </span>
+            {found.map((a) => (
+              <li key={a.track.id}>
+                <button
+                  type="button"
+                  disabled={!!busy}
+                  onClick={() => void pick(a.track)}
+                  aria-label={`${t.aside.replace}: ${a.track.title}`}
+                  className="flex w-full items-center gap-3 rounded-xl px-2 py-1.5 text-left hover:bg-surface-3 disabled:opacity-60"
+                >
+                  <Artwork src={a.track.thumb} className="size-11 shrink-0 rounded-[10px]" />
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-[15px] font-medium">{a.track.title}</span>
+                    <span className="block truncate text-[13px] text-fg-2">
+                      {a.track.artist}
+                      {a.track.duration > 0 && ` · ${formatTime(a.track.duration)}`}
                     </span>
-                    <span className="shrink-0 rounded-full bg-surface-3 px-3 py-1.5 text-xs font-medium">
-                      {busy === other.id ? "…" : t.aside.replace}
+                    <span className="mt-0.5 flex flex-wrap gap-1">
+                      {why(a).map((w) => (
+                        <span key={w} className="rounded-full bg-accent-soft px-1.5 text-[11px] leading-[18px] text-accent-text">
+                          {w}
+                        </span>
+                      ))}
                     </span>
-                  </button>
-                </li>
-              );
-            })}
+                  </span>
+                  <span className="shrink-0 rounded-full bg-surface-3 px-3 py-1.5 text-xs font-medium">
+                    {busy === a.track.id ? "…" : t.aside.replace}
+                  </span>
+                </button>
+              </li>
+            ))}
           </ul>
         )}
       </div>

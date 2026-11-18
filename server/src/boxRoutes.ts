@@ -75,14 +75,17 @@ export function registerBoxRoutes(app: FastifyInstance) {
     return { added: r.added.length, merged: r.merged, skipped: r.skipped };
   });
 
-  /** Another version of a track that won't play here: up to 5 YouTube results for its title and artist (see `pickAlternatives`). */
+  /**
+   * Other versions of a track that won't play here: up to 5 YouTube results with an alike title, each saying why it
+   * is offered (see `pickAlternatives`).
+   */
   app.get("/api/box/:id/alternatives", async (req) => {
     const id = youtubeId(req.params);
     const original = await box.findTrack(id);
     if (!original) throw new HttpError(404, msg("trackNotFound", { id }));
-    // Upload titles carry noise search doesn't match ("13. … 【… OST】 【HQ 1080p】"): drop track numbers and brackets,
-    // then try the title with the artist, else the title alone.
-    const title = original.title.replace(/^\s*\d+\s*[.)-]\s*/, "").replace(/【[^】]*】|\[[^\]]*\]/g, " ").replace(/\s+/g, " ").trim() || original.title;
+    // Upload titles carry noise search doesn't match ("13. … 【… OST】 【HQ 1080p】"): search by the title's words,
+    // with the artist, else alone.
+    const title = box.titleWords(original.title).join(" ") || original.title;
     const lang = langOf(req);
     const annotate = await box.annotator();
     for (const q of [`${title} ${original.artist}`.trim(), title]) {
@@ -90,10 +93,10 @@ export function registerBoxRoutes(app: FastifyInstance) {
       const found = [...songs, ...videos].filter((t, i, all) => VIDEO_ID.test(t.id) && all.findIndex((x) => x.id === t.id) === i);
       // The account (when connected) tells which results won't play here either; without it the box's marks do.
       const checked = await checkVideos(found.map((t) => t.id)).catch(() => new Map<string, Unplayable | null>());
-      const tracks = box.pickAlternatives(original, found.map(annotate), (t) => !!t.blocked || !!checked.get(t.id));
-      if (tracks.length) return { tracks };
+      const alternatives = box.pickAlternatives(original, found.map(annotate), (t) => !!t.blocked || !!checked.get(t.id));
+      if (alternatives.length) return { alternatives };
     }
-    return { tracks: [] };
+    return { alternatives: [] };
   });
 
   /** `{ track }`: puts it in place of track `id` in the box, playlists, favorites and bundles (see `box.replaceEntry`). */

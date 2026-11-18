@@ -302,16 +302,66 @@ export async function replaceTrack(oldId: string, track: Track): Promise<void> {
 }
 
 /**
- * Candidates to replace `original` with: search results that are another video and play here (`blocked` says when
- * one doesn't), closest in length first (search order among equals), at most `count`.
+ * A title as words to compare: without a leading track number, bracketed notes (【…】, […]) and upload noise
+ * (OST, HQ, 1080p, official…), lowercased. Also what a search for other versions asks for (joined).
  */
-export function pickAlternatives(original: Track, found: Track[], blocked: (t: Track) => boolean, count = 5): Track[] {
+export function titleWords(title: string): string[] {
+  const clean = title
+    .normalize("NFKC")
+    .toLocaleLowerCase()
+    .replace(/^\s*\d+\s*[.)-]\s*/, "")
+    .replace(/【[^】]*】|\[[^\]]*\]/g, " ");
+  return (clean.match(/[\p{L}\p{N}]+/gu) ?? []).filter((w) => !NOISE.has(w));
+}
+const NOISE = new Set(["ost", "official", "audio", "video", "mv", "hq", "hd", "1080p", "720p", "lyrics", "lyric", "full", "version", "ver", "the", "a"]);
+
+/** Character pairs of the words run together, for titles written without spaces (Japanese, Chinese). */
+const pairs = (words: string[]) => {
+  const s = words.join("");
+  return new Set(Array.from({ length: Math.max(0, s.length - 1) }, (_, i) => s.slice(i, i + 2)));
+};
+
+/** How alike two titles are, 0–1: the share of the original's words the other has, or of its character pairs (Dice). */
+export function titleLikeness(original: string, other: string): number {
+  const a = titleWords(original);
+  const b = new Set(titleWords(other));
+  if (!a.length || !b.size) return 0;
+  const words = a.filter((w) => b.has(w)).length / a.length;
+  const pa = pairs(a);
+  const pb = pairs([...b]);
+  const shared = [...pa].filter((p) => pb.has(p)).length;
+  const dice = pa.size + pb.size ? (2 * shared) / (pa.size + pb.size) : 0;
+  return Math.max(words, dice);
+}
+
+/** Below this a search result is another song, not another version (Road Taken → "Good Luck, Babe!"). */
+export const LIKE_ENOUGH = 0.6;
+
+export interface Alternative {
+  track: Track;
+  /** Why it is offered: the same title (bar track numbers and notes), the same artist (channel). */
+  sameTitle: boolean;
+  sameArtist: boolean;
+}
+
+const artistKey = (a: string) => a.normalize("NFKC").toLocaleLowerCase().replace(/\s*-\s*topic$/, "").replace(/[^\p{L}\p{N}]+/gu, "");
+
+/**
+ * Other versions of `original`: search results that are another video, play here (`blocked` says when one doesn't)
+ * and have a title alike enough, closest in length first (search order among equals), at most `count`.
+ */
+export function pickAlternatives(original: Track, found: Track[], blocked: (t: Track) => boolean, count = 5): Alternative[] {
+  const title = titleWords(original.title).join(" ");
+  const artist = artistKey(original.artist);
   return found
-    .filter((t) => t.id !== original.id && !blocked(t))
+    .filter((t) => t.id !== original.id && !blocked(t) && titleLikeness(original.title, t.title) >= LIKE_ENOUGH)
     .map((t, i) => ({ t, i, off: original.duration && t.duration ? Math.abs(t.duration - original.duration) : Number.MAX_SAFE_INTEGER }))
     .sort((a, b) => a.off - b.off || a.i - b.i)
     .slice(0, count)
-    .map(({ t }) => t);
+    .map(({ t }) => {
+      const other = artistKey(t.artist);
+      return { track: t, sameTitle: titleWords(t.title).join(" ") === title, sameArtist: !!artist && !!other && (other.includes(artist) || artist.includes(other)) };
+    });
 }
 
 /** A track by ID from the box, the local folders or the library, without response-only flags. */

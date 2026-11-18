@@ -36,6 +36,13 @@ export interface BoxItem {
   blocked?: { reason: Unplayable; at: number };
 }
 
+/** Another version of a track that won't play here, and why it is offered. */
+export interface Alternative {
+  track: Track;
+  sameTitle: boolean;
+  sameArtist: boolean;
+}
+
 export interface BoxQuery {
   /** "blocked": only the tracks put aside because they won't play here. */
   filter?: "untagged" | "blocked";
@@ -274,9 +281,9 @@ export const server = {
     request<{ sources: (Omit<BoxSource, "at"> & { count: number })[]; total: number; aside: Partial<Record<Unplayable, number>> }>(
       "/api/box/sources",
     ),
-  /** Up to 5 other versions of a track that won't play here, closest in length first. */
+  /** Up to 5 other versions of a track that won't play here (alike titles only), closest in length first, with why. */
   alternatives: (id: string, signal?: AbortSignal) =>
-    request<{ tracks: Track[] }>(`/api/box/${id}/alternatives`, { signal }).then((r) => r.tracks),
+    request<{ alternatives: Alternative[] }>(`/api/box/${id}/alternatives`, { signal }).then((r) => r.alternatives),
   /** Puts `track` in place of `id` in the song box, playlists, favorites and bundles. */
   replaceTrack: (id: string, track: Track) =>
     request<{ track: Track; rows: number }>(`/api/box/${id}/replace`, { method: "POST", json: { track } }),

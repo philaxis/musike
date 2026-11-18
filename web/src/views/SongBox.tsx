@@ -57,7 +57,8 @@ export default function SongBox() {
 
   const items = page?.items ?? [];
   const tracks: Track[] = useMemo(() => (page?.items ?? []).map((it) => it.track), [page]);
-  const sel = useListSelection(tracks, !isTvMode());
+  // Tracks put aside won't play: no picking there, only 「다른 판 찾기」 per row.
+  const sel = useListSelection(tracks, !isTvMode() && !aside);
 
   // Sources and how many tracks are put aside (for the chips), again after a track was replaced.
   useEffect(() => {
@@ -194,21 +195,25 @@ export default function SongBox() {
         />
       ) : (
         <div onPointerDownCapture={sel.activate}>
-          <SelectionBar
-            chosen={chosen}
-            all={tracks}
-            allSelected={allSelected}
-            onToggleAll={allSelected ? sel.clear : sel.selectAll}
-            onClear={sel.clear}
-            selecting={sel.mode}
-            label={
-              chosen.length ? (
-                <SelectedCount n={chosen.length} total={page.total} />
-              ) : (
-                <Short phone={t.songBox.count(page.total)} wide={`${t.selection.selectAll} · ${t.songBox.count(page.total)}`} />
-              )
-            }
-          />
+          {aside ? (
+            <p className="border-b border-line px-4 py-2.5 text-sm text-fg-2 md:px-6">{t.songBox.count(page.total)}</p>
+          ) : (
+            <SelectionBar
+              chosen={chosen}
+              all={tracks}
+              allSelected={allSelected}
+              onToggleAll={allSelected ? sel.clear : sel.selectAll}
+              onClear={sel.clear}
+              selecting={sel.mode}
+              label={
+                chosen.length ? (
+                  <SelectedCount n={chosen.length} total={page.total} />
+                ) : (
+                  <Short phone={t.songBox.count(page.total)} wide={`${t.selection.selectAll} · ${t.songBox.count(page.total)}`} />
+                )
+              }
+            />
+          )}
           <ul className="mt-2 flex flex-col px-2 md:px-3">
             {items.map((it, i) => (
               <li key={it.track.id}>
@@ -216,7 +221,7 @@ export default function SongBox() {
                   track={it.track}
                   selected={sel.has(it.track.id)}
                   onToggle={(e) => sel.toggle(i, e.shiftKey)}
-                  onPlay={() => playList(tracks, i, 0, true)}
+                  onPlay={() => (aside ? useUi.getState().openAlternatives(it.track) : playList(tracks, i, 0, true))}
                   menu={() => menuFor(i)}
                   drag={() => (sel.has(it.track.id) ? chosen : [it.track])}
                   row={i}

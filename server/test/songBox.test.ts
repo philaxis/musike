@@ -240,11 +240,29 @@ describe("tracks that won't play", () => {
   });
 
   it("picks other versions closest in length, leaving out the same video and those that won't play", () => {
-    const t = (id: string, duration: number) => ({ ...track(id), duration });
+    const t = (id: string, duration: number, title = "Uncle Skunk", artist = "Guthrie Govan") => ({ ...track(id, title), artist, duration });
     const original = t(vid(0), 200);
     const found = [t(vid(0), 200), t(vid(1), 260), t(vid(2), 203), t(vid(3), 199), t(vid(4), 200), t(vid(5), 0), t(vid(6), 201), t(vid(7), 150), t(vid(8), 200)];
     const picked = box.pickAlternatives(original, found, (x) => x.id === vid(8));
-    assert.deepEqual(picked.map((x) => x.id), [vid(4), vid(3), vid(6), vid(2), vid(7)]);
+    assert.deepEqual(picked.map((x) => x.track.id), [vid(4), vid(3), vid(6), vid(2), vid(7)]);
+    assert.deepEqual([picked[0].sameTitle, picked[0].sameArtist], [true, true]);
+  });
+
+  it("offers only results with an alike title, and says why", () => {
+    const t = (id: string, title: string, artist: string, duration: number) => ({ ...track(id, title), artist, duration });
+    const original = t(vid(0), "13. Road Taken (Calm/Roar) ~【Fire Emblem Fates OST: Map Themes Mixed】 【HQ 1080p】", "Loo Zhong Han", 323);
+    const found = [
+      t(vid(1), "Chappell Roan - Good Luck, Babe! (Official Lyric Video)", "Chappell Roan", 219),
+      t(vid(2), "Fire Emblem Fates - Alight (Calm/Storm Mashup)", "Superbird", 336),
+      t(vid(3), "Road Taken (Calm/Roar)", "Fire Emblem - Topic", 320),
+      t(vid(4), "Fire Emblem Fates OST - Road Taken (Calm)", "Loo Zhong Han", 300),
+    ];
+    const picked = box.pickAlternatives(original, found, () => false);
+    assert.deepEqual(picked.map((x) => x.track.id), [vid(3), vid(4)]);
+    assert.deepEqual(picked.map((x) => [x.sameTitle, x.sameArtist]), [[true, false], [false, true]]);
+    assert.deepEqual(box.titleWords(original.title), ["road", "taken", "calm", "roar"]);
+    assert.ok(box.titleLikeness("真夏の果実", "真夏の果実 (2020 Remaster)") >= box.LIKE_ENOUGH, "titles without spaces");
+    assert.ok(box.titleLikeness("Dream of the Return", "Dream of the Return") === 1);
   });
 
   it("replaces a track with another version: sources, tags and playlist rows stay, the old ID stays as `was`", async () => {
