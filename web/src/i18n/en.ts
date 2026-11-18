@@ -67,6 +67,18 @@ export const en = {
     startBody: "Find any song or music video on YouTube. It plays as audio or video, with no ads.",
     seeAll: "See all",
     yourFavorites: "Your favorites",
+    resume: "Pick up where you left off",
+    resumeAt: (time: string) => `from ${time}`,
+    sunToday: "☀ Today's likes",
+    sunMore: "See them all",
+    sunHint: "Like it? ☀",
+    sunHintSub: "The ☀ button by Now playing",
+    mixes: "Today's mixes",
+    daily: "New every day",
+    albums: "Albums to take out today",
+    albumsSub: "New every day · not heard for a while",
+    yearAgo: "A year ago",
+    yearAgoSub: (from: string, to: string) => `${from} – ${to}`,
   },
 
   library: {
@@ -75,6 +87,15 @@ export const en = {
     create: "Create",
     playlistSub: (n: number) => `Playlist · ${count(n, "track", "tracks")}`,
     noPlaylists: "You don't have any playlists yet. Create one here or use any track's menu to start one.",
+    recentSub: "In the order you played them",
+    count: (n: number) => String(n),
+    albums: "Albums",
+    albumSub: (artist: string, n: number) => (artist ? `${artist} · ${count(n, "track", "tracks")}` : count(n, "track", "tracks")),
+    shelfIntro: (n: number) => `${count(n, "album", "albums")} · heard lately first, then by name`,
+    albumsEmpty: "No albums yet",
+    albumsEmptyBody: "Once the taste analysis finds your tracks' albums, those with 3 or more of them show up here by genre.",
+    playlists: "Playlists",
+    newPlaylistSub: "Create",
   },
 
   collection: {
@@ -499,19 +520,20 @@ export const en = {
     failed: "Couldn't read this playlist. Check that it's public.",
   },
 
-  // Song box, tags, bundles, YouTube account
+  // All songs (once the song box), tags, bundles, YouTube account
   songBox: {
-    title: "Song box",
-    tileSub: "Every track brought in, with sources and tags",
+    title: "All songs",
     fromYoutube: "Brought in from YouTube",
+    fromYoutubeHint: "Tap one to see only its tracks in All songs.",
+    moreViews: "By source, put aside, changes",
     all: "All",
     untagged: "Not sorted",
     bySource: "By source",
     byTag: "By tag",
     count: (n: number) => count(n, "track", "tracks"),
     loadMore: "Load more",
-    failed: "Couldn't open the song box",
-    empty: "The song box is empty",
+    failed: "Couldn't open All songs",
+    empty: "No songs yet",
     emptyBody: "Paste a YouTube playlist link into Search, or connect your YouTube account in Settings.",
     emptyFiltered: "Nothing here matches",
     noTags: "No tags yet",
@@ -520,11 +542,11 @@ export const en = {
     fromLocal: (name: string) => `My folder · ${name}`,
     fromLink: "Added by hand",
     fromSearch: "Search",
-    openBox: "Open the song box",
+    openBox: "Open All songs",
 
-    importAction: (n: number) => `Bring into the song box (${count(n, "track", "tracks")})`,
+    importAction: (n: number) => `Bring into All songs (${count(n, "track", "tracks")})`,
     imported: (name: string, added: number, merged: number) =>
-      (added ? `"${name}": ${count(added, "track", "tracks")} into the song box` : `Every track of "${name}" is already in the song box`) +
+      (added ? `"${name}": ${count(added, "track", "tracks")} into All songs` : `Every track of "${name}" is already in All songs`) +
       (merged ? ` (${merged} already there got this source)` : ""),
 
     tags: "Tags",
@@ -552,7 +574,7 @@ export const en = {
     connected: "Connected",
     connect: "Connect",
     reconnect: "Connect again",
-    googleBody: "New tracks from your YouTube playlists and liked videos come into the song box every day. Read-only.",
+    googleBody: "New tracks from your YouTube playlists and liked videos come into All songs every day. Read-only.",
     noClient: "The server has no Google sign-in settings yet, so it can't connect.",
     revoked: "The connection has ended. Connect again.",
     myPlaylists: "My YouTube playlists",
@@ -561,7 +583,7 @@ export const en = {
     playlistsFailed: "Couldn't read your playlists",
     syncNow: "Bring in now",
     syncing: "Bringing in…",
-    synced: (added: number) => (added ? `${count(added, "new track", "new tracks")} in the song box` : "No new tracks"),
+    synced: (added: number) => (added ? `${count(added, "new track", "new tracks")} in All songs` : "No new tracks"),
     disconnect: "Disconnect",
     disconnected: "YouTube account disconnected",
     connectedToast: "YouTube account connected",
@@ -632,7 +654,6 @@ export const en = {
   // 「My record」: listening stats, today's likes ☀ and one track's record.
   stats: {
     title: "My record",
-    tileSub: "Time listened, most played, calendar",
     period4w: "4 weeks",
     period6m: "6 months",
     periodAll: "All time",
@@ -712,15 +733,13 @@ export const en = {
   // Genres and sound groups of the taste analysis, automatic playlists, the alike-tracks radio.
   taste: {
     genres: "Genres",
-    genresSub: (n: number) => `${count(n, "genre", "genres")} · by sound`,
     genreSub: (tracks: number, groups: number) => `${count(tracks, "track", "tracks")} · ${count(groups, "sound group", "sound groups")}`,
-    genresIntro: "Your song box by genre, then by how the music sounds.",
+    genresIntro: "Your tracks by genre, then by how the music sounds.",
     noGroup: "No sound group",
     group: "Sound group",
     groupSub: (n: number, artists: string[]) => [count(n, "track", "tracks"), artists.join(", ")].filter(Boolean).join(" · "),
     mixes: "Automatic playlists",
-    mixesSub: "Daily mixes and more, from what you play",
-    mixesIntro: "Made on the server from what you play, your favorites and the song box. They change every day.",
+    mixesIntro: "Made on the server from what you play, your favorites and all your songs. They change every day.",
     mixesEmpty: "No automatic playlists yet",
     mixesEmptyBody: "They appear once the taste analysis is there or you have played some tracks.",
     daily: (n: number) => `Daily Mix ${n}`,
@@ -743,9 +762,8 @@ export const en = {
     notAnalyzed: "This track hasn't been analysed yet, so there's no radio for it.",
     openFailed: "Couldn't open this",
     map: "Music map",
-    mapSub: (n: number) => (n ? `${n.toLocaleString()} tracks in 3D · find by words or sound` : "Tracks in 3D · find by words or sound"),
     mapMissing: "No music map yet",
-    mapMissingBody: "The taste analysis draws the map from the song box every morning. Come back after the next run.",
+    mapMissingBody: "The taste analysis draws the map from all your songs every morning. Come back after the next run.",
   },
 
   // Albums, composers and performances of the taste analysis: from a track to where it belongs.
@@ -771,7 +789,7 @@ export const en = {
     emptyBody: "They show up once the taste analysis finds who wrote your tracks.",
   },
 
-  // The video ledger: what changed about the song box's videos on YouTube (song box 「Changes」, 「Track record」).
+  // The video ledger: what changed about my tracks' videos on YouTube (All songs 「Changes」, 「Track record」).
   ledger: {
     chip: "Changes",
     body: "What changed about your tracks on YouTube: renamed, taken down, made private, blocked, swapped for another video. Your own titles stay as they are.",
@@ -781,7 +799,7 @@ export const en = {
     /** What a video is now, for the counts. */
     state: { region: "Blocked here", gone: "Deleted", private: "Private", premium: "Premium only", age: "Age-restricted" },
     empty: "Nothing has changed yet",
-    emptyBody: "Every account sync checks each track of the song box; what changed on YouTube shows up here.",
+    emptyBody: "Every account sync checks each of your YouTube tracks; what changed on YouTube shows up here.",
     failed: "Couldn't load the changes",
     loadMore: "More",
     title: (from: string, to: string) => `Renamed: ${from} → ${to}`,
@@ -793,6 +811,30 @@ export const en = {
     history: "On YouTube",
     noChanges: "Nothing changed on YouTube",
     youtubeTitle: (title: string) => `YouTube title: ${title}`,
+  },
+
+  // 「☀ Today's likes」 collected
+  sun: {
+    title: "☀ Today's likes",
+    collection: "☀ All my day likes",
+    recent: "Lately",
+    all: "All time",
+    calendar: "Calendar",
+    ago: "This time of year",
+    recentIntro: "The last 28 days, most ☀ days first",
+    allIntro: "Ever since the start, most ☀ days first",
+    calendarIntro: "Each day shows its first ☀. Tap a day for its tracks.",
+    agoIntro: (span: number) => `☀ within ${span} days of today in earlier years`,
+    days: (n: number) => `☀ ${count(n, "day", "days")}`,
+    yearsAgo: (n: number) => (n === 1 ? "A year ago" : `${n} years ago`),
+    prevMonth: "Previous month",
+    nextMonth: "Next month",
+    empty: "No ☀ yet",
+    emptyBody: "When you like what's playing, tap ☀ next to it. Each day's likes gather here.",
+    recentEmpty: "No ☀ in the last 28 days",
+    agoEmpty: "Nothing from a year ago yet",
+    agoEmptyBody: "☀ keeps its date. From this time next year, what you liked around today shows up here.",
+    failed: "Couldn't load this",
   },
 };
 

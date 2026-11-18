@@ -1,134 +1,104 @@
-import { ChartBarIcon, DatabaseIcon, MapTrifoldIcon, PlusIcon, SparkleIcon, SquaresFourIcon, TrayIcon, YoutubeLogoIcon } from "@phosphor-icons/react";
-import { useEffect, useState } from "react";
+import {
+  ChartBarIcon,
+  ClockCounterClockwiseIcon,
+  DatabaseIcon,
+  HeartIcon,
+  MapTrifoldIcon,
+  MusicNotesIcon,
+  PlusIcon,
+  SparkleIcon,
+  SunIcon,
+  type Icon,
+} from "@phosphor-icons/react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Link, useNavigate } from "react-router";
-import { Cover, type CoverKind } from "../components/Cover";
+import { MyAlbumTile, TILE, TileRow } from "../components/AlbumTiles";
+import { Cover } from "../components/Cover";
+import { NamePlaylistDialog } from "../components/Dialogs";
+import { IconButton } from "../components/IconButton";
+import { LocalRoots } from "../components/LocalRoots";
 import { menuTrigger, NO_CALLOUT } from "../components/menuTrigger";
 import { favoritesMenu, historyMenu, playlistMenu } from "../components/menus";
-import { NamePlaylistDialog } from "../components/Dialogs";
-import { LocalRoots } from "../components/LocalRoots";
-import { PageHeader } from "../components/Page";
+import { MoreLink, PageHeader, Section } from "../components/Page";
+import { TrackCard } from "../components/TasteCards";
+import { useRemote } from "../hooks/useRemote";
 import { useT } from "../i18n";
 import { capabilities } from "../lib/api";
+import { cn } from "../lib/format";
 import { paths } from "../lib/routes";
-import { server, type BoxSource } from "../lib/server";
-import type { Track } from "../lib/types";
-import { IconButton } from "../components/IconButton";
+import { server } from "../lib/server";
 import { useLibrary } from "../stores/library";
 import { useUi, type MenuTarget } from "../stores/ui";
 import { isTvMode } from "../tv/tvMode";
 
-const COVER = "size-16 shrink-0 rounded-[12px] md:aspect-square md:size-auto md:w-full md:rounded-[14px] md:shadow-[0_12px_32px_rgb(0_0_0/0.3)]";
-/** Tiles that are a place rather than a list of tracks: an icon instead of a cover. */
-const ICONS = { box: TrayIcon, stats: ChartBarIcon, genres: SquaresFourIcon, mixes: SparkleIcon, map: MapTrifoldIcon };
+/** Albums per shelf; the genre's page has all of them. */
+const SHELF = 12;
 
-function Entry({
-  to,
-  name,
-  kind,
-  tracks,
-  sub,
-  menu,
-}: {
-  to: string;
-  name: string;
-  kind: CoverKind | keyof typeof ICONS;
-  tracks: Track[];
-  sub: string;
-  /** Right-click and long press: play, queue or edit it whole. */
-  menu?: () => MenuTarget;
-}) {
-  const Icon = kind in ICONS ? ICONS[kind as keyof typeof ICONS] : null;
+/** A big way in at the top: an icon, a name and a count. */
+function QuickTile({ to, icon, name, sub, tint, menu }: { to: string; icon: ReactNode; name: string; sub: string; tint: string; menu?: () => MenuTarget }) {
   return (
-    <li>
-      <Link
-        to={to}
-        {...(menu && menuTrigger(menu))}
-        draggable={false}
-        className={`group flex items-center gap-3 rounded-[16px] p-2 transition-colors hover:bg-surface-2 md:flex-col md:items-stretch md:gap-3 md:p-3 ${NO_CALLOUT}`}
-      >
-        {Icon ? (
-          <span className={`${COVER} grid place-items-center ${kind === "stats" ? "bg-surface-4 text-fg" : "bg-accent-soft text-accent-text"}`}>
-            <Icon size={26} />
-          </span>
-        ) : (
-          <Cover kind={kind as CoverKind} tracks={tracks} iconSize={26} className={COVER} />
-        )}
-        <span className="min-w-0">
-          <span className="block truncate font-medium">{name}</span>
-          <span className="block truncate text-sm text-fg-2">{sub}</span>
-        </span>
-      </Link>
-    </li>
+    <Link
+      to={to}
+      {...(menu && menuTrigger(menu))}
+      draggable={false}
+      className={cn(
+        "flex min-w-0 flex-col gap-2 rounded-[16px] bg-surface-2 p-3 ring-1 ring-line transition-colors hover:bg-surface-3 sm:flex-row sm:items-center sm:gap-3",
+        NO_CALLOUT,
+      )}
+    >
+      <span className={cn("grid size-10 shrink-0 place-items-center rounded-[12px]", tint)}>{icon}</span>
+      <span className="min-w-0">
+        <span className="block truncate text-sm font-semibold">{name}</span>
+        <span className="block truncate text-xs text-fg-2">{sub}</span>
+      </span>
+    </Link>
   );
 }
 
-type SourceCount = Omit<BoxSource, "at"> & { count: number };
-
-/** Where the song box's YouTube tracks came from, each a way into the box filtered to it. Biggest first. */
-function YoutubeSources({ sources }: { sources: SourceCount[] }) {
-  const t = useT();
-  const yt = sources.filter((s) => s.kind !== "local").sort((a, b) => b.count - a.count);
-  if (!yt.length) return null;
+/** A small way to a place at the bottom (map, record, ☀). */
+function SmallLink({ to, icon: Icon, children }: { to: string; icon: Icon; children: ReactNode }) {
   return (
-    <section className="px-2 pt-8 md:px-4">
-      <h2 className="px-2 pb-2 text-lg font-bold md:px-2">{t.songBox.fromYoutube}</h2>
-      <ul className="grid grid-cols-1 gap-1 sm:grid-cols-2 md:gap-2 lg:grid-cols-3 2xl:grid-cols-5">
-        {yt.map((s) => (
-          <li key={`${s.kind}:${s.ref}`}>
-            <Link
-              to={paths.box({ source: `${s.kind}:${s.ref}` })}
-              className="flex items-center gap-3 rounded-[14px] p-2 transition-colors hover:bg-surface-2"
-            >
-              <span className="grid size-12 shrink-0 place-items-center rounded-[10px] bg-[#ff4e4522] text-[#ff4e45]">
-                <YoutubeLogoIcon size={22} weight="fill" />
-              </span>
-              <span className="min-w-0">
-                <span className="block truncate font-medium">{s.kind === "youtube-liked" ? t.songBox.fromLiked : s.name || t.songBox.fromLink}</span>
-                <span className="block truncate text-sm text-fg-2">{t.songBox.count(s.count)}</span>
-              </span>
-            </Link>
-          </li>
-        ))}
-      </ul>
-    </section>
+    <Link to={to} className="flex h-10 items-center gap-2 rounded-full bg-surface-2 px-4 text-sm font-medium text-fg-2 ring-1 ring-line hover:text-fg">
+      <Icon size={18} />
+      {children}
+    </Link>
   );
 }
 
+/**
+ * The Library: where my music stays put (Home is what changes every day). Favorites, recently played and all songs;
+ * genres; albums with 3 or more of my tracks, one shelf per genre; my own playlists; small links to the map, the
+ * record and the ☀ collection.
+ */
 export default function Library() {
-  const { favorites, playlists, history, createPlaylist } = useLibrary();
+  const { favorites, playlists, createPlaylist } = useLibrary();
   const [creating, setCreating] = useState(false);
   const setSettingsOpen = useUi((s) => s.setSettingsOpen);
   const navigate = useNavigate();
   const t = useT();
-  const showBox = capabilities.serverLibrary && !isTvMode();
-  const [sources, setSources] = useState<SourceCount[] | null>(null);
-  const [boxTotal, setBoxTotal] = useState(0);
-  // Genres show once the taste analysis is there; automatic playlists work from listening alone.
-  const [genres, setGenres] = useState(0);
-  useEffect(() => {
-    if (!capabilities.serverLibrary) return;
-    server.tasteGenres().then(
-      (r) => setGenres(r.genres.length),
-      () => setGenres(0),
-    );
-  }, []);
-  // The 3D music map, once the analysis has drawn it. Not on TV: it wants a mouse or a finger.
-  const [mapSongs, setMapSongs] = useState<number | null>(null);
-  useEffect(() => {
-    if (!showBox) return;
-    server.musicMap().then(
-      (r) => setMapSongs(r.ready ? r.songs : null),
-      () => setMapSongs(null),
-    );
-  }, [showBox]);
+  const tv = isTvMode();
+  const own = capabilities.serverLibrary;
+  // Sorting, records and the map are for the phone and the computer: TV mode only plays.
+  const showBox = own && !tv;
+  const genres = useRemote(`taste-genres${own ? "" : ":none"}`, (signal) => (own ? server.tasteGenres(signal) : Promise.resolve({ ready: false, genres: [] })));
+  const shelves = useRemote(`album-shelves${own ? "" : ":none"}`, (signal) =>
+    own ? server.albumShelves({ limit: SHELF }, signal) : Promise.resolve({ ready: false, total: 0, shelves: [] }),
+  );
+  const [boxTotal, setBoxTotal] = useState<number | null>(null);
   useEffect(() => {
     if (!showBox) return;
     server.boxSources().then(
-      (r) => {
-        setSources(r.sources);
-        setBoxTotal(r.total);
-      },
-      () => setSources([]),
+      (r) => setBoxTotal(r.total),
+      () => setBoxTotal(null),
+    );
+  }, [showBox]);
+  // The 3D music map, once the analysis has drawn it.
+  const [map, setMap] = useState(false);
+  useEffect(() => {
+    if (!showBox) return;
+    server.musicMap().then(
+      (r) => setMap(r.ready),
+      () => setMap(false),
     );
   }, [showBox]);
 
@@ -138,80 +108,144 @@ export default function Library() {
         title={t.nav.library}
         // TV mode only plays: no making playlists or importing backups there.
         actions={
-          !isTvMode() && (
+          !tv && (
             <>
-            <IconButton label={t.library.backup} onClick={() => setSettingsOpen(true)}>
-              <DatabaseIcon size={20} />
-            </IconButton>
-            <button
-              type="button"
-              onClick={() => setCreating(true)}
-              className="flex h-10 items-center gap-1.5 rounded-full bg-accent pr-4 pl-3 text-sm font-semibold text-accent-ink transition-transform active:scale-[0.97]"
-            >
-              <PlusIcon size={18} weight="bold" /> <span className="hidden sm:inline">{t.nav.newPlaylist}</span>
-              <span className="sm:hidden">{t.library.newShort}</span>
-            </button>
+              <IconButton label={t.library.backup} onClick={() => setSettingsOpen(true)}>
+                <DatabaseIcon size={20} />
+              </IconButton>
+              <button
+                type="button"
+                onClick={() => setCreating(true)}
+                className="flex h-10 items-center gap-1.5 rounded-full bg-accent pr-4 pl-3 text-sm font-semibold text-accent-ink transition-transform active:scale-[0.97]"
+              >
+                <PlusIcon size={18} weight="bold" /> <span className="hidden sm:inline">{t.nav.newPlaylist}</span>
+                <span className="sm:hidden">{t.library.newShort}</span>
+              </button>
             </>
           )
         }
       />
 
-      <ul className="grid grid-cols-1 gap-1 px-2 pt-2 md:grid-cols-3 md:gap-2 md:px-4 lg:grid-cols-4 2xl:grid-cols-6">
-        <Entry
-          to={paths.favorites}
-          name={t.nav.favorites}
-          kind="favorites"
-          tracks={favorites}
-          sub={t.common.tracks(favorites.length)}
-          menu={favoritesMenu}
-        />
-        <Entry
-          to={paths.history}
-          name={t.nav.recentlyPlayed}
-          kind="history"
-          tracks={history}
-          sub={t.common.tracks(history.length)}
-          menu={historyMenu}
-        />
-        {/* The song box is for sorting, which TV mode leaves to the phone and Hermes. */}
-        {showBox && (
-          <Entry
-            to={paths.box()}
-            name={t.songBox.title}
-            kind="box"
-            tracks={[]}
-            sub={boxTotal ? `${t.songBox.count(boxTotal)} · ${t.songBox.tileSub}` : t.songBox.tileSub}
+      <div className="flex flex-col gap-9 pt-2">
+        <div className={cn("grid gap-2 px-4 md:px-6", showBox ? "grid-cols-3" : "grid-cols-2", "lg:max-w-4xl")}>
+          <QuickTile
+            to={paths.favorites}
+            icon={<HeartIcon size={22} weight="fill" />}
+            tint="bg-accent text-accent-ink"
+            name={t.nav.favorites}
+            sub={t.common.tracks(favorites.length)}
+            menu={favoritesMenu}
           />
-        )}
-        {/* Stats too: TV mode only plays. */}
-        {showBox && <Entry to={paths.stats} name={t.stats.title} kind="stats" tracks={[]} sub={t.stats.tileSub} />}
-        {genres > 0 && <Entry to={paths.tasteGenres} name={t.taste.genres} kind="genres" tracks={[]} sub={t.taste.genresSub(genres)} />}
-        {mapSongs !== null && <Entry to={paths.musicMap} name={t.taste.map} kind="map" tracks={[]} sub={t.taste.mapSub(mapSongs)} />}
-        {capabilities.serverLibrary && (
-          <Entry to={paths.mixes} name={t.taste.mixes} kind="mixes" tracks={[]} sub={t.taste.mixesSub} />
-        )}
-        {playlists.map((p) => (
-          <Entry
-            key={p.id}
-            to={paths.playlist(p.id)}
-            name={p.name}
-            kind="playlist"
-            tracks={p.tracks}
-            sub={t.library.playlistSub(p.tracks.length)}
-            menu={() => playlistMenu(p)}
+          <QuickTile
+            to={paths.history}
+            icon={<ClockCounterClockwiseIcon size={22} />}
+            tint="bg-surface-4 text-fg"
+            name={t.nav.recentlyPlayed}
+            sub={t.library.recentSub}
+            menu={historyMenu}
           />
-        ))}
-      </ul>
+          {showBox && (
+            <QuickTile
+              to={paths.box()}
+              icon={<MusicNotesIcon size={22} />}
+              tint="bg-accent-soft text-accent-text"
+              name={t.songBox.title}
+              sub={boxTotal === null ? "\u00a0" : t.songBox.count(boxTotal)}
+            />
+          )}
+        </div>
 
-      {playlists.length === 0 && (
-        <p className="px-4 pt-6 text-sm text-fg-2 md:px-6">
-          {t.library.noPlaylists}
-        </p>
-      )}
+        {genres.status === "ok" && genres.data.genres.length > 0 && (
+          <Section title={t.taste.genres} sub={t.library.count(genres.data.genres.length)} action={<MoreLink to={paths.tasteGenres}>{t.home.seeAll}</MoreLink>}>
+            <TileRow>
+              {genres.data.genres.map((g) => (
+                <TrackCard key={g.genre} className={TILE} to={paths.tasteGenre(g.genre)} title={g.genre} sub={t.taste.genreSub(g.count, g.groups)} tracks={g.tracks} />
+              ))}
+            </TileRow>
+          </Section>
+        )}
 
-      {showBox && sources && <YoutubeSources sources={sources} />}
+        {shelves.status === "ok" && shelves.data.total > 0 && (
+          <Section title={t.library.albums} sub={t.library.count(shelves.data.total)}>
+            <div className="flex flex-col gap-6">
+              {shelves.data.shelves.map((s) => (
+                <div key={s.genre} className="flex flex-col gap-2.5">
+                  <div className="flex items-end justify-between gap-4 px-4 md:px-6">
+                    <h3 className="min-w-0 truncate font-semibold text-fg-2">{s.genre}</h3>
+                    <MoreLink to={paths.albumShelf(s.genre)}>{t.library.count(s.count)}</MoreLink>
+                  </div>
+                  <TileRow>
+                    {s.albums.map((a) => (
+                      <MyAlbumTile key={a.key} album={a} className={TILE} />
+                    ))}
+                  </TileRow>
+                </div>
+              ))}
+            </div>
+          </Section>
+        )}
 
-      {capabilities.serverLibrary && <LocalRoots />}
+        <Section title={t.library.playlists}>
+          {tv && !playlists.length ? (
+            <p className="px-4 text-sm text-fg-2 md:px-6">{t.library.noPlaylists}</p>
+          ) : (
+            <TileRow>
+              {!tv && (
+                <li className={TILE}>
+                  <button type="button" onClick={() => setCreating(true)} className="flex w-full flex-col gap-2 text-left">
+                    <span className="grid aspect-square w-full place-items-center rounded-[14px] border border-dashed border-line-strong text-fg-2 transition-colors hover:text-fg">
+                      <PlusIcon size={36} />
+                    </span>
+                    <span className="min-w-0">
+                      <span className="block truncate text-sm font-semibold">{t.nav.newPlaylist}</span>
+                      <span className="block truncate text-xs text-fg-2">{t.library.newPlaylistSub}</span>
+                    </span>
+                  </button>
+                </li>
+              )}
+              {playlists.map((p) => (
+                <li key={p.id} className={TILE}>
+                  <Link to={paths.playlist(p.id)} {...menuTrigger(() => playlistMenu(p))} draggable={false} className={cn("group flex flex-col gap-2", NO_CALLOUT)}>
+                    <span className="block overflow-hidden rounded-[14px]">
+                      <Cover kind="playlist" tracks={p.tracks} className="aspect-square w-full transition-transform duration-300 ease-out-expo group-hover:scale-[1.04]" />
+                    </span>
+                    <span className="min-w-0">
+                      <span className="block truncate text-sm font-semibold">{p.name}</span>
+                      <span className="block truncate text-xs text-fg-2">{t.common.tracks(p.tracks.length)}</span>
+                    </span>
+                  </Link>
+                </li>
+              ))}
+            </TileRow>
+          )}
+        </Section>
+
+        {own && <LocalRoots />}
+
+        {own && (
+          <div className="flex flex-wrap gap-2 px-4 md:px-6">
+            {map && (
+              <SmallLink to={paths.musicMap} icon={MapTrifoldIcon}>
+                {t.taste.map}
+              </SmallLink>
+            )}
+            {showBox && (
+              <SmallLink to={paths.stats} icon={ChartBarIcon}>
+                {t.stats.title}
+              </SmallLink>
+            )}
+            <SmallLink to={paths.sun()} icon={SunIcon}>
+              {t.sun.collection}
+            </SmallLink>
+            {/* TV mode keeps the classic Home, so the automatic playlists stay reachable from here. */}
+            {tv && (
+              <SmallLink to={paths.mixes} icon={SparkleIcon}>
+                {t.taste.mixes}
+              </SmallLink>
+            )}
+          </div>
+        )}
+      </div>
 
       <NamePlaylistDialog
         open={creating}

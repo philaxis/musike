@@ -13,7 +13,7 @@ export const paths = {
   /** My music: a server folder's albums, and one album's tracks. */
   localRoot: (root: string) => `/library/local/${encodeURIComponent(root)}`,
   localAlbum: (root: string, key: string) => `/library/local/${encodeURIComponent(root)}/album?key=${encodeURIComponent(key)}`,
-  /** The song box, filtered: `filter=untagged`, `by=source|tag` (picking), `source=kind:ref`, `tag=…`. */
+  /** 「모든 곡」 (once 「곡 상자」), filtered: `filter=untagged|blocked|replaced|changes`, `by=source|tag` (picking), `source=kind:ref`, `tag=…`. */
   box: (query: Record<string, string> = {}) => {
     const q = new URLSearchParams(query).toString();
     return `/library/box${q ? `?${q}` : ""}`;
@@ -36,6 +36,13 @@ export const paths = {
   tasteRadio: (id: string) => `/library/radio/${id}`,
   /** Albums, composers and performances of the analysis: my tracks only. `genre` keeps the composer list to one genre. */
   workAlbum: (key: string) => `/library/albums/${encodeURIComponent(key)}`,
+  /** One genre's albums of my tracks (the Library's shelf, whole). */
+  albumShelf: (genre: string) => `/library/shelves/${encodeURIComponent(genre)}`,
+  /** 「오늘 좋음 ☀」 collected: `view=recent|all|calendar|ago`, the calendar's `month=YYYY-MM` and `day=YYYY-MM-DD`. */
+  sun: (query: Record<string, string> = {}) => {
+    const q = new URLSearchParams(query).toString();
+    return `/library/sun${q ? `?${q}` : ""}`;
+  },
   performance: (key: string) => `/library/performances/${encodeURIComponent(key)}`,
   composers: (genre?: string) => `/library/composers${genre ? `?genre=${encodeURIComponent(genre)}` : ""}`,
   composer: (name: string) => `/library/composers/${encodeURIComponent(name)}`,

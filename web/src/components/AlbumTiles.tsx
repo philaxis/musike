@@ -1,12 +1,14 @@
 import { DotsThreeIcon } from "@phosphor-icons/react";
+import type { ReactNode } from "react";
 import { Link } from "react-router";
 import { useT } from "../i18n";
 import { cn } from "../lib/format";
 import { paths } from "../lib/routes";
+import type { ShelfAlbum } from "../lib/server";
 import type { AlbumCard } from "../lib/types";
 import { Artwork } from "./Artwork";
 import { menuTrigger, NO_CALLOUT, openMenuFromButton } from "./menuTrigger";
-import { youtubeAlbumMenu } from "./menus";
+import { workAlbumMenu, youtubeAlbumMenu } from "./menus";
 
 /** An album cover with its title; opens the album. Right-click, long press or ⋯: play, queue or save it whole. */
 export function AlbumTile({ album, className }: { album: AlbumCard; className?: string }) {
@@ -72,5 +74,55 @@ export function AlbumGrid({ albums }: { albums: AlbumCard[] }) {
         </li>
       ))}
     </ul>
+  );
+}
+
+/** A horizontally scrolling row of tiles (`li`s of TILE width), the shelves of Home and the Library. */
+export function TileRow({ children, className }: { children: ReactNode; className?: string }) {
+  return (
+    <ul className={cn("no-scrollbar flex snap-x snap-mandatory scroll-px-4 gap-3 overflow-x-auto px-4 md:scroll-px-6 md:gap-4 md:px-6", className)}>
+      {children}
+    </ul>
+  );
+}
+
+/** Width of a tile in a TileRow. */
+export const TILE = "w-36 shrink-0 snap-start md:w-44";
+
+/** An album of my tracks (the analysis' album): opens its tracks. Right-click, long press or ⋯: play, queue or save it whole. */
+export function MyAlbumTile({ album, className }: { album: ShelfAlbum; className?: string }) {
+  const t = useT();
+  const menu = () => workAlbumMenu({ key: album.key, name: album.name, count: album.count }, album.cover.thumb);
+  return (
+    <li className={cn("group relative", className)}>
+      <Link
+        to={paths.workAlbum(album.key)}
+        state={{ name: album.name }}
+        {...menuTrigger(menu)}
+        draggable={false}
+        className={cn("flex flex-col gap-2", NO_CALLOUT)}
+      >
+        <span className="block overflow-hidden rounded-[14px]">
+          <Artwork
+            src={album.cover.art}
+            fallback={album.cover.thumb}
+            className="aspect-square w-full transition-transform duration-300 ease-out-expo group-hover:scale-[1.04]"
+          />
+        </span>
+        <span className="min-w-0">
+          <span className="block truncate text-sm font-semibold">{album.name}</span>
+          <span className="block truncate text-xs text-fg-2">{t.library.albumSub(album.artists[0] ?? "", album.count)}</span>
+        </span>
+      </Link>
+      <button
+        type="button"
+        onClick={(e) => openMenuFromButton(e, menu())}
+        aria-label={t.basics.menuFor(album.name)}
+        title={t.trackList.more}
+        className="absolute top-1.5 right-1.5 grid size-9 place-items-center rounded-full bg-black/45 text-white backdrop-blur-sm transition-opacity hover:bg-black/65 focus-visible:opacity-100 md:opacity-0 md:group-hover:opacity-100 pointer-coarse:opacity-100"
+      >
+        <DotsThreeIcon size={20} weight="bold" />
+      </button>
+    </li>
   );
 }

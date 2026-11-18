@@ -46,6 +46,8 @@ import TasteGenres from "./views/TasteGenres";
 import TasteTracks from "./views/TasteTracks";
 import Composer from "./views/Composer";
 import Composers from "./views/Composers";
+import AlbumShelf from "./views/AlbumShelf";
+import Sun from "./views/Sun";
 
 const SHEET_HASH = `#${NOW_PLAYING_HASH}`;
 
@@ -185,6 +187,8 @@ export default function App() {
               <Route path="/library/composers" element={<Composers />} />
               <Route path="/library/composers/:name" element={<Composer />} />
               <Route path={paths.musicMap} element={<MusicMap />} />
+              <Route path="/library/shelves/:genre" element={<AlbumShelf />} />
+              <Route path="/library/sun" element={<Sun />} />
               <Route path="*" element={<Home />} />
             </Routes>
           )}

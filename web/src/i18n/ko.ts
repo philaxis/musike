@@ -62,6 +62,18 @@ export const ko: Messages = {
     startBody: "YouTube의 노래와 뮤직비디오를 찾아 광고 없이 소리나 영상으로 들을 수 있어요.",
     seeAll: "모두 보기",
     yourFavorites: "즐겨찾는 곡",
+    resume: "이어 듣기",
+    resumeAt: (time) => `${time}부터`,
+    sunToday: "☀ 오늘 좋음",
+    sunMore: "모아 보기",
+    sunHint: "마음에 들면 ☀",
+    sunHintSub: "지금 재생 칸의 ☀ 단추",
+    mixes: "오늘의 믹스",
+    daily: "매일 바뀜",
+    albums: "오늘 꺼내 볼 앨범",
+    albumsSub: "매일 바뀜 · 한동안 안 들은 것",
+    yearAgo: "1년 전 이맘때",
+    yearAgoSub: (from, to) => `${from} ~ ${to}`,
   },
 
   library: {
@@ -70,6 +82,15 @@ export const ko: Messages = {
     create: "만들기",
     playlistSub: (n) => `재생목록 · ${n}곡`,
     noPlaylists: "아직 재생목록이 없어요. 여기서 만들거나 곡 메뉴에서 바로 시작해 보세요.",
+    recentSub: "들은 순서대로",
+    count: (n) => `${n}개`,
+    albums: "앨범",
+    albumSub: (artist, n) => (artist ? `${artist} · ${n}곡` : `${n}곡`),
+    shelfIntro: (n) => `앨범 ${n}개 · 최근 들은 앨범부터, 그다음 이름순`,
+    albumsEmpty: "아직 앨범이 없어요",
+    albumsEmptyBody: "취향 분석이 곡의 앨범을 찾으면, 내 곡이 3곡 넘게 든 앨범이 장르별로 여기에 보여요.",
+    playlists: "재생목록",
+    newPlaylistSub: "만들기",
   },
 
   collection: {
@@ -492,19 +513,20 @@ export const ko: Messages = {
     failed: "이 재생목록을 읽지 못했어요. 공개된 목록인지 확인해 주세요.",
   },
 
-  // 곡 상자·꼬리표·묶음·유튜브 계정
+  // 모든 곡(옛 곡 상자)·꼬리표·묶음·유튜브 계정
   songBox: {
-    title: "곡 상자",
-    tileSub: "들여온 곡 전부, 출처와 꼬리표",
+    title: "모든 곡",
     fromYoutube: "유튜브에서 들여온 곡",
+    fromYoutubeHint: "누르면 그 목록에서 온 곡만 「모든 곡」에서 보여요.",
+    moreViews: "출처별·치워 둔 곡·변경 기록",
     all: "전체",
     untagged: "정리 안 됨",
     bySource: "출처별",
     byTag: "꼬리표별",
     count: (n) => `${n}곡`,
     loadMore: "더 보기",
-    failed: "곡 상자를 열지 못했어요",
-    empty: "곡 상자가 비어 있어요",
+    failed: "모든 곡을 열지 못했어요",
+    empty: "아직 곡이 없어요",
     emptyBody: "검색창에 유튜브 재생목록 링크를 붙여 넣거나, 설정에서 유튜브 계정을 연결하면 곡이 들어와요.",
     emptyFiltered: "여기에 맞는 곡이 없어요",
     noTags: "아직 꼬리표가 없어요",
@@ -513,11 +535,11 @@ export const ko: Messages = {
     fromLocal: (name) => `내 폴더 · ${name}`,
     fromLink: "직접 넣음",
     fromSearch: "검색",
-    openBox: "곡 상자 보기",
+    openBox: "모든 곡 보기",
 
-    importAction: (n) => `곡 상자로 들여오기 (${n}곡)`,
+    importAction: (n) => `모든 곡에 들여오기 (${n}곡)`,
     imported: (name, added, merged) =>
-      (added ? `「${name}」 ${added}곡을 곡 상자에 넣었어요` : `「${name}」의 곡은 이미 모두 곡 상자에 있어요`) +
+      (added ? `「${name}」 ${added}곡을 모든 곡에 넣었어요` : `「${name}」의 곡은 이미 모두 들어와 있어요`) +
       (merged ? ` (이미 있던 ${merged}곡은 출처만 더함)` : ""),
 
     tags: "꼬리표",
@@ -545,7 +567,7 @@ export const ko: Messages = {
     connected: "연결됨",
     connect: "연결하기",
     reconnect: "다시 연결하기",
-    googleBody: "내 유튜브 재생목록과 좋아요 표시한 동영상의 새 곡이 매일 곡 상자로 들어와요. 읽기만 해요.",
+    googleBody: "내 유튜브 재생목록과 좋아요 표시한 동영상의 새 곡이 매일 「모든 곡」으로 들어와요. 읽기만 해요.",
     noClient: "서버에 구글 로그인 설정 파일이 없어서 아직 연결할 수 없어요.",
     revoked: "연결이 끊겼어요. 다시 연결해 주세요.",
     myPlaylists: "내 유튜브 재생목록",
@@ -554,7 +576,7 @@ export const ko: Messages = {
     playlistsFailed: "재생목록을 읽지 못했어요",
     syncNow: "지금 들여오기",
     syncing: "들여오는 중…",
-    synced: (added) => (added ? `새로 ${added}곡이 곡 상자에 들어왔어요` : "새로 들어온 곡이 없어요"),
+    synced: (added) => (added ? `새로 ${added}곡이 「모든 곡」에 들어왔어요` : "새로 들어온 곡이 없어요"),
     disconnect: "연결 끊기",
     disconnected: "유튜브 계정 연결을 끊었어요",
     connectedToast: "유튜브 계정을 연결했어요",
@@ -618,7 +640,6 @@ export const ko: Messages = {
   // 「내 기록」: 들은 기록 통계, 오늘 좋음 ☀, 이 곡 기록
   stats: {
     title: "내 기록",
-    tileSub: "들은 시간, 많이 들은 곡, 날짜 달력",
     period4w: "4주",
     period6m: "6개월",
     periodAll: "전체",
@@ -697,15 +718,13 @@ export const ko: Messages = {
 
   taste: {
     genres: "장르",
-    genresSub: (n) => `${n}개 장르 · 소리 묶음별`,
     genreSub: (tracks, groups) => `${tracks}곡 · 소리 묶음 ${groups}개`,
-    genresIntro: "곡 상자를 장르로, 그 안은 소리가 닮은 곡끼리 묶었어요.",
+    genresIntro: "내 곡을 장르로, 그 안은 소리가 닮은 곡끼리 묶었어요.",
     noGroup: "소리 묶음 없음",
     group: "소리 묶음",
     groupSub: (n, artists) => [`${n}곡`, artists.join(", ")].filter(Boolean).join(" · "),
     mixes: "자동 재생목록",
-    mixesSub: "데일리 믹스 등, 들은 기록으로",
-    mixesIntro: "들은 기록·즐겨찾기·곡 상자로 서버가 만들어요. 날마다 바뀌어요.",
+    mixesIntro: "들은 기록·즐겨찾기·모든 곡으로 서버가 만들어요. 날마다 바뀌어요.",
     mixesEmpty: "아직 자동 재생목록이 없어요",
     mixesEmptyBody: "취향 분석이 있거나 곡을 좀 듣고 나면 생겨요.",
     daily: (n) => `데일리 믹스 ${n}`,
@@ -728,9 +747,8 @@ export const ko: Messages = {
     notAnalyzed: "아직 분석되지 않은 곡이라 라디오를 만들 수 없어요.",
     openFailed: "열지 못했어요",
     map: "음악 지도",
-    mapSub: (n) => (n ? `${n.toLocaleString()}곡 3D · 글자·소리로 찾기` : "3D로 둘러보기 · 글자·소리로 찾기"),
     mapMissing: "아직 음악 지도가 없어요",
-    mapMissingBody: "취향 분석이 매일 아침 곡 상자로 지도를 그려요. 다음 분석 뒤에 다시 열어 주세요.",
+    mapMissingBody: "취향 분석이 매일 아침 모든 곡으로 지도를 그려요. 다음 분석 뒤에 다시 열어 주세요.",
   },
 
   works: {
@@ -756,13 +774,13 @@ export const ko: Messages = {
 
   ledger: {
     chip: "변경 기록",
-    body: "곡 상자 곡이 유튜브에서 어떻게 바뀌었는지: 제목이 바뀜, 지워짐, 비공개, 막힘, 다른 영상으로 바꿈. 내가 붙인 제목은 그대로예요.",
+    body: "내 곡이 유튜브에서 어떻게 바뀌었는지: 제목이 바뀜, 지워짐, 비공개, 막힘, 다른 영상으로 바꿈. 내가 붙인 제목은 그대로예요.",
     watching: (n) => `${n.toLocaleString("ko-KR")}곡 지켜보는 중`,
     checked: (when) => `마지막 확인 ${when}`,
     notChecked: "아직 확인 전",
     state: { region: "한국에서 막힘", gone: "지워짐", private: "비공개", premium: "프리미엄 전용", age: "나이 제한" },
     empty: "아직 바뀐 것이 없어요",
-    emptyBody: "계정 동기화 때마다 곡 상자 곡을 하나하나 확인해요. 유튜브에서 바뀐 것이 여기에 쌓여요.",
+    emptyBody: "계정 동기화 때마다 내 유튜브 곡을 하나하나 확인해요. 유튜브에서 바뀐 것이 여기에 쌓여요.",
     failed: "변경 기록을 불러오지 못했어요",
     loadMore: "더 보기",
     title: (from, to) => `제목이 바뀜: ${from} → ${to}`,
@@ -773,5 +791,29 @@ export const ko: Messages = {
     history: "유튜브에서 바뀐 것",
     noChanges: "유튜브에서 바뀐 것 없음",
     youtubeTitle: (title) => `유튜브 제목: ${title}`,
+  },
+
+  // 「☀ 오늘 좋음」 모아 보기
+  sun: {
+    title: "☀ 오늘 좋음",
+    collection: "☀ 오늘 좋음 모음",
+    recent: "요즘",
+    all: "전체",
+    calendar: "달력",
+    ago: "이맘때",
+    recentIntro: "최근 28일 동안 ☀한 날이 많은 곡부터",
+    allIntro: "처음부터 지금까지 ☀한 날이 많은 곡부터",
+    calendarIntro: "그날 처음 ☀한 곡의 표지예요. 날짜를 누르면 그날 곡이 나와요.",
+    agoIntro: (span) => `지난해들의 오늘 앞뒤 ${span}일에 ☀한 곡`,
+    days: (n) => `☀ ${n}일`,
+    yearsAgo: (n) => `${n}년 전`,
+    prevMonth: "지난달",
+    nextMonth: "다음 달",
+    empty: "아직 ☀한 곡이 없어요",
+    emptyBody: "곡을 듣다가 마음에 들면 지금 재생 칸의 ☀를 눌러 보세요. 날마다 여기에 모여요.",
+    recentEmpty: "최근 28일에는 ☀한 곡이 없어요",
+    agoEmpty: "작년 이맘때 기록은 아직 없어요",
+    agoEmptyBody: "☀는 날짜와 함께 남아요. 내년 이맘때부터 작년 오늘 무렵 좋았던 곡이 여기에 보여요.",
+    failed: "불러오지 못했어요",
   },
 };

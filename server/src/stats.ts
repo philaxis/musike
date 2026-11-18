@@ -24,7 +24,7 @@ const DATE = /^\d{4}-\d{2}-\d{2}$/;
 export const dayOf = (ms: number) => new Date(ms + TZ_OFFSET).toISOString().slice(0, 10);
 const hourOf = (ms: number) => new Date(ms + TZ_OFFSET).getUTCHours();
 /** When a Seoul date starts (ms). */
-const dayStart = (date: string) => Date.parse(`${date}T00:00:00Z`) - TZ_OFFSET;
+export const dayStart = (date: string) => Date.parse(`${date}T00:00:00Z`) - TZ_OFFSET;
 
 export const isSkip = (p: Pick<Play, "heard" | "end">) => p.end === "skipped" && p.heard < 30;
 
@@ -249,9 +249,10 @@ function fromPlay(p: Play): Track {
   };
 }
 
-const present = async (p: Play): Promise<Track> => (await annotator())((await findTrack(p.id).catch(() => null)) ?? fromPlay(p));
+/** A log line's track as the app shows it: from the box, music folders or library; else rebuilt from the line. */
+export const present = async (p: Play): Promise<Track> => (await annotator())((await findTrack(p.id).catch(() => null)) ?? fromPlay(p));
 /** Ranked tracks to show; those put aside in the song box (won't play here) are left out. */
-const presentAll = async (counts: { play: Play }[]) => (await Promise.all(counts.map((c) => present(c.play)))).filter((t) => !t.blocked);
+export const presentAll = async (counts: { play: Play }[]) => (await Promise.all(counts.map((c) => present(c.play)))).filter((t) => !t.blocked);
 
 // 「오늘 좋음」: data/daylikes.json, `{ "2026-11-18": [track + at] }`.
 
@@ -261,7 +262,7 @@ const likesFile = () => path.join(config.dataDir, "daylikes.json");
 let likes: Record<string, DayLike[]> | null = null;
 let writingLikes: Promise<void> = Promise.resolve();
 
-async function loadLikes(): Promise<Record<string, DayLike[]>> {
+export async function loadLikes(): Promise<Record<string, DayLike[]>> {
   if (likes) return likes;
   const out: Record<string, DayLike[]> = {};
   try {
@@ -310,17 +311,18 @@ function dateParam(v: unknown, now: number): string {
   return v;
 }
 
-/** A day's 「오늘 좋음」; a video that was replaced shows as the one in its place (see the video ledger). */
+/** A 「오늘 좋음」 entry as the app shows it: a replaced video as the one in its place (see the video ledger). */
+export async function presentLike(t: DayLike, resolve: (id: string) => string): Promise<DayLike> {
+  const id = resolve(t.id);
+  const now = id === t.id ? null : await findTrack(id);
+  const like: DayLike = now ? { ...now, at: t.at } : t;
+  return local.annotate(like) as DayLike;
+}
+
+/** A day's 「오늘 좋음」. */
 async function dayView(date: string) {
   const [all, { resolve }] = await Promise.all([loadLikes(), aliases()]);
-  const tracks = await Promise.all(
-    (all[date] ?? []).map(async (t) => {
-      const id = resolve(t.id);
-      const now = id === t.id ? null : await findTrack(id);
-      const like: DayLike = now ? { ...now, at: t.at } : t;
-      return local.annotate(like);
-    }),
-  );
+  const tracks = await Promise.all((all[date] ?? []).map((t) => presentLike(t, resolve)));
   return { date, tracks };
 }
 

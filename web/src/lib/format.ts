@@ -11,6 +11,9 @@ export function formatTime(seconds: number): string {
 
 export const cn = (...parts: (string | false | null | undefined)[]) => parts.filter(Boolean).join(" ");
 
+/** Seoul's date ("YYYY-MM-DD") right now: the day the server's lists (☀, stats, mixes) key on. Seoul is UTC+9 all year. */
+export const seoulDay = () => new Date(Date.now() + 9 * 3_600_000).toISOString().slice(0, 10);
+
 export function shuffled<T>(items: T[]): T[] {
   const a = items.slice();
   for (let i = a.length - 1; i > 0; i--) {
