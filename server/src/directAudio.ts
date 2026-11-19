@@ -1,5 +1,6 @@
+import type { Innertube } from "youtubei.js";
 import type { Lang } from "./i18n.js";
-import { text, withClient } from "./search.js";
+import { dropSession, text, withClient } from "./search.js";
 
 /**
  * A track's audio asked straight from YouTube's API, without yt-dlp. The Android app plays it this way, and the
@@ -39,33 +40,49 @@ export async function fetchRemoteClients(key: "clients" | "ios" = "clients"): Pr
   }
 }
 
-/** Tries each client in turn. Throws with YouTube's reason (or an empty message) when none of them has audio. */
-export async function directAudio(id: string, clients: string[], lang?: Lang): Promise<DirectAudio> {
+/** YouTube's words for a video only Music Premium members can play (asked in English, see `directAudio`). */
+export const PREMIUM_ONLY = /Music Premium members/i;
+
+/** One client's answer: the audio, or YouTube's reason for none (empty when it gave none). */
+async function ask(id: string, client: string, lang: Lang | undefined, session: Innertube | undefined): Promise<DirectAudio | string> {
+  const basic = (yt: Innertube) => yt.getBasicInfo(id, { client: client as never });
+  const info: any = session ? await basic(session) : await withClient(basic, lang);
+  const status = info.playability_status;
+  if (status?.status && status.status !== "OK") return text(status.reason);
+  const formats: any[] = [...(info.streaming_data?.adaptive_formats ?? []), ...(info.streaming_data?.formats ?? [])].filter(
+    (f) => f.has_audio && !f.has_video && typeof f.url === "string",
+  );
+  // AAC (m4a) first: it plays everywhere. Highest bitrate within the same kind.
+  const best = formats.sort(
+    (a, b) => Number(b.mime_type?.startsWith("audio/mp4")) - Number(a.mime_type?.startsWith("audio/mp4")) || (b.bitrate ?? 0) - (a.bitrate ?? 0),
+  )[0];
+  if (!best) return "";
+  const expire = Number(new URL(best.url).searchParams.get("expire")) * 1000;
+  return {
+    url: best.url,
+    mime: best.mime_type?.startsWith("audio/webm") ? "audio/webm" : "audio/mp4",
+    title: info.basic_info?.title ?? "",
+    duration: info.basic_info?.duration ?? 0,
+    expiresAt: expire || Date.now() + 3 * 3600_000,
+  };
+}
+
+/**
+ * Tries each client in turn, on the shared session in `lang` or on `session`. Throws with YouTube's reason (or an
+ * empty message) when none of them has audio. YouTube refuses even playable videos to a shared session that asked a
+ * lot ("try again later"), so a refusal other than Premium-only is asked once more on a fresh shared session.
+ */
+export async function directAudio(id: string, clients: string[], lang?: Lang, session?: Innertube): Promise<DirectAudio> {
   let reason = "";
   for (const client of clients) {
     try {
-      const info: any = await withClient((yt) => yt.getBasicInfo(id, { client: client as never }), lang);
-      const status = info.playability_status;
-      if (status?.status && status.status !== "OK") {
-        reason = text(status.reason) || reason;
-        continue;
+      let got = await ask(id, client, lang, session);
+      if (typeof got === "string" && !session && !PREMIUM_ONLY.test(got)) {
+        dropSession(lang);
+        got = await ask(id, client, lang, session);
       }
-      const formats: any[] = [...(info.streaming_data?.adaptive_formats ?? []), ...(info.streaming_data?.formats ?? [])].filter(
-        (f) => f.has_audio && !f.has_video && typeof f.url === "string",
-      );
-      // AAC (m4a) first: it plays everywhere. Highest bitrate within the same kind.
-      const best = formats.sort(
-        (a, b) => Number(b.mime_type?.startsWith("audio/mp4")) - Number(a.mime_type?.startsWith("audio/mp4")) || (b.bitrate ?? 0) - (a.bitrate ?? 0),
-      )[0];
-      if (!best) continue;
-      const expire = Number(new URL(best.url).searchParams.get("expire")) * 1000;
-      return {
-        url: best.url,
-        mime: best.mime_type?.startsWith("audio/webm") ? "audio/webm" : "audio/mp4",
-        title: info.basic_info?.title ?? "",
-        duration: info.basic_info?.duration ?? 0,
-        expiresAt: expire || Date.now() + 3 * 3600_000,
-      };
+      if (typeof got !== "string") return got;
+      reason = got || reason;
     } catch (e) {
       reason = (e as Error).message || reason;
     }

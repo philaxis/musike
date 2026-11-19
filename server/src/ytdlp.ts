@@ -4,9 +4,10 @@ import { mkdir, readdir, rename, rm, stat, utimes } from "node:fs/promises";
 import path from "node:path";
 import { ensureComponent } from "./bootstrap.js";
 import { config } from "./config.js";
-import { DEFAULT_CLIENTS, directAudio, fetchRemoteClients, type DirectAudio } from "./directAudio.js";
+import type { Innertube } from "youtubei.js";
+import { DEFAULT_CLIENTS, directAudio, fetchRemoteClients, PREMIUM_ONLY, type DirectAudio } from "./directAudio.js";
 import { tools } from "./tools.js";
-import { msg, type MsgKey } from "./i18n.js";
+import { msg, type Lang, type MsgKey } from "./i18n.js";
 import { HttpError, unplayableError, type Unplayable } from "./types.js";
 
 export interface StreamFormat {
@@ -84,7 +85,8 @@ export async function run(args: string[], timeoutMs: number): Promise<string> {
 // Failures that usually mean YouTube changed and yt-dlp needs an update.
 const OUTDATED = /nsig|signature|n challenge|JavaScript runtime|Unable to extract|Failed to extract|player response|Requested format is not available|HTTP Error 403/i;
 
-const PREMIUM_ONLY = /Music Premium members/i;
+/** Audio is asked directly in English: YouTube's reasons are matched by their words (`PREMIUM_ONLY`). */
+const DIRECT_LANG = "en" satisfies Lang;
 
 /** What a person is told about a video that won't play here, by why. */
 const UNPLAYABLE_TEXT = {
@@ -188,7 +190,7 @@ async function resolveDirect(id: string, ytdlpError: unknown): Promise<Resolved>
   // Removed, private or age-restricted videos won't play any other way either.
   if (ytdlpError instanceof HttpError && (ytdlpError.status === 403 || ytdlpError.status === 404)) throw ytdlpError;
   try {
-    return fromDirect(id, await directAudio(id, await clientsForDirect()));
+    return fromDirect(id, await directAudio(id, await clientsForDirect(), DIRECT_LANG));
   } catch {
     throw ytdlpError; // yt-dlp's error says more, and may offer the update
   }
@@ -210,7 +212,7 @@ export function resolveAudio(id: string): Promise<Resolved> {
   if (inflight) return inflight;
 
   const job = clientsForDirect()
-    .then((clients) => directAudio(id, clients))
+    .then((clients) => directAudio(id, clients, DIRECT_LANG))
     .then(
       (found) => {
         const r = fromDirect(id, found);
@@ -228,12 +230,13 @@ export function resolveAudio(id: string): Promise<Resolved> {
 }
 
 /**
- * Whether YouTube's API, asked directly, says `id` plays for Music Premium members only. False when it plays (its
- * audio address is kept for `resolveAudio`), when it won't for another reason, and when YouTube couldn't be asked.
+ * Whether YouTube's API, asked directly on `session`, says `id` plays for Music Premium members only. False when it
+ * plays (its audio address is kept for `resolveAudio`), when it won't for another reason, and when YouTube couldn't
+ * be asked.
  */
-export async function premiumOnly(id: string): Promise<boolean> {
+export async function premiumOnly(id: string, session: Innertube): Promise<boolean> {
   try {
-    audioAt.set(id, fromDirect(id, await directAudio(id, await clientsForDirect())));
+    audioAt.set(id, fromDirect(id, await directAudio(id, await clientsForDirect(), DIRECT_LANG, session)));
     return false;
   } catch (e) {
     return PREMIUM_ONLY.test((e as Error)?.message ?? "");
