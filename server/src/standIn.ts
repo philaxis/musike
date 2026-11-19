@@ -1,10 +1,11 @@
+import { setTimeout as sleep } from "node:timers/promises";
 import * as box from "./box.js";
 import { checkVideos, videoTrack } from "./google.js";
 import { msg, type Lang } from "./i18n.js";
 import * as ledger from "./ledger.js";
 import type { ReplacedBy } from "./ledger.js";
 import * as library from "./library.js";
-import { search } from "./search.js";
+import { ownSession, search } from "./search.js";
 import { HttpError, VIDEO_ID, type Track, type Unplayable } from "./types.js";
 import { premiumOnly, resolveStreams } from "./ytdlp.js";
 import { musicRedirect } from "./ytMusic.js";
@@ -201,14 +202,19 @@ export function fixAside(): Promise<FixResult> {
   return fixing;
 }
 
-/** Box tracks asked together by `findPremiumOnly`. */
-const PREMIUM_PARALLEL = 4;
+/**
+ * `findPremiumOnly` asks one track at a time with a pause between, on a session of its own renewed every
+ * PREMIUM_SESSION_ASKS: YouTube starts answering "try again later" to a session after several hundred quick asks.
+ */
+const PREMIUM_GAP_MS = 250;
+const PREMIUM_SESSION_ASKS = 150;
 let premiumRun: Promise<number> | null = null;
 
 /**
  * Asks YouTube directly, for every box track not put aside, whether it plays for Music Premium members only (the
  * account's check can't tell), and puts those aside as "premium" so `fixAside` puts stand-ins in before anyone plays
- * them. Skipped when the last run is more recent than `ifOlderThan` (ms). Returns how many were found; one run at a time.
+ * them. About a quarter of an hour for the whole box. Skipped when the last run is more recent than `ifOlderThan`
+ * (ms). Returns how many were found; one run at a time.
  */
 export function findPremiumOnly(ifOlderThan = 0): Promise<number> {
   premiumRun ??= (async () => {
@@ -216,10 +222,12 @@ export function findPremiumOnly(ifOlderThan = 0): Promise<number> {
     if (last !== undefined && Date.now() - last < ifOlderThan) return 0;
     const ids = (await box.youtubeEntries()).filter((e) => !e.blocked && VIDEO_ID.test(e.track.id)).map((e) => e.track.id);
     const found: string[] = [];
-    const worker = async () => {
-      for (let id = ids.shift(); id; id = ids.shift()) if (await premiumOnly(id)) found.push(id);
-    };
-    await Promise.all(Array.from({ length: PREMIUM_PARALLEL }, worker));
+    let session = await ownSession("en");
+    for (const [n, id] of ids.entries()) {
+      if (n > 0 && n % PREMIUM_SESSION_ASKS === 0) session = await ownSession("en");
+      if (await premiumOnly(id, session)) found.push(id);
+      await sleep(PREMIUM_GAP_MS);
+    }
     const at = Date.now();
     if (found.length) await box.applyChecks(new Map(found.map((id): [string, Unplayable] => [id, "premium"])), at, false);
     for (const id of found) await ledger.recordPlayFailure(id, "premium", at);

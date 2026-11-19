@@ -1,0 +1,5 @@
+- [x] 1 `search.ts` `ownSession`·`dropSession`
+- [x] 2 `directAudio.ts` 거절되면 새 세션으로 한 번 더, `session` 인자, `PREMIUM_ONLY`
+- [x] 3 `ytdlp.ts` 영어로 묻기, `premiumOnly(id, session)`
+- [x] 4 `standIn.ts` 프리미엄 찾기 천천히·따로 세션
+- [x] 5 시험 서버에서 찾기 도는 동안 처음 누른 곡 시간

@@ -8,16 +8,31 @@ import { ytdlpSearch } from "./ytdlp.js";
 // One session per language: YouTube Music words its own texts (genre names, artist bios) in the session's language.
 const clients = new Map<string, Promise<Innertube>>();
 
+function create(hl: string): Promise<Innertube> {
+  return Innertube.create({ retrieve_player: false, lang: hl, location: config.location, fetch: config.fetch });
+}
+
 function yt(hl: string): Promise<Innertube> {
   let client = clients.get(hl);
   if (!client) {
-    client = Innertube.create({ retrieve_player: false, lang: hl, location: config.location, fetch: config.fetch }).catch((err) => {
+    client = create(hl).catch((err) => {
       clients.delete(hl);
       throw err;
     });
     clients.set(hl, client);
   }
   return client;
+}
+
+/**
+ * A session not shared with anything else, for a long run of requests: YouTube answers a session that asked a lot
+ * with "try again later" for a while, and that must not reach plays and searches.
+ */
+export const ownSession = (lang: Lang): Promise<Innertube> => create(youtubeLang(lang));
+
+/** Forgets the shared session in `lang`, so the next request starts a fresh one. */
+export function dropSession(lang?: Lang) {
+  clients.delete(lang ? youtubeLang(lang) : config.lang);
 }
 
 /**
