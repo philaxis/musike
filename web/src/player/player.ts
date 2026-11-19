@@ -141,7 +141,7 @@ function prepare(id: string): Promise<Prepare> {
 }
 
 /** How long after a track starts the window ahead is filled (so it never slows that start), and how long a prepared address counts as fresh. */
-const AHEAD_DELAY_MS = 4000;
+const AHEAD_DELAY_MS = 1500;
 const AHEAD_FRESH_MS = 5 * 60_000;
 /** How many tracks after and before the current one get their address resolved (and warmed) ahead. Only the next one's audio is loaded. */
 const AHEAD_NEXT = 3;
