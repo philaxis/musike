@@ -6,7 +6,7 @@ import type { ReplacedBy } from "./ledger.js";
 import * as library from "./library.js";
 import { search } from "./search.js";
 import { HttpError, VIDEO_ID, type Track, type Unplayable } from "./types.js";
-import { resolveStreams } from "./ytdlp.js";
+import { premiumOnly, resolveStreams } from "./ytdlp.js";
 import { musicRedirect } from "./ytMusic.js";
 
 // Stand-ins: a track that won't play here (blocked in this country, deleted, private, age-restricted, Premium only)
@@ -15,7 +15,8 @@ import { musicRedirect } from "./ytMusic.js";
 //     that is the same song (`box.redirectFits`);
 //  2. the best of 「다른 판 찾기」's candidates (`box.standInOrder`).
 // Only when neither plays does it stay put aside. This runs when a track turns out not to play (`/api/prepare`) and
-// after each check of the song box; 「되돌리기」 (`restore`) puts the original back for good.
+// after each check of the song box; 「되돌리기」 (`restore`) puts the original back for good. Premium-only tracks, which
+// the account's check can't see, are looked for ahead too (`findPremiumOnly`).
 
 /** How long a track put aside waits before a stand-in is looked for again (the check, and plays before it). */
 const LOOK_AGAIN_MS = 24 * 3600_000;
@@ -198,4 +199,32 @@ export function fixAside(): Promise<FixResult> {
     return result;
   })().finally(() => (fixing = null));
   return fixing;
+}
+
+/** Box tracks asked together by `findPremiumOnly`. */
+const PREMIUM_PARALLEL = 4;
+let premiumRun: Promise<number> | null = null;
+
+/**
+ * Asks YouTube directly, for every box track not put aside, whether it plays for Music Premium members only (the
+ * account's check can't tell), and puts those aside as "premium" so `fixAside` puts stand-ins in before anyone plays
+ * them. Skipped when the last run is more recent than `ifOlderThan` (ms). Returns how many were found; one run at a time.
+ */
+export function findPremiumOnly(ifOlderThan = 0): Promise<number> {
+  premiumRun ??= (async () => {
+    const last = await box.premiumCheckedAt();
+    if (last !== undefined && Date.now() - last < ifOlderThan) return 0;
+    const ids = (await box.youtubeEntries()).filter((e) => !e.blocked && VIDEO_ID.test(e.track.id)).map((e) => e.track.id);
+    const found: string[] = [];
+    const worker = async () => {
+      for (let id = ids.shift(); id; id = ids.shift()) if (await premiumOnly(id)) found.push(id);
+    };
+    await Promise.all(Array.from({ length: PREMIUM_PARALLEL }, worker));
+    const at = Date.now();
+    if (found.length) await box.applyChecks(new Map(found.map((id): [string, Unplayable] => [id, "premium"])), at, false);
+    for (const id of found) await ledger.recordPlayFailure(id, "premium", at);
+    await box.markPremiumChecked(at);
+    return found.length;
+  })().finally(() => (premiumRun = null));
+  return premiumRun;
 }

@@ -20,13 +20,13 @@ import { registerMapRoutes } from "./mapRoutes.js";
 import { findVideoFor, radio, search, suggestions } from "./search.js";
 import { registerStatsRoutes } from "./stats.js";
 import { mediaId, registerServerRoutes, trackId } from "./serverRoutes.js";
-import { fixAside, settledAside, standInFor } from "./standIn.js";
+import { findPremiumOnly, fixAside, settledAside, standInFor } from "./standIn.js";
 import { proxyStream, serveFile, warmStream } from "./stream.js";
 import { langOf, msg, tr } from "./i18n.js";
 import { presentJob, startJob, systemInfo, type Channel } from "./system.js";
 import { refreshTools, type Tools } from "./tools.js";
 import { HttpError, isLocalId, VIDEO_ID, type Track } from "./types.js";
-import { downloadHd, pruneCache, resolveStreams, unplayableBecause } from "./ytdlp.js";
+import { downloadHd, pruneCache, resolveAudio, resolveStreams, unplayableBecause } from "./ytdlp.js";
 
 function videoId(params: unknown): string {
   const id = (params as { id?: string }).id ?? "";
@@ -158,14 +158,14 @@ export async function startServer(opts: StartOptions = {}): Promise<RunningServe
     let replaced: Track | null = already && (await boxAnnotator())(already);
     const aside = !replaced && (await settledAside(id));
     if (aside) throw unplayableBecause(aside);
-    const r = await resolveStreams(replaced?.id ?? id).catch(async (e: unknown) => {
+    const r = await resolveAudio(replaced?.id ?? id).catch(async (e: unknown) => {
       if (!(e instanceof HttpError && e.reason) || replaced) throw e;
-      // What yt-dlp says won't play shows in the song box and the video ledger too, without waiting for the next check.
+      // What YouTube or yt-dlp says won't play shows in the song box and the video ledger too, without waiting for the next check.
       await markBlocked(id, e.reason);
       await ledger.recordPlayFailure(id, e.reason);
       replaced = await standInFor(id, e.reason);
       if (!replaced) throw e;
-      return resolveStreams(replaced.id);
+      return resolveAudio(replaced.id);
     });
     // It plays: a status only a failed play had set (Premium-only, say) is over.
     await ledger.recordPlayable(r.id);
@@ -310,11 +310,14 @@ export async function startServer(opts: StartOptions = {}): Promise<RunningServe
 
   pruneCache().catch(() => {});
   // The video ledger's first record (once, from the box), then which song-box tracks won't play here: once, when it
-  // was never checked (later with each account sync). Then stand-ins for the tracks put aside that weren't looked at
-  // in a day.
+  // was never checked (later with each account sync). Then Premium-only tracks, when not looked for in a day, and
+  // stand-ins for the tracks put aside that weren't looked at in a day.
   youtubeEntries()
     .then(ledger.seed)
     .then(() => checkBoxOnce())
+    .catch((e: unknown) => app.log.warn(e))
+    .then(() => findPremiumOnly(24 * 3600_000))
+    .then((premiumOnly) => app.log.info({ premiumOnly }, "Premium-only tracks found"))
     .catch((e: unknown) => app.log.warn(e))
     .then(() => fixAside())
     .then((standIns) => app.log.info({ standIns }, "stand-ins for tracks put aside"))

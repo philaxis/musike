@@ -62,6 +62,8 @@ interface BoxData {
   localTags: Record<string, string[]>;
   /** When every YouTube track was last checked for whether it plays here (ms); absent until the first check. */
   checkedAt?: number;
+  /** When every YouTube track that plays was last asked about being Premium-only (ms); see standIn.ts. */
+  premiumAt?: number;
 }
 
 const PAGE = 200;
@@ -82,7 +84,7 @@ async function load(): Promise<BoxData> {
   if (!storage) throw new Error("Box storage not configured");
   const json = await storage.read();
   const data = (json ? JSON.parse(json) : {}) as Partial<BoxData>;
-  state = { entries: data.entries ?? [], localTags: data.localTags ?? {}, checkedAt: data.checkedAt };
+  state = { entries: data.entries ?? [], localTags: data.localTags ?? {}, checkedAt: data.checkedAt, premiumAt: data.premiumAt };
   // Boxes saved before `blocked` marked deleted and private videos `gone: true`.
   for (const e of state.entries as (BoxEntry & { gone?: true })[]) {
     if (!e.gone) continue;
@@ -295,6 +297,16 @@ export async function markBlocked(id: string, reason: Unplayable): Promise<void>
 /** When the whole box was last checked; undefined before the first check. */
 export async function checkedAt(): Promise<number | undefined> {
   return (await load()).checkedAt;
+}
+
+/** When the box was last looked through for Premium-only tracks; undefined before the first time. */
+export async function premiumCheckedAt(): Promise<number | undefined> {
+  return (await load()).premiumAt;
+}
+
+export async function markPremiumChecked(at: number): Promise<void> {
+  (await load()).premiumAt = at;
+  await persist();
 }
 
 /** The box's entries (all YouTube tracks), for the check and the video ledger. */

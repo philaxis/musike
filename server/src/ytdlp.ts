@@ -4,7 +4,7 @@ import { mkdir, readdir, rename, rm, stat, utimes } from "node:fs/promises";
 import path from "node:path";
 import { ensureComponent } from "./bootstrap.js";
 import { config } from "./config.js";
-import { DEFAULT_CLIENTS, directAudio, fetchRemoteClients } from "./directAudio.js";
+import { DEFAULT_CLIENTS, directAudio, fetchRemoteClients, type DirectAudio } from "./directAudio.js";
 import { tools } from "./tools.js";
 import { msg, type MsgKey } from "./i18n.js";
 import { HttpError, unplayableError, type Unplayable } from "./types.js";
@@ -84,6 +84,8 @@ export async function run(args: string[], timeoutMs: number): Promise<string> {
 // Failures that usually mean YouTube changed and yt-dlp needs an update.
 const OUTDATED = /nsig|signature|n challenge|JavaScript runtime|Unable to extract|Failed to extract|player response|Requested format is not available|HTTP Error 403/i;
 
+const PREMIUM_ONLY = /Music Premium members/i;
+
 /** What a person is told about a video that won't play here, by why. */
 const UNPLAYABLE_TEXT = {
   region: "videoRegion",
@@ -104,7 +106,7 @@ export function toHttpError(stderr: string): HttpError {
   }
   if (/in your country|claimed content|copyright grounds/i.test(line)) return unplayableBecause("region");
   if (/Private video/i.test(line)) return unplayableBecause("private");
-  if (/Music Premium members/i.test(line)) return unplayableBecause("premium");
+  if (PREMIUM_ONLY.test(line)) return unplayableBecause("premium");
   if (/Video unavailable|video is unavailable|removed/i.test(line)) return unplayableBecause("gone");
   // yt-dlp's own words stay as they are (English); only the advice around them is translated.
   const detail = line.replace(/^ERROR:\s*/, "").slice(0, 240);
@@ -116,6 +118,7 @@ export function toHttpError(stderr: string): HttpError {
 /** Forget resolved stream URLs, e.g. after updating yt-dlp so the next play uses the new version. */
 export function clearResolved() {
   resolvedAt.clear();
+  audioAt.clear();
 }
 
 const isAudioOnly = (f: RawFormat) => !!f.url && f.vcodec === "none" && !!f.acodec && f.acodec !== "none";
@@ -151,6 +154,9 @@ function expiryOf(url: string): number {
 
 const cache = new Map<string, Promise<Resolved>>();
 const resolvedAt = new Map<string, Resolved>();
+/** Audio-only answers from YouTube's API asked directly (`resolveAudio`): no video, no channel. */
+const audioJobs = new Map<string, Promise<Resolved>>();
+const audioAt = new Map<string, Resolved>();
 
 // When yt-dlp fails, the clients to ask YouTube directly (see directAudio.ts), refreshed from the repository.
 // Read lazily: directAudio.ts and this module import each other through search.ts.
@@ -165,6 +171,14 @@ async function clientsForDirect(): Promise<string[]> {
   return directClients ?? DEFAULT_CLIENTS;
 }
 
+const fromDirect = (id: string, direct: DirectAudio): Resolved => ({
+  id,
+  title: direct.title,
+  duration: direct.duration,
+  audio: { formatId: "direct", url: direct.url, headers: {}, mime: direct.mime },
+  expiresAt: direct.expiresAt - 10 * 60_000,
+});
+
 /**
  * Plan B for audio: YouTube's bot check stops yt-dlp on some connections (VPNs, shared networks), and a YouTube
  * change can break it until it's updated. Asking YouTube for the audio directly often still works. Video stays
@@ -174,16 +188,55 @@ async function resolveDirect(id: string, ytdlpError: unknown): Promise<Resolved>
   // Removed, private or age-restricted videos won't play any other way either.
   if (ytdlpError instanceof HttpError && (ytdlpError.status === 403 || ytdlpError.status === 404)) throw ytdlpError;
   try {
-    const direct = await directAudio(id, await clientsForDirect());
-    return {
-      id,
-      title: direct.title,
-      duration: direct.duration,
-      audio: { formatId: "direct", url: direct.url, headers: {}, mime: direct.mime },
-      expiresAt: direct.expiresAt - 10 * 60_000,
-    };
+    return fromDirect(id, await directAudio(id, await clientsForDirect()));
   } catch {
     throw ytdlpError; // yt-dlp's error says more, and may offer the update
+  }
+}
+
+/**
+ * A track's audio, fast: YouTube's API asked directly (one request, about a tenth of a second) before yt-dlp (a
+ * process, a web page and a signature puzzle: seconds). Same AAC format as yt-dlp picks. A Premium-only answer is
+ * final; any other refusal or failure goes to yt-dlp, which tells why a track won't play. Video and the channel name
+ * stay `resolveStreams`'s.
+ */
+export function resolveAudio(id: string): Promise<Resolved> {
+  const now = Date.now();
+  const done = resolvedAt.get(id);
+  if (done && done.expiresAt > now) return Promise.resolve(done);
+  const direct = audioAt.get(id);
+  if (direct && direct.expiresAt > now) return Promise.resolve(direct);
+  const inflight = audioJobs.get(id) ?? cache.get(id);
+  if (inflight) return inflight;
+
+  const job = clientsForDirect()
+    .then((clients) => directAudio(id, clients))
+    .then(
+      (found) => {
+        const r = fromDirect(id, found);
+        audioAt.set(id, r);
+        return r;
+      },
+      (e: unknown) => {
+        if (PREMIUM_ONLY.test((e as Error)?.message ?? "")) throw unplayableBecause("premium");
+        return resolveStreams(id);
+      },
+    )
+    .finally(() => audioJobs.delete(id));
+  audioJobs.set(id, job);
+  return job;
+}
+
+/**
+ * Whether YouTube's API, asked directly, says `id` plays for Music Premium members only. False when it plays (its
+ * audio address is kept for `resolveAudio`), when it won't for another reason, and when YouTube couldn't be asked.
+ */
+export async function premiumOnly(id: string): Promise<boolean> {
+  try {
+    audioAt.set(id, fromDirect(id, await directAudio(id, await clientsForDirect())));
+    return false;
+  } catch (e) {
+    return PREMIUM_ONLY.test((e as Error)?.message ?? "");
   }
 }
 
@@ -222,6 +275,7 @@ export function resolveStreams(id: string): Promise<Resolved> {
 
 export function invalidate(id: string) {
   resolvedAt.delete(id);
+  audioAt.delete(id);
 }
 
 const downloads = new Map<string, Promise<string>>();
